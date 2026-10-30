@@ -3,14 +3,15 @@
 Take a CSV of `(id, lat, lon)`, identify each point's building with `geolocate`, assess its physical
 climate risk with `physrisk`, and show the portfolio in a web dashboard.
 
-The plan is epic #1. So far `app/engine` and `app/front` exist; the rest arrives with issues #10–#11.
+The plan is epic #1. So far everything except the final end-to-end check and docs (#11) exists.
 
 ## Stack
 - Python >= 3.11, DuckDB >= 2.0, `physrisk-lib` (pinned exactly: its output has no stability promise)
 - `geolocate`: git submodule at `vendor/geolocate`, imported directly
 - FastAPI for the API, TypeScript (Vite + React) for the front end
 - Terraform or OpenTofu (`infra/`) owns the run settings and writes a git-ignored `.asset-risk.json`
-- Docker (`docker/`): one image and a compose stack
+- Docker (`docker/`): one image and a compose stack. Settings are mounted at run time, and run data
+  lives on the `asset-risk_data` volume, separate from `data/` on the host.
 
 ## Architecture
 ```
@@ -92,6 +93,8 @@ script/              ad-hoc CLIs
 - In the dashboard, compare scenarios only on shared hazards, and history only on the same hazards as
   the selected scenario. Keep "No model" and "No data" visibly different from a low score.
 - Pass values into SQL as parameters (`?`), never via string formatting.
+- `docker/Dockerfile.dockerignore` is an allow-list, and `test/engine/test_docker.py` enforces it. Add a
+  path only if the image needs it. `compose.yml` must keep publishing on `127.0.0.1`.
 - Never commit `.asset-risk.json`, `.geolocate.json`, `*.tfstate*` or `*.tfvars`: they may contain
   credentials.
 
@@ -102,6 +105,7 @@ script/              ad-hoc CLIs
   `run typecheck`. `script/serve.py` serves the built `dist/` once it exists. Map tiles default to
   OpenFreeMap; override with `VITE_MAP_STYLE_LIGHT` and `VITE_MAP_STYLE_DARK` at build time.
 - Lint: `.venv/bin/ruff check --fix .` · Format: `.venv/bin/ruff format .`
+- Docker: `script/start.sh` (add `--detach` to run in the background)
 - Serve: `.venv/bin/python script/serve.py` · API docs at `/docs`
 - Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live` or `-m e2e`
 - Infra: `terraform -chdir=infra init && terraform -chdir=infra apply` (or `tofu`)

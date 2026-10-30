@@ -1,4 +1,4 @@
-"""Start the app: python script/serve.py [--host 127.0.0.1]
+"""Start the app: python script/serve.py [--host 127.0.0.1] [--port 8000]
 
 There is no login, so only bind beyond localhost inside a container that publishes to localhost.
 """
@@ -22,9 +22,10 @@ def main() -> int:
     parser.add_argument(
         "--host", default="127.0.0.1", help="address to bind (default: %(default)s)"
     )
+    parser.add_argument("--port", type=int, help="port (default: api_port from the settings)")
     args = parser.parse_args()
     try:
-        port = load_settings().api_port
+        port = args.port or load_settings().api_port
     except SettingsError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

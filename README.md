@@ -16,6 +16,17 @@ uv venv .venv && uv pip install -p .venv -r requirements-dev.txt
 
 If you cloned without `--recurse-submodules`, run `git submodule update --init`.
 
+## Run it
+
+Needs Docker, and [Terraform](https://developer.hashicorp.com/terraform/install) or OpenTofu.
+
+```bash
+terraform -chdir=infra init && terraform -chdir=infra apply   # writes the settings files
+script/start.sh                                               # http://127.0.0.1:8000
+```
+
+The app has no login, so it only listens on localhost. Don't expose it as it stands.
+
 ## Layout
 
 | Path | Contents |

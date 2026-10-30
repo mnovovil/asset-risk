@@ -34,6 +34,7 @@ VALID = {
 def clean_env(monkeypatch):
     monkeypatch.delenv("ASSET_RISK_CONFIG", raising=False)
     monkeypatch.delenv("GEOLOCATE_CONFIG", raising=False)
+    monkeypatch.delenv("ASSET_RISK_DATA_DIR", raising=False)
 
 
 def write(tmp_path, **overrides):
@@ -66,6 +67,11 @@ def test_geolocate_env_overrides_the_file(tmp_path, monkeypatch):
     monkeypatch.setenv("GEOLOCATE_CONFIG", "/config/.geolocate.json")
     s = load_settings(write(tmp_path))
     assert s.geolocate_config == Path("/config/.geolocate.json")
+
+
+def test_data_dir_env_overrides_the_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("ASSET_RISK_DATA_DIR", "/data")
+    assert load_settings(write(tmp_path)).data_dir == Path("/data")
 
 
 def test_missing_file(tmp_path):
