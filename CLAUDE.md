@@ -3,8 +3,8 @@
 Take a CSV of `(id, lat, lon)`, identify each point's building with `geolocate`, assess its physical
 climate risk with `physrisk`, and show the portfolio in a web dashboard.
 
-The plan is epic #1. So far the scaffold and settings exist; the other modules below arrive with
-issues #4–#11.
+The plan is epic #1. So far ingest, geolocation, store and settings exist; the other modules below
+arrive with issues #5–#11.
 
 ## Stack
 - Python >= 3.11, DuckDB >= 2.0, `physrisk-lib` (pinned exactly: its output has no stability promise)
@@ -35,6 +35,13 @@ script/              ad-hoc CLIs
 - **`.geolocate.json`**: written to `vendor/geolocate/` by geolocate's own stack, which `infra/` calls
   as a module. `$GEOLOCATE_CONFIG` overrides the path in `.asset-risk.json`, which is only valid on
   the machine that ran `apply`.
+
+- **geolocate's output CSV** (written in `app/engine/geolocation.py`, loaded by
+  `app/engine/sql/load_assets.sql`): the engine reads this documented interface, not geolocate's
+  internals. A submodule bump must keep `test/engine/test_store.py` passing.
+- **Run database** (`<data_dir>/runs/<uuid>/run.duckdb`, `app/engine/sql/schema.sql`): `assets` has one
+  row per input row in input order, keyed on `row_num`, because invalid rows can have no id. Folder
+  names are generated; the uploaded file's name is only ever stored as a label.
 
 ## Rules
 - Never edit `vendor/`. To change geolocate, change its own repo and bump the submodule. A bump also
