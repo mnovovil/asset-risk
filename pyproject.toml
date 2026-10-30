@@ -1,0 +1,24 @@
+[project]
+name = "asset-risk"
+version = "0.1.0"
+description = "Physical climate risk for a portfolio of id, lat, lon points"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["app", "test"]
+extend-exclude = ["vendor", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["app"]
+addopts = "-m 'not s3 and not live and not e2e'"
+markers = [
+    "s3: hits the live Overture S3 bucket (opt-in: pytest -m s3)",
+    "live: calls physrisk against its live hazard data (opt-in: pytest -m live)",
+    "e2e: drives the full compose stack (opt-in: pytest -m e2e)",
+]

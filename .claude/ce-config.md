@@ -16,12 +16,12 @@ Fill in the placeholders. Any section left as `TBD` is skipped by the commands.
 
 | Purpose | Command |
 |---------|---------|
-| Install deps | `uv venv .venv && uv pip install -p .venv -r requirements-dev.txt` |
+| Install deps | `git submodule update --init && uv venv .venv && uv pip install -p .venv -r requirements-dev.txt` |
 | Lint (+fix) | `.venv/bin/ruff check --fix .` |
 | Format | `.venv/bin/ruff format .` |
 | Type check | `TBD` |
 | Unit tests | `.venv/bin/pytest` |
-| Integration / E2E tests | `.venv/bin/pytest -m s3` (live Overture S3, opt-in) |
+| Integration / E2E tests | `.venv/bin/pytest -m s3` (live Overture S3), `-m live` (live physrisk data), `-m e2e` (compose stack); all opt-in |
 | Start local services | `TBD` |
 
 ## Code Areas
@@ -30,10 +30,12 @@ Path prefixes used to group changes (`/ce:update`) and tag plan steps (`/ce:plan
 
 | Area tag | Paths | Notes |
 |----------|-------|-------|
-| `[src]` | `src/**` | Application code |
-| `[tests]` | `tests/**` | Test suite |
-| `[scripts]` | `scripts/**` | Tooling / one-off scripts |
-| `[docker]` | `docker/**` | Container image for the CLI |
+| `[engine]` | `app/engine/**` | Python data computation and API |
+| `[front]` | `app/front/**` | TypeScript website |
+| `[test]` | `test/**` | Test suite (`test/engine`, `test/front`) |
+| `[script]` | `script/**` | Ad-hoc CLIs and tooling |
+| `[vendor]` | `vendor/**`, `.gitmodules` | Pinned geolocate submodule — change by bumping the pin, never by editing |
+| `[docker]` | `docker/**` | Image and compose stack for the app |
 | `[docs]` | `README.md`, `docs/**` | User-facing docs |
 | `[infra]` | `infra/**` | Infrastructure — may require a manual apply after merge |
 | `[ci]` | `.github/**` | CI/CD |
@@ -77,13 +79,14 @@ Files derived from another source. Add their outputs to `.claude/protected-paths
 
 | Artifact | Source | Precondition | Fetch | Generate | Outputs | Verify |
 |----------|--------|--------------|-------|----------|---------|--------|
-| `file-index` | Overture release parquet footers on S3 (`overture_buildings_path` default in `infra/variables.tf`) | Network access, about 4 GB of free memory | Included in Generate | `.venv/bin/python scripts/build_file_index.py <s3-folder>` | `infra/overture_file_index.json` | `.venv/bin/pytest tests/test_file_index.py` |
+| `api-types` (exists once #7 and #8 land) | FastAPI schemas in `app/engine/` | `app/front` dependencies installed | `.venv/bin/python script/export_openapi.py` | `npm --prefix app/front exec openapi-typescript -- openapi.json -o src/api/schema.d.ts` | `app/front/src/api/schema.d.ts` | `npm --prefix app/front run typecheck` |
 
 ## Flagged Paths (`/ce:update`)
 
 Changes under these paths are called out after a pull:
 
 - `infra/**` — infrastructure changed; a manual apply may be needed
+- `vendor/**`, `.gitmodules` — geolocate pin changed; run `git submodule update --init` and re-apply `infra/`
 - `**/migrations/**` — new DB migrations; run them locally
 - `.env.example` — new env vars; check secrets are wired in every environment
 - `CLAUDE.md`, `.claude/**` — conventions or skills changed; worth a read
