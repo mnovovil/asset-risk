@@ -6,30 +6,18 @@ import type { RunStatus } from "@/api/client";
 import { POLL_INTERVAL_MS } from "@/hooks/useRun";
 import { RunPage } from "@/pages/RunPage";
 
-import { jsonResponse, runStatus } from "./helpers";
+import { jsonResponse, resultsResponse, runStatus } from "./helpers";
+
+vi.mock("@/components/dashboard/RiskMap", () => ({ default: () => null }));
 
 const RUN_ID = "11111111-1111-4111-8111-111111111111";
 const STATUS_URL = `/api/runs/${RUN_ID}`;
-
-const SUMMARY = {
-  total_assets: 3,
-  assessable: 2,
-  excluded: 1,
-  assumed_type: 1,
-  global_curve: 0,
-  nearest_match: 0,
-  no_building: 0,
-  failed_assets: 0,
-  exclusions: [{ reason: "invalid", assets: 1 }],
-  shared_hazards: ["Wind"],
-};
 
 /** Answer status polls from a script of responses; the last one repeats. */
 function stubPolls(...responses: (RunStatus | number | "offline")[]) {
   const polls = vi.fn();
   vi.stubGlobal("fetch", async (url: string) => {
-    if (url.endsWith("/summary")) return jsonResponse(SUMMARY);
-    expect(url).toBe(STATUS_URL);
+    if (url !== STATUS_URL) return resultsResponse(url);
     const next = responses.length > 1 ? responses.shift()! : responses[0];
     polls();
     if (next === "offline") throw new TypeError("Failed to fetch");
@@ -104,8 +92,8 @@ describe("RunPage", () => {
     expect(screen.getByText("Geolocating")).toBeInTheDocument();
 
     await nextPoll();
-    expect(screen.getByRole("status")).toHaveTextContent("This run has finished.");
-    expect(screen.getByText(/2 of 3 assets were assessed/)).toBeInTheDocument();
+    await settle();
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download results as CSV" })).toHaveAttribute(
       "href",
       `${STATUS_URL}/export.csv`,
@@ -160,7 +148,8 @@ describe("RunPage", () => {
     await settle();
     await nextPoll();
     expect(polls).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("This run has finished.")).toBeInTheDocument();
+    await settle();
+    expect(screen.getByRole("link", { name: "Download results as CSV" })).toBeInTheDocument();
   });
 
   it("stops polling when the page is left", async () => {

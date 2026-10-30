@@ -72,7 +72,7 @@ export function UploadPage() {
   }
 
   return (
-    <>
+    <div className="narrow">
       <section aria-labelledby="upload-heading">
         <h1 id="upload-heading">Assess a portfolio</h1>
         <p className="lede">
@@ -106,6 +106,6 @@ export function UploadPage() {
         )}
       </section>
       <RunsList />
-    </>
+    </div>
   );
 }
