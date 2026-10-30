@@ -3,7 +3,7 @@
 Take a CSV of `(id, lat, lon)`, identify each point's building with `geolocate`, assess its physical
 climate risk with `physrisk`, and show the portfolio in a web dashboard.
 
-The plan is epic #1. So far everything except the final end-to-end check and docs (#11) exists.
+The README covers setup, `docs/reference.md` the details, and `docs/methodology.md` how to read results.
 
 ## Stack
 - Python >= 3.11, DuckDB >= 2.0, `physrisk-lib` (pinned exactly: its output has no stability promise)
