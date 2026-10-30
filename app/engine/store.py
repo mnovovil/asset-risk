@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import threading
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +15,16 @@ import duckdb
 SQL_DIR = Path(__file__).parent / "sql"
 GEOLOCATED_CSV = "geolocated.csv"
 DATABASE = "run.duckdb"
+
+
+@dataclass
+class _OpenDatabase:
+    connection: duckdb.DuckDBPyConnection
+    users: int = 0
+
+
+_open: dict[Path, _OpenDatabase] = {}
+_open_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -23,8 +36,29 @@ class Run:
     def geolocated_csv(self) -> Path:
         return self.directory / GEOLOCATED_CSV
 
-    def connect(self) -> duckdb.DuckDBPyConnection:
-        return duckdb.connect(self.directory / DATABASE)
+    @contextmanager
+    def connect(self) -> Iterator[duckdb.DuckDBPyConnection]:
+        """A cursor on the run's database, which stays open while anything is using it.
+
+        The API reads a run while the queue's thread writes to it. Opening a file while another
+        thread closes it fails in DuckDB ("Unique file handle conflict"), so one shared connection
+        per file is opened and closed under a lock, and each caller gets its own cursor from it.
+        """
+        path = self.directory / DATABASE
+        with _open_lock:
+            if path not in _open:
+                _open[path] = _OpenDatabase(duckdb.connect(path))
+            database = _open[path]
+            database.users += 1
+        try:
+            with database.connection.cursor() as cursor:
+                yield cursor
+        finally:
+            with _open_lock:
+                database.users -= 1
+                if database.users == 0:
+                    database.connection.close()
+                    del _open[path]
 
 
 def create_run(
@@ -54,6 +88,26 @@ def load_assets(run: Run) -> int:
     if loaded != expected:
         raise ValueError(f"Loaded {loaded} rows from geolocate's output, expected {expected}")
     return loaded
+
+
+def find_run(data_dir: str | os.PathLike[str], run_id: str) -> Run | None:
+    """Return the run with this id, or None. Only a canonical UUID ever becomes a path."""
+    try:
+        canonical = str(uuid.UUID(run_id))
+    except ValueError:
+        return None
+    if canonical != run_id:
+        return None
+    run = Run(canonical, Path(data_dir) / "runs" / canonical)
+    return run if (run.directory / DATABASE).is_file() else None
+
+
+def all_runs(data_dir: str | os.PathLike[str]) -> list[Run]:
+    return [
+        run
+        for directory in (Path(data_dir) / "runs").glob("*")
+        if (run := find_run(data_dir, directory.name)) is not None
+    ]
 
 
 def set_status(run: Run, status: str, stage: str | None = None, error: str | None = None) -> None:

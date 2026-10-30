@@ -1,12 +1,13 @@
 import csv
 import re
+import threading
 from pathlib import Path
 
 import pytest
 
 from engine.geolocation import locate
 from engine.ingest import read_portfolio
-from engine.store import create_run, load_assets
+from engine.store import create_run, load_assets, set_progress, status
 
 COLUMNS = (
     "id,lat,lon,match_type,distance_m,building_id,name,class,subtype,height,num_floors,geometry_wkt"
@@ -133,3 +134,39 @@ def test_end_to_end_from_csv_to_table(local_settings, coords_csv):
         ("p1", "intersects", "house")
     ]
     assert fetch(run, "SELECT count(*) FROM assets WHERE match_type = 'invalid'") == [(4,)]
+
+
+def test_threads_can_open_and_close_a_run_at_the_same_time(tmp_path):
+    # The API polls a run while the queue writes to it, each opening and closing the database.
+    run = create_run(tmp_path, 1)
+    errors = []
+
+    def write():
+        try:
+            for i in range(200):
+                set_progress(run, i, 200)
+        except Exception as e:
+            errors.append(e)
+
+    def read():
+        try:
+            for _ in range(200):
+                status(run)
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=write)] + [threading.Thread(target=read) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert status(run)["done"] == 199
+
+
+def test_a_run_can_be_opened_again_after_closing(tmp_path):
+    run = create_run(tmp_path, 1)
+    with run.connect() as con:
+        con.execute("UPDATE runs SET total_rows = 5")
+    with run.connect() as con:
+        assert con.execute("SELECT total_rows FROM runs").fetchone() == (5,)
