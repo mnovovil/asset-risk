@@ -1,0 +1,2 @@
+duckdb>=2.0
+physrisk-lib==1.10.6

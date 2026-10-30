@@ -1,0 +1,3 @@
+[submodule "vendor/geolocate"]
+	path = vendor/geolocate
+	url = https://github.com/mnovovil/geolocate.git

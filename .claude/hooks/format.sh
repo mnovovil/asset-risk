@@ -26,6 +26,10 @@ case "$file" in
   *.rs)
     command -v rustfmt >/dev/null 2>&1 && rustfmt --quiet "$file" 2>/dev/null ;;
   *.tf)
-    command -v terraform >/dev/null 2>&1 && terraform fmt "$file" >/dev/null 2>&1 ;;
+    if command -v terraform >/dev/null 2>&1; then
+      terraform fmt "$file" >/dev/null 2>&1
+    elif command -v tofu >/dev/null 2>&1; then
+      tofu fmt "$file" >/dev/null 2>&1
+    fi ;;
 esac
 exit 0
