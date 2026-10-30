@@ -1,7 +1,7 @@
 """Run physrisk for every assessable asset, for each configured scenario and year.
 
-Requests run serially, because physrisk's thread safety is untested. A failed batch is recorded and
-the run continues, and its assets have no results for that scenario and year, not zeros.
+Requests run one at a time, because physrisk's thread safety is untested. A failed batch is recorded
+and the run continues, and its assets have no results for that scenario and year, not zeros.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import cache
@@ -26,6 +27,9 @@ MAX_ERROR_LENGTH = 500
 NO_VULNERABILITY = {-1: "No vulnerability"}
 
 logger = logging.getLogger(__name__)
+
+# Runs assess in the background while the API looks up hazard curves.
+_physrisk_lock = threading.Lock()
 
 _INSERT_IMPACTS = """
 INSERT INTO impacts
@@ -102,8 +106,8 @@ def _request(requester: Requester, batch: list[tuple], scenario: str, year: int)
         }
         for _, building_type, location, lat, lon in batch
     ]
-    return json.loads(
-        requester.get(
+    with _physrisk_lock:
+        response = requester.get(
             request_id="get_asset_impact",
             request_dict={
                 "assets": {"items": items},
@@ -114,7 +118,7 @@ def _request(requester: Requester, batch: list[tuple], scenario: str, year: int)
                 "include_measures": True,
             },
         )
-    )
+    return json.loads(response)
 
 
 def flatten(
@@ -182,8 +186,8 @@ def hazard_curve(
     requester: Requester | None = None,
 ) -> dict[str, list[float]]:
     """Intensity by return period at one point. Empty when the scenario has no data for it."""
-    response = json.loads(
-        (requester or default_requester()).get(
+    with _physrisk_lock:
+        raw = (requester or default_requester()).get(
             request_id="get_hazard_data",
             request_dict={
                 "items": [
@@ -199,7 +203,7 @@ def hazard_curve(
                 ]
             },
         )
-    )
+    response = json.loads(raw)
     curve = response["items"][0]["intensity_curve_set"][0]
     return {"return_periods": curve["index_values"], "intensities": curve["intensities"]}
 
