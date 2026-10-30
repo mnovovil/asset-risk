@@ -1,7 +1,10 @@
 -- Load geolocate's output CSV. Its columns are a public interface; see its docs/reference.md.
 -- Everything is read as text, as written, and cast here so a bad value becomes NULL and not an
 -- error. A footprint can be a very long line of WKT, hence the large max_line_size.
-INSERT INTO assets
+INSERT INTO assets (
+    row_num, asset_id, lat, lon, match_type, distance_m, building_id, name, class, subtype, height,
+    num_floors, geometry_wkt
+)
 SELECT row_number() OVER () AS row_num,
        id,
        TRY_CAST(lat AS DOUBLE),

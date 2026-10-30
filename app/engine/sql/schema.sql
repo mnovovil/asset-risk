@@ -22,5 +22,16 @@ CREATE TABLE assets (
     subtype      VARCHAR,
     height       DOUBLE,
     num_floors   INTEGER,
-    geometry_wkt VARCHAR
+    geometry_wkt VARCHAR,
+
+    -- Filled in by classify.sql.
+    region             VARCHAR,  -- continent from the country data; NULL when there is none nearby
+    region_source      VARCHAR,  -- contains | nearest
+    region_distance_km DOUBLE,   -- how far away the nearest country is; 0 when inside one
+    physrisk_type      VARCHAR,
+    physrisk_location  VARCHAR,
+    location_fallback  BOOLEAN,  -- physrisk_location is Global because region has no curve
+    type_source        VARCHAR,  -- class | subtype | assumed
+    assessable         BOOLEAN,
+    exclusion_reason   VARCHAR   -- invalid | off_land | no_curve
 );
