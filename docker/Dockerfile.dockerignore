@@ -1,0 +1,11 @@
+# Allow-list: only what the image needs. Keeps .asset-risk.json, .geolocate.json, Terraform state and
+# vars, .env, the venv and run data out of the build context, so they can't end up in an image layer.
+*
+!requirements.txt
+!app/engine/
+!app/front/
+app/front/node_modules
+app/front/dist
+!script/serve.py
+!vendor/geolocate/src/
+**/__pycache__

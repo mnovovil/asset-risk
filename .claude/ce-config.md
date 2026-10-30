@@ -22,7 +22,7 @@ Fill in the placeholders. Any section left as `TBD` is skipped by the commands.
 | Type check | `npm --prefix app/front run typecheck` (front end only) |
 | Unit tests | `.venv/bin/pytest && npm --prefix app/front test` |
 | Integration / E2E tests | `.venv/bin/pytest -m s3` (live Overture S3), `-m live` (live physrisk data), `-m e2e` (compose stack); all opt-in |
-| Start local services | `.venv/bin/python script/serve.py`, plus `npm --prefix app/front run dev` for front-end work |
+| Start local services | `script/start.sh` (Docker), or `.venv/bin/python script/serve.py` plus `npm --prefix app/front run dev` for front-end work |
 
 ## Code Areas
 

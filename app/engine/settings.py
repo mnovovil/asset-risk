@@ -12,6 +12,7 @@ from pathlib import Path
 
 ENV_VAR = "ASSET_RISK_CONFIG"
 GEOLOCATE_ENV_VAR = "GEOLOCATE_CONFIG"
+DATA_DIR_ENV_VAR = "ASSET_RISK_DATA_DIR"
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PATH = ROOT / ".asset-risk.json"
 KEYS = (
@@ -121,7 +122,8 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         geolocate_batch_size=raw["geolocate_batch_size"],
         max_portfolio_rows=raw["max_portfolio_rows"],
         max_upload_mb=float(upload),
-        data_dir=_from_root(raw["data_dir"]),
+        # In a container, data lives on its volume wherever the settings put it on the host.
+        data_dir=_from_root(os.environ.get(DATA_DIR_ENV_VAR) or raw["data_dir"]),
         api_port=raw["api_port"],
         # The path Terraform wrote is only valid on its own machine, so the container overrides it.
         geolocate_config=_from_root(os.environ.get(GEOLOCATE_ENV_VAR) or raw["geolocate_config"]),
