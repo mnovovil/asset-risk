@@ -1,0 +1,283 @@
+/* Colours follow docs/physrisk_demo.ipynb. */
+:root {
+  color-scheme: light dark;
+  --ink: #0b0b0b;
+  --muted: #52514e;
+  --line: #e6e5e0;
+  --surface: #fcfcfb;
+  --card: #ffffff;
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --success: #12795a;
+  --warning: #8a5e00;
+  --error: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f2f1ed;
+    --muted: #b0aea8;
+    --line: #36352f;
+    --surface: #161614;
+    --card: #1f1f1c;
+    --accent: #6ba6ec;
+    --accent-ink: #0b0b0b;
+    --success: #5cc9a3;
+    --warning: #e5b84f;
+    --error: #f2877f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+section + section {
+  margin-top: 40px;
+}
+
+.site-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.site-name {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.lede {
+  margin: 0 0 24px;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.dropzone {
+  padding: 40px 16px;
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  text-align: center;
+}
+
+.dropzone-active {
+  border-color: var(--accent);
+}
+
+.dropzone-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.dropzone .muted {
+  margin: 4px 0 16px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+input:focus-visible + .button,
+.visually-hidden:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.dropzone:focus-within .button {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.card {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.table-scroll {
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+caption {
+  padding-bottom: 8px;
+  color: var(--muted);
+  text-align: left;
+}
+
+th,
+td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+th {
+  font-weight: 600;
+}
+
+td {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  padding: 10px 12px;
+  border-left: 3px solid currentColor;
+  overflow-wrap: anywhere;
+}
+
+.notice-error {
+  color: var(--error);
+}
+
+.notice-warning {
+  color: var(--warning);
+}
+
+.notice-success {
+  color: var(--success);
+}
+
+.runs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runs-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.runs-list a {
+  overflow-wrap: anywhere;
+}
+
+.runs-list .status {
+  margin-left: auto;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.status-completed {
+  color: var(--success);
+}
+
+.status-failed,
+.status-interrupted {
+  color: var(--error);
+}
+
+.stages {
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.stage-label {
+  display: block;
+  font-weight: 600;
+}
+
+.stage-waiting .stage-label {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.stage-done .stage-label::after {
+  content: " ✓";
+  color: var(--success);
+}
+
+progress {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--accent);
+}
