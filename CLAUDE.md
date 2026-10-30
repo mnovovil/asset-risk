@@ -3,7 +3,8 @@
 Take a CSV of `(id, lat, lon)`, identify each point's building with `geolocate`, assess its physical
 climate risk with `physrisk`, and show the portfolio in a web dashboard.
 
-The plan is epic #1. So far `app/engine` is complete; the rest arrives with issues #8–#11.
+The plan is epic #1. So far `app/engine` and the front end's shell exist; the rest arrives with issues
+#9–#11.
 
 ## Stack
 - Python >= 3.11, DuckDB >= 2.0, `physrisk-lib` (pinned exactly: its output has no stability promise)
@@ -59,6 +60,12 @@ script/              ad-hoc CLIs
   `{"detail": "readable message"}`. Assets are addressed by `row_num`, because an invalid row can
   have no id and an id can contain any character. Results are 409 until a run is `completed`.
 
+- **Front-end types** (`app/front/src/api/schema.d.ts`): generated from `app/front/openapi.json` with
+  `npm run gen:api`. After an API change, run `/sync-generated`. Never hand-edit it.
+- **Front-end tests** live in `test/front`, outside the package. `vite.config.ts` and `tsconfig.json`
+  resolve their dependencies from `app/front`.
+- TypeScript stays on 5.x: `openapi-typescript` 7 doesn't work with TypeScript 7.
+
 ## Rules
 - Never edit `vendor/`. To change geolocate, change its own repo and bump the submodule. A bump also
   moves the Overture release, because geolocate's `infra/` pins it.
@@ -86,6 +93,9 @@ script/              ad-hoc CLIs
 
 ## Commands
 - Install: `git submodule update --init && uv venv .venv && uv pip install -p .venv -r requirements-dev.txt`
+  and `npm --prefix app/front ci`
+- Front end: `npm --prefix app/front run dev` (proxies `/api` to port 8000) · `run build` · `test` ·
+  `run typecheck`. `script/serve.py` serves the built `dist/` once it exists.
 - Lint: `.venv/bin/ruff check --fix .` · Format: `.venv/bin/ruff format .`
 - Serve: `.venv/bin/python script/serve.py` · API docs at `/docs`
 - Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live` or `-m e2e`

@@ -16,13 +16,13 @@ Fill in the placeholders. Any section left as `TBD` is skipped by the commands.
 
 | Purpose | Command |
 |---------|---------|
-| Install deps | `git submodule update --init && uv venv .venv && uv pip install -p .venv -r requirements-dev.txt` |
+| Install deps | `git submodule update --init && uv venv .venv && uv pip install -p .venv -r requirements-dev.txt && npm --prefix app/front ci` |
 | Lint (+fix) | `.venv/bin/ruff check --fix .` |
 | Format | `.venv/bin/ruff format .` |
-| Type check | `TBD` |
-| Unit tests | `.venv/bin/pytest` |
+| Type check | `npm --prefix app/front run typecheck` (front end only) |
+| Unit tests | `.venv/bin/pytest && npm --prefix app/front test` |
 | Integration / E2E tests | `.venv/bin/pytest -m s3` (live Overture S3), `-m live` (live physrisk data), `-m e2e` (compose stack); all opt-in |
-| Start local services | `TBD` |
+| Start local services | `.venv/bin/python script/serve.py`, plus `npm --prefix app/front run dev` for front-end work |
 
 ## Code Areas
 
@@ -80,7 +80,7 @@ Files derived from another source. Add their outputs to `.claude/protected-paths
 | Artifact | Source | Precondition | Fetch | Generate | Outputs | Verify |
 |----------|--------|--------------|-------|----------|---------|--------|
 | `regions` | Natural Earth 1:50m countries, at the commit pinned in `script/build_regions.py` | Network access | Included in Generate | `.venv/bin/python script/build_regions.py` | `app/engine/data/countries.geojson` | `.venv/bin/pytest test/engine/test_classify.py` |
-| `api-types` (exists once #7 and #8 land) | FastAPI schemas in `app/engine/` | `app/front` dependencies installed | `.venv/bin/python script/export_openapi.py` | `npm --prefix app/front exec openapi-typescript -- openapi.json -o src/api/schema.d.ts` | `app/front/src/api/schema.d.ts` | `npm --prefix app/front run typecheck` |
+| `api-types` | FastAPI schemas in `app/engine/` | `npm --prefix app/front ci` | `.venv/bin/python script/export_openapi.py` | `npm --prefix app/front run gen:api` | `app/front/openapi.json`, `app/front/src/api/schema.d.ts` | `.venv/bin/pytest test/engine/test_api.py -k openapi && npm --prefix app/front run check:api && npm --prefix app/front run typecheck` |
 
 ## Flagged Paths (`/ce:update`)
 

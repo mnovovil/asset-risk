@@ -16,6 +16,11 @@ ROOT = Path(__file__).resolve().parents[2]
 CSV = b"id,lat,lon\n=cmd,40.4,-3.7\nb,29.7,-95.3\nbad,95,1\n"
 
 
+def api_app(settings, execute):
+    """The API alone, whether or not the front end has been built on this machine."""
+    return create_app(settings, execute=execute, front_dist=Path("/nonexistent"))
+
+
 def complete_run(run, points, settings):
     """Stands in for the pipeline: writes the results a real run would."""
     with run.connect() as con:
@@ -55,7 +60,7 @@ def complete_run(run, points, settings):
 
 @pytest.fixture
 def client(settings):
-    with TestClient(create_app(settings, execute=complete_run)) as c:
+    with TestClient(api_app(settings, complete_run)) as c:
         yield c
 
 
@@ -140,7 +145,7 @@ def test_too_many_rows_is_rejected(client):
 
 def test_too_many_bytes_is_rejected(settings):
     small = replace(settings, max_upload_mb=0.001)
-    with TestClient(create_app(small, execute=complete_run)) as client:
+    with TestClient(api_app(small, complete_run)) as client:
         response = upload(client, b"id,lat,lon\n" + b"a,1,2\n" * 1000)
     assert response.status_code == 413
     assert "MB limit" in response.json()["detail"]
@@ -200,7 +205,7 @@ class Blocking:
 
 def test_queue_runs_one_at_a_time_in_order(settings):
     pipeline = Blocking()
-    with TestClient(create_app(settings, execute=pipeline)) as client:
+    with TestClient(api_app(settings, pipeline)) as client:
         first = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         second = upload(client).json()
@@ -219,7 +224,7 @@ def test_queue_runs_one_at_a_time_in_order(settings):
 
 def test_results_wait_for_the_run_to_complete(settings):
     pipeline = Blocking()
-    with TestClient(create_app(settings, execute=pipeline)) as client:
+    with TestClient(api_app(settings, pipeline)) as client:
         run_id = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         response = client.get(f"/api/runs/{run_id}/summary")
@@ -233,7 +238,7 @@ def test_failed_run_reports_its_error_and_has_no_results(settings):
         set_status(run, "failed", error="geolocate failed: S3 is down")
         return False
 
-    with TestClient(create_app(settings, execute=fail)) as client:
+    with TestClient(api_app(settings, fail)) as client:
         run_id = upload(client).json()["run_id"]
         body = wait_until_finished(client, run_id)
         assert (body["status"], body["error"]) == ("failed", "geolocate failed: S3 is down")
@@ -250,7 +255,7 @@ def test_a_crash_in_the_pipeline_does_not_stop_the_queue(settings):
             raise RuntimeError("boom")
         return complete_run(run, points, settings)
 
-    with TestClient(create_app(settings, execute=crash_once)) as client:
+    with TestClient(api_app(settings, crash_once)) as client:
         upload(client)
         second = upload(client).json()["run_id"]
         assert wait_until_finished(client, second)["status"] == "completed"
@@ -261,7 +266,7 @@ def test_unfinished_runs_are_marked_interrupted_at_startup(settings, state):
     run = create_run(settings.data_dir, 1)
     if state == "running":
         set_status(run, "running", "assessing")
-    with TestClient(create_app(settings, execute=complete_run)) as client:
+    with TestClient(api_app(settings, complete_run)) as client:
         body = client.get(f"/api/runs/{run.run_id}").json()
     assert body["status"] == "interrupted"
     assert "Upload the portfolio again" in body["error"]
@@ -270,7 +275,7 @@ def test_unfinished_runs_are_marked_interrupted_at_startup(settings, state):
 def test_finished_runs_survive_a_restart(settings):
     run = create_run(settings.data_dir, 1)
     set_status(run, "completed")
-    with TestClient(create_app(settings, execute=complete_run)) as client:
+    with TestClient(api_app(settings, complete_run)) as client:
         assert client.get(f"/api/runs/{run.run_id}").json()["status"] == "completed"
     assert len(all_runs(settings.data_dir)) == 1
 
@@ -451,6 +456,7 @@ def test_static_files_cannot_escape_the_folder(settings, tmp_path):
     (tmp_path / "secret.txt").write_text("secret")
     with TestClient(spa_app(settings, tmp_path)) as client:
         assert "secret" not in client.get("/..%2fsecret.txt").text
+        assert "secret" not in client.get("/api/runs/..%2f..%2f..%2fsecret.txt").text
 
 
 def test_committed_openapi_is_current():
