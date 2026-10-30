@@ -150,5 +150,17 @@ After changing the API, regenerate the front end's types:
 .venv/bin/python script/export_openapi.py && npm --prefix app/front run gen:api
 ```
 
+After a visible change to the app, record the README's GIF again. Each new version stays in git
+history, so don't do this for small changes:
+
+```bash
+uvx playwright@1.64.1 install chromium-headless-shell   # once
+uv run script/record_demo.py --build
+```
+
+It runs the sample CSV for real in its own compose project and volume, and stops if the run fails or
+the map doesn't load. Without `--build` it reuses the existing image. Check that it reports all three
+stages: Classifying is short, and the page only checks progress every 1.5 s, so it can be missed.
+
 `script/overture_values.py` audits the building type map against a live release, and
 `script/build_regions.py` rebuilds the region data.

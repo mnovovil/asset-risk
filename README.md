@@ -8,6 +8,12 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 [most buildings have no known type](docs/methodology.md#building-type), so read
 [the methodology](docs/methodology.md) before relying on a number.
 
+![Uploading the sample CSV, following the geolocating, classifying and assessing stages, then going through the dashboard's figures, map, charts, asset details and data quality notes](docs/assets/demo.gif)
+
+*A real run of the [sample CSV](app/front/public/sample_portfolio.csv), with the stages sped up. Its
+figures are screening estimates for illustration. Map data © OpenStreetMap contributors, via
+OpenFreeMap and OpenMapTiles.*
+
 ## Quick start
 
 You need Docker, [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.3 or OpenTofu,
