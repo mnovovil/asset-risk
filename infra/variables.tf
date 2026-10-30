@@ -29,7 +29,7 @@ variable "years" {
 }
 
 variable "default_building_type" {
-  description = "physrisk type for assets with no usable Overture class or subtype. Results are sensitive to this: about half of the buildings in a Madrid sample had neither."
+  description = "physrisk type for assets with no usable Overture class or subtype. Most Overture buildings have neither, so this often decides the type, and results are sensitive to it."
   type        = string
   default     = "Buildings/Commercial"
 

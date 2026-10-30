@@ -56,7 +56,11 @@ def test_loads_typed_values(tmp_path):
         ),
     )
     assert load_assets(run) == 1
-    assert fetch(run, "SELECT * FROM assets") == [
+    columns = (
+        "row_num, asset_id, lat, lon, match_type, distance_m, building_id, name, class, subtype, "
+        "height, num_floors, geometry_wkt"
+    )
+    assert fetch(run, f"SELECT {columns} FROM assets") == [
         (
             1,
             "a",

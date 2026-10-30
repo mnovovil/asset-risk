@@ -5,3 +5,4 @@
 # vendor/*
 app/front/src/api/schema.d.ts
 vendor/*
+app/engine/data/countries.geojson
