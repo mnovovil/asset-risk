@@ -53,8 +53,8 @@ SHOW_CAPTION = """text => {
     caption.id = "demo-caption";
     caption.style.cssText = `position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
       z-index: 1000; width: max-content; max-width: 1200px; padding: 10px 20px; color: #fff;
-      border-radius: 8px;
-      background: #1f2933; font: 600 20px/1.3 system-ui, sans-serif; text-align: center;`;
+      border-radius: 8px; background: #1f2933; font: 600 20px/1.3 system-ui, sans-serif;
+      text-align: center;`;
     document.body.append(caption);
     // So the end of the page can scroll clear of the caption.
     document.body.style.paddingBottom = "100px";
@@ -240,8 +240,9 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=OUTPUT, help="default: %(default)s")
     args = parser.parse_args()
 
-    compose("up", "--detach", "--wait", *(["--build"] if args.build else []))
     try:
+        # Inside the try, because a container that fails its health check is still left running.
+        compose("up", "--detach", "--wait", *(["--build"] if args.build else []))
         with tempfile.TemporaryDirectory() as folder:
             record(Path(folder), args.output)
     except (RuntimeError, PlaywrightError) as e:
