@@ -72,3 +72,7 @@ flowchart TB
 | `vendor/geolocate` | geolocate, pinned as a submodule |
 
 Settings, the API, performance and development commands are in the [reference](docs/reference.md).
+
+## License
+
+[MIT](LICENSE). `vendor/geolocate`, physrisk and the data sources have their own terms.
