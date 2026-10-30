@@ -1,8 +1,8 @@
-"""Run a portfolio CSV through the pipeline: python script/run_portfolio.py <portfolio.csv>
+"""Run a portfolio CSV through the full pipeline: python script/run_portfolio.py <portfolio.csv>
 [--settings path].
 
-Runs ingest, geolocate and classify so far, then prints a summary. Exit codes: 0 success,
-1 settings, geolocate or classification failure, 2 bad portfolio.
+Prints a summary and the mean average annual loss per scenario and year. Exit codes: 0 success,
+1 settings or pipeline failure, 2 bad portfolio.
 """
 
 from __future__ import annotations
@@ -13,11 +13,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
-from engine.classify import ClassificationError, classify  # noqa: E402
-from engine.geolocation import GeolocationError, locate  # noqa: E402
-from engine.ingest import PortfolioError, read_portfolio  # noqa: E402
+from engine.geolocation import GeolocationError  # noqa: E402
+from engine.ingest import PortfolioError  # noqa: E402
+from engine.pipeline import execute, start  # noqa: E402
 from engine.settings import SettingsError, load_settings  # noqa: E402
-from engine.store import create_run, load_assets  # noqa: E402
+from engine.store import status, summary  # noqa: E402
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         settings = load_settings(args.settings)
-        points = read_portfolio(args.csv_path, settings.max_portfolio_rows)
+        run, points = start(args.csv_path, settings, args.csv_path.name)
     except (SettingsError, GeolocationError) as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_FAILED
@@ -40,22 +40,31 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_INPUT
 
-    run = create_run(settings.data_dir, len(points), args.csv_path.name)
-    try:
-        counts = locate(points, run.geolocated_csv, settings)
-        load_assets(run)
-        classified = classify(run, settings)
-    except (GeolocationError, ClassificationError) as e:
-        print(f"error: {e}", file=sys.stderr)
+    if not execute(run, points, settings):
+        print(f"error: {status(run)['error']}", file=sys.stderr)
         return EXIT_FAILED
 
-    matched = ", ".join(f"{k}={v}" for k, v in counts.items())
-    assessed = ", ".join(f"{k}={v}" for k, v in classified.items())
-    print(f"Run {run.run_id}: {len(points)} rows")
-    print(f"Geolocated: {matched}")
-    print(f"Classified: {assessed}")
+    print(f"Run {run.run_id}: {summary(run)}")
+    with run.connect() as con:
+        rows = con.execute(
+            "SELECT scenario, year, assets, mean_total_aal, mean_shared_aal, hazards "
+            "FROM v_portfolio_trajectory ORDER BY scenario, year"
+        ).fetchall()
+        hazards = con.execute("SELECT hazard FROM v_shared_hazards ORDER BY 1").fetchall()
+    shared = [hazard for (hazard,) in hazards]
+    print(f"Hazards in every scenario: {shared}")
+    print("scenario    year  assets  total AAL  shared AAL  hazards")
+    for scenario, year, assets, total, comparable, covered in rows:
+        print(
+            f"{scenario:<11} {year or '':<5} {assets:>6}  {_percent(total):>9}  "
+            f"{_percent(comparable):>10}  {covered:>7}"
+        )
     print(f"Results: {run.directory}")
     return EXIT_OK
+
+
+def _percent(value: float | None) -> str:
+    return "-" if value is None else f"{value:.3%}"
 
 
 if __name__ == "__main__":

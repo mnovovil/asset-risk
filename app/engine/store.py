@@ -37,6 +37,7 @@ def create_run(
     run = Run(run_id, directory)
     with run.connect() as con:
         con.execute((SQL_DIR / "schema.sql").read_text())
+        con.execute((SQL_DIR / "views.sql").read_text())
         con.execute(
             "INSERT INTO runs (run_id, source_name, total_rows) VALUES (?, ?, ?)",
             [run_id, source_name, total_rows],
@@ -53,3 +54,36 @@ def load_assets(run: Run) -> int:
     if loaded != expected:
         raise ValueError(f"Loaded {loaded} rows from geolocate's output, expected {expected}")
     return loaded
+
+
+def set_status(run: Run, status: str, stage: str | None = None, error: str | None = None) -> None:
+    """Record where the run is. Progress within the stage restarts at zero."""
+    with run.connect() as con:
+        con.execute(
+            "UPDATE runs SET status = ?, stage = ?, error = ?, done = 0, total = 0, "
+            "updated_at = current_timestamp",
+            [status, stage, error],
+        )
+
+
+def set_progress(run: Run, done: int, total: int) -> None:
+    with run.connect() as con:
+        con.execute(
+            "UPDATE runs SET done = ?, total = ?, updated_at = current_timestamp", [done, total]
+        )
+
+
+def status(run: Run) -> dict:
+    with run.connect() as con:
+        return _one_row(con, "SELECT * FROM runs")
+
+
+def summary(run: Run) -> dict:
+    with run.connect() as con:
+        return _one_row(con, "SELECT * FROM v_portfolio_summary")
+
+
+def _one_row(con: duckdb.DuckDBPyConnection, sql: str) -> dict:
+    cursor = con.execute(sql)
+    names = [d[0] for d in cursor.description]
+    return dict(zip(names, cursor.fetchone(), strict=True))

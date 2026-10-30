@@ -1,5 +1,5 @@
 variable "scenarios" {
-  description = "Climate scenarios to assess. The historical baseline always comes back too."
+  description = "Climate scenarios to assess. The historical baseline always comes back too. Data differs by scenario: ssp585 has all five hazards, ssp245 lacks fire and hail, ssp126 has only fire and hail, and ssp370 returned nothing."
   type        = list(string)
   default     = ["ssp245", "ssp585"]
 
