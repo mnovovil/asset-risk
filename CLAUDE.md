@@ -72,7 +72,8 @@ script/              ad-hoc CLIs
 ## Branches
 - `dev` is the default branch. Branch from it, open PRs against it, and squash-merge.
 - `main` is the release branch. It only moves through a release PR from `dev`, merged with a merge
-  commit. Never squash a release, or `main` and `dev` stop sharing history.
+  commit. Never squash a release, or `main` and `dev` stop sharing history. The `Source branch` CI
+  job fails any PR into `main` from another branch.
 - Both are protected: a PR and green CI (`.github/workflows/ci.yml`) are required, and force pushes
   and deletion are blocked. Every CI job runs on every PR, because a required check that a path
   filter skips never reports.

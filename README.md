@@ -73,6 +73,37 @@ flowchart TB
 
 Settings, the API, performance and development commands are in the [reference](docs/reference.md).
 
+## Branches and pull requests
+
+All work goes through `dev`. `main` only receives releases from `dev`.
+
+```mermaid
+gitGraph
+    commit id: "release 1"
+    branch dev
+    checkout dev
+    branch feat/42-thing
+    checkout feat/42-thing
+    commit id: "work"
+    commit id: "more work"
+    checkout dev
+    merge feat/42-thing id: "PR #42, squash" type: HIGHLIGHT
+    branch fix/43-bug
+    checkout fix/43-bug
+    commit id: "fix"
+    checkout dev
+    merge fix/43-bug id: "PR #43, squash" type: HIGHLIGHT
+    checkout main
+    merge dev id: "release PR, merge commit" type: HIGHLIGHT
+```
+
+- Branch from `dev` and open the PR against `dev`. It's squash-merged.
+- A release is a PR from `dev` to `main`, merged with a merge commit (never squashed, so the two
+  branches keep sharing history).
+- PRs into `main` from any other branch fail the `Source branch` check.
+- Every PR needs green CI: `Source branch`, `Engine`, `Front end` and `Infra`.
+- No direct pushes, force pushes or deletion on `dev` or `main`.
+
 ## License
 
 [MIT](LICENSE). `vendor/geolocate`, physrisk and the data sources have their own terms.
