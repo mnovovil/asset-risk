@@ -1,0 +1,100 @@
+name: CI
+
+# Runs on every PR and push to both long-lived branches. Every job always runs (no path filters),
+# because the jobs are required checks and a filtered-out required check never reports.
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  engine:
+    name: Engine (ruff, pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install
+        run: uv venv .venv && uv pip install -p .venv -r requirements-dev.txt
+
+      - name: Lint
+        run: .venv/bin/ruff check .
+
+      - name: Format
+        run: .venv/bin/ruff format --check .
+
+      # Unit tests only: the s3, live and e2e markers are excluded by default in pyproject.toml.
+      # This includes the check that app/front/openapi.json is current.
+      - name: Test
+        run: .venv/bin/pytest
+
+  front:
+    name: Front end (typecheck, api types, vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/front/package-lock.json
+
+      - name: Install
+        run: npm --prefix app/front ci
+
+      - name: Typecheck
+        run: npm --prefix app/front run typecheck
+
+      - name: Generated API types are current
+        run: npm --prefix app/front run check:api
+
+      - name: Test
+        run: npm --prefix app/front test
+
+  infra:
+    name: Infra (tofu fmt, validate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # infra/ calls geolocate's stack as a module from the submodule.
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: '1.11.6'
+
+      - name: Format
+        run: tofu fmt -check -recursive infra
+
+      - name: Init
+        run: tofu -chdir=infra init -backend=false -input=false
+
+      - name: Validate
+        run: tofu -chdir=infra validate
