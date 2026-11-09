@@ -6,11 +6,11 @@ Fill in the placeholders. Any section left as `TBD` is skipped by the commands.
 ## Repository
 
 - **Repo**: `mnovovil/asset-risk` (e.g. `owner/name` — if TBD, commands use `gh repo view --json nameWithOwner --jq .nameWithOwner`)
-- **Base branch** (PRs target this): `main` (if TBD, use the repo's default branch)
-- **Release branch** (production, if different): `TBD`
+- **Base branch** (PRs target this): `dev` (if TBD, use the repo's default branch)
+- **Release branch** (production, if different): `main` (updated only by a release PR from `dev`)
 - **Branch naming**: `feat/<issue>-<slug>`, `fix/<issue>-<slug>`, `chore/<issue>-<slug>`
 - **Commit style**: Conventional commits — `feat:`, `fix:`, `ci:`, `chore:`, `docs:`, `test:`, `refactor:`
-- **Merge strategy**: squash
+- **Merge strategy**: squash into `dev`; a merge commit for release PRs `dev` → `main`, so `main` keeps `dev`'s commits
 
 ## Commands
 

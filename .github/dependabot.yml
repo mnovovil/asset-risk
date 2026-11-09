@@ -1,0 +1,33 @@
+version: 2
+# PRs go to the default branch, dev.
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    ignore:
+      # Pinned exactly on purpose: its output has no stability promise. Bump it by hand and
+      # re-check results (CLAUDE.md, Stack).
+      - dependency-name: "physrisk-lib"
+
+  - package-ecosystem: "npm"
+    directory: "/app/front"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+    open-pull-requests-limit: 5
+    ignore:
+      # openapi-typescript 7 doesn't work with TypeScript 7 (CLAUDE.md, Contracts).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+
+  # The geolocate submodule isn't listed: a bump also moves the Overture release, so do it on purpose.
