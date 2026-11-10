@@ -21,6 +21,7 @@ import { SCORE_NOTES, scoreKind } from "@/lib/dashboard";
 import { assetLabel, percent, scenarioLabel } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
+import { AssetHazardMap } from "./AssetHazardMap";
 import { ChartLegend } from "./ChartLegend";
 import { ChartTooltip } from "./ChartTooltip";
 
@@ -339,6 +340,18 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
                 Raw hazard data, before any assumed flood protection. A flat line at zero means this
                 exact point is dry in the data, not that the area has no flood risk.
               </p>
+              {asset.lat !== null && asset.lon !== null && (
+                <>
+                  <h3>Hazard maps</h3>
+                  <AssetHazardMap
+                    runId={runId}
+                    pair={pair}
+                    lat={asset.lat}
+                    lon={asset.lon}
+                    hazards={hazards}
+                  />
+                </>
+              )}
             </>
           )}
         </>
