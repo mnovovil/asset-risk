@@ -45,6 +45,12 @@ MAP_SETTLE_SECONDS = 4
 SCROLL_STEPS = 4
 SCROLL_STEP_SECONDS = 0.08
 SCROLL_MARGIN_PX = 40
+# Avilés has about 1.1 m of river flood at 1 in 1000 years, so its map has colour at the asset.
+DETAIL_ASSET = "aviles"
+HAZARD_MAPS = [
+    ("RiverineInundation", "Hazard maps around the asset: river flood depth, 1 in 1000 years"),
+    ("CoastalInundation", "Switch hazards: clear means no flood in the data, not no risk"),
+]
 
 SHOW_CAPTION = """text => {
   let caption = document.getElementById("demo-caption");
@@ -164,7 +170,25 @@ def record_progress(rec: Recorder) -> list[str]:
     return seen
 
 
-def record_results(rec: Recorder, tiles_loaded: list[str]) -> None:
+def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
+    """Scroll the panel to its hazard map, then show river and coastal flood around the asset."""
+    page = rec.page
+    heading = panel.get_by_role("heading", name="Hazard maps", level=3)
+    heading.wait_for()
+    heading.evaluate("e => e.scrollIntoView({block: 'start', behavior: 'instant'})")
+    for hazard, caption in HAZARD_MAPS:
+        panel.get_by_label("Hazard").select_option(hazard)
+        rec.caption(caption)
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
+        fail_on_alert(page)
+        # A tile only loads where physrisk has one: none would mean an empty hazard map.
+        if not any(f"/hazard-maps/{hazard}/" in url for url in hazard_tiles):
+            raise RuntimeError(f"no {hazard} map tile loaded")
+        rec.shot(4.5)
+
+
+def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[str]) -> None:
     page = rec.page
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
@@ -184,14 +208,16 @@ def record_results(rec: Recorder, tiles_loaded: list[str]) -> None:
     rec.caption('Scores per hazard: "No model" and "No data" are not low risk')
     rec.scroll_to("Risk by asset and hazard", 4)
     rec.caption("The details of one asset")
-    rec.click(page.get_by_role("button", name="nairobi-centre").first)
-    page.get_by_role("dialog", name="Asset details").wait_for()
+    rec.click(page.get_by_role("button", name=DETAIL_ASSET).first)
+    panel = page.get_by_role("dialog", name="Asset details")
+    panel.wait_for()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
     fail_on_alert(page)
     rec.shot(4.5)
+    record_hazard_maps(rec, panel, hazard_tiles)
     page.keyboard.press("Escape")
-    page.get_by_role("dialog", name="Asset details").wait_for(state="hidden")
+    panel.wait_for(state="hidden")
     rec.caption("Change over time, comparing scenarios on shared hazards only")
     rec.scroll_to("Change over time", 3.5)
     rec.caption("How far to trust these results: a screening tool, not a site assessment")
@@ -220,14 +246,21 @@ def record(folder: Path, output: Path) -> None:
         browser = p.chromium.launch(args=CHROMIUM_ARGS)
         page = browser.new_page(viewport=VIEWPORT, color_scheme="light")
         tiles_loaded: list[str] = []
-        page.on(
-            "response",
-            lambda r: tiles_loaded.append(r.url) if r.ok and r.url.endswith(".pbf") else None,
-        )
+        hazard_tiles: list[str] = []
+
+        def on_response(response) -> None:
+            if not response.ok:
+                return
+            if response.url.endswith(".pbf"):
+                tiles_loaded.append(response.url)
+            elif "/hazard-maps/" in response.url:
+                hazard_tiles.append(response.url)
+
+        page.on("response", on_response)
         rec = Recorder(page, folder)
         record_upload(rec)
         seen = record_progress(rec)
-        record_results(rec, tiles_loaded)
+        record_results(rec, tiles_loaded, hazard_tiles)
         browser.close()
     print(f"Stages on screen: {', '.join(seen) or 'none'}")
     print(f"Frames: {len(rec.frames)}, {sum(f.seconds for f in rec.frames):.0f} s")
