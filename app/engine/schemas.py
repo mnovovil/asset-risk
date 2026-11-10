@@ -138,6 +138,19 @@ class HazardCurve(BaseModel):
     intensities: list[float]
 
 
+class HazardMapLayer(BaseModel):
+    hazard: str
+    available: bool
+    reason: str | None  # why there's no map for this scenario and year
+    return_period: int
+    units: str
+    min_value: float
+    max_value: float
+    max_zoom: int
+    legend: list[str]  # CSS colours from min_value to max_value, as drawn on the map
+    tile_url: str | None  # {z}, {x} and {y} are left for the map to fill in
+
+
 class AppConfig(BaseModel):
     scenarios: list[str]
     years: list[int]
