@@ -9,9 +9,10 @@ import { usePrefersDark } from "@/hooks/useColorScheme";
 
 const HAZARD = "hazard";
 const ASSET = "asset";
-// Hazard pixels are about 1 km at the deepest zoom, so a closer start would show only blocks.
-const START_ZOOM = 8;
-const MAX_ZOOM = 12;
+// Close enough to see the streets around the asset. physrisk's tiles stop at zoom 6, so MapLibre
+// stretches the one tile that covers the asset: panning and zooming here fetch nothing new.
+const START_ZOOM = 14;
+const MAX_ZOOM = 17;
 const TILE_SIZE_PX = 512;
 
 interface HazardTileMapProps {
@@ -104,7 +105,16 @@ export default function HazardTileMap({ lat, lon, tileUrl, maxZoom, label }: Haz
       tileSize: TILE_SIZE_PX,
       maxzoom: maxZoom,
     });
-    map.addLayer({ id: HAZARD, type: "raster", source: HAZARD }, ASSET);
+    map.addLayer(
+      {
+        id: HAZARD,
+        type: "raster",
+        source: HAZARD,
+        // Sharp cells show the data's real resolution, instead of smoothing it into false detail.
+        paint: { "raster-resampling": "nearest", "raster-fade-duration": 0 },
+      },
+      ASSET,
+    );
   }, [ready, tileUrl, maxZoom]);
 
   if (unavailable) {
