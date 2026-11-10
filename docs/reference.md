@@ -70,10 +70,17 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/summary` | Counts, exclusions and shared hazards |
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
 | `GET /api/runs/{id}/assets/{row_num}/hazard-curve` | River flood depth by return period |
+| `GET /api/runs/{id}/hazard-maps` | The hazards physrisk can draw a map of for one `scenario` and `year`, each with its tile URL and legend, or the reason it has none |
+| `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to 6, for the same `scenario` and `year`. 404 where there's no map |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
 | `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard |
 | `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
+
+Map tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
+while another run is assessing. The app keeps the last 256 in memory. Only river and coastal flood
+have public map data. `app/engine/hazard_maps.py` lists them, and `pytest -m live` checks that list
+against physrisk after a version bump.
 
 Results return 409 until a run is `completed`. Assets are addressed by `row_num`, because an invalid
 row can have no id. Runs that were queued or running when the app stopped are marked `interrupted`,

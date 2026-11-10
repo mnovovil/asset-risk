@@ -46,6 +46,7 @@ def test_a_tile_asks_physrisk_for_the_1000_year_layer():
             "min_value": 0.0,
             "max_value": 2.0,
             "index_value": 1000,
+            "colormap": "flare",
         }
     ]
 
@@ -155,6 +156,19 @@ def test_live_flood_maps_have_water(hazard, scenario, year):
     image = hazard_maps.tile(hazard, scenario, year, *COAST_TILE)
     assert image is not None
     assert opaque_pixels(image) > 0
+
+
+@pytest.mark.live
+def test_live_tiles_use_the_legends_colormap():
+    """physrisk's request defaults to "heating", which would leave the legend wrong."""
+    from physrisk.data.colormap_provider import colormap
+    from PIL import Image
+
+    layer = hazard_maps.LAYERS[RIVER]
+    image = hazard_maps.tile(RIVER, "historical", None, *COAST_TILE)
+    drawn = {p for p in Image.open(io.BytesIO(image)).convert("RGBA").get_flattened_data() if p[3]}
+    assert drawn
+    assert drawn <= {tuple(entry) for entry in colormap(layer.colormap).values()}
 
 
 @pytest.mark.live

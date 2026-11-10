@@ -147,6 +147,8 @@ def tile(
         "min_value": layer.min_value,
         "max_value": layer.max_value,
         "index_value": RETURN_PERIOD,
+        # physrisk's request defaults to "heating", not the resource's own colormap.
+        "colormap": layer.colormap,
     }
     try:
         with _physrisk_lock:
