@@ -414,6 +414,93 @@ def test_hazard_curve_failure_is_reported(client, finished, monkeypatch):
     assert "no data" in response.json()["detail"]
 
 
+def test_hazard_maps_list_the_flood_layers(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
+    assert [layer["hazard"] for layer in layers] == ["RiverineInundation", "CoastalInundation"]
+    river = layers[0]
+    assert river["available"] is True
+    assert river["reason"] is None
+    assert (river["return_period"], river["units"], river["max_zoom"]) == (1000, "m", 6)
+    assert len(river["legend"]) == 5
+    assert river["tile_url"] == (
+        f"/api/runs/{finished}/hazard-maps/RiverineInundation/{{z}}/{{x}}/{{y}}.png"
+        "?scenario=ssp585&year=2050"
+    )
+    baseline = client.get(url, params={"scenario": "historical"}).json()
+    assert baseline[0]["tile_url"].endswith("?scenario=historical")
+
+
+def test_hazard_maps_say_why_a_scenario_has_none(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    layers = client.get(url, params={"scenario": "ssp370", "year": 2050}).json()
+    assert {(layer["available"], layer["tile_url"]) for layer in layers} == {(False, None)}
+    assert layers[0]["reason"] == "physrisk has no flood map for this scenario"
+
+
+def test_hazard_maps_need_an_assessed_pair(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    assert client.get(url, params={"scenario": "ssp245", "year": 2050}).status_code == 404
+    tile = f"{url}/RiverineInundation/5/23/13.png"
+    assert client.get(tile, params={"scenario": "ssp245", "year": 2050}).status_code == 404
+
+
+def test_hazard_maps_wait_for_the_run_to_complete(settings):
+    pipeline = Blocking()
+    with TestClient(api_app(settings, pipeline)) as client:
+        run_id = upload(client).json()["run_id"]
+        assert pipeline.first_started.wait(10)
+        url = f"/api/runs/{run_id}/hazard-maps"
+        assert client.get(url, params={"scenario": "historical"}).status_code == 409
+        tile = f"{url}/RiverineInundation/5/23/13.png"
+        assert client.get(tile, params={"scenario": "historical"}).status_code == 409
+        pipeline.proceed.set()
+
+
+def test_hazard_map_tile(client, finished, monkeypatch):
+    seen = []
+
+    def fake(*args):
+        seen.append(args)
+        return b"\x89PNG"
+
+    monkeypatch.setattr("engine.api.hazard_maps.tile", fake)
+    url = f"/api/runs/{finished}/hazard-maps/CoastalInundation/5/23/13.png"
+    response = client.get(url, params={"scenario": "ssp585", "year": 2050})
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == b"\x89PNG"
+    assert client.get(url, params={"scenario": "historical"}).status_code == 200
+    assert seen == [
+        ("CoastalInundation", "ssp585", 2050, 5, 23, 13),
+        ("CoastalInundation", "historical", None, 5, 23, 13),
+    ]
+
+
+@pytest.mark.parametrize(
+    "path", ["Wind/5/23/13.png", "RiverineInundation/9/0/0.png", "RiverineInundation/1/2/0.png"]
+)
+def test_hazard_map_tile_with_no_map_is_404(client, finished, path):
+    response = client.get(
+        f"/api/runs/{finished}/hazard-maps/{path}", params={"scenario": "historical"}
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]
+
+
+def test_hazard_map_tile_failure_is_reported(client, finished, monkeypatch):
+    def fail(*args):
+        raise RuntimeError("S3 down")
+
+    monkeypatch.setattr("engine.api.hazard_maps.tile", fail)
+    response = client.get(
+        f"/api/runs/{finished}/hazard-maps/RiverineInundation/5/23/13.png",
+        params={"scenario": "historical"},
+    )
+    assert response.status_code == 502
+    assert "S3 down" in response.json()["detail"]
+
+
 def test_export_is_a_download_with_every_asset(client, finished):
     response = client.get(f"/api/runs/{finished}/export.csv")
     assert response.headers["content-type"].startswith("text/csv")

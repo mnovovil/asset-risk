@@ -164,6 +164,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/hazard-maps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hazard Maps
+         * @description The hazards physrisk can draw a map of. Other hazards have no public map data.
+         */
+        get: operations["get_hazard_maps_api_runs__run_id__hazard_maps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/hazard-maps/{hazard}/{z}/{x}/{y}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hazard Map Tile
+         * @description One 512 px map tile. 404 where physrisk has no map, which a map shows as transparent.
+         */
+        get: operations["get_hazard_map_tile_api_runs__run_id__hazard_maps__hazard___z___x___y__png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/impacts": {
         parameters: {
             query?: never;
@@ -439,6 +479,29 @@ export interface components {
             intensities: number[];
             /** Return Periods */
             return_periods: number[];
+        };
+        /** HazardMapLayer */
+        HazardMapLayer: {
+            /** Available */
+            available: boolean;
+            /** Hazard */
+            hazard: string;
+            /** Legend */
+            legend: string[];
+            /** Max Value */
+            max_value: number;
+            /** Max Zoom */
+            max_zoom: number;
+            /** Min Value */
+            min_value: number;
+            /** Reason */
+            reason: string | null;
+            /** Return Period */
+            return_period: number;
+            /** Tile Url */
+            tile_url: string | null;
+            /** Units */
+            units: string;
         };
         /** Health */
         Health: {
@@ -839,6 +902,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hazard_maps_api_runs__run_id__hazard_maps_get: {
+        parameters: {
+            query: {
+                scenario: string;
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HazardMapLayer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hazard_map_tile_api_runs__run_id__hazard_maps__hazard___z___x___y__png_get: {
+        parameters: {
+            query: {
+                scenario: string;
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                hazard: string;
+                z: number;
+                x: number;
+                y: number;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
                 };
             };
             /** @description Validation Error */

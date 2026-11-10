@@ -95,8 +95,8 @@ def run_id():
 @pytest.mark.e2e
 def test_each_outcome_is_reported(run_id):
     summary = _get(f"/runs/{run_id}/summary")
-    assert summary["total_assets"] == 6
-    assert summary["assessable"] == 4
+    assert summary["total_assets"] == 8
+    assert summary["assessable"] == 6
     assert summary["failed_assets"] == 0
     assert {e["reason"]: e["assets"] for e in summary["exclusions"]} == {
         "invalid": 1,
@@ -111,6 +111,8 @@ def test_assets_are_classified(run_id):
     assert assets["empire-state"]["physrisk_type"] == "Buildings/Commercial"
     assert assets["empire-state"]["region"] == "North America"
     assert assets["nairobi-centre"]["physrisk_location"] == "Global"
+    assert assets["aviles"]["region"] == "Europe"
+    assert assets["gijon"]["region"] == "Europe"
     assert assets["mid-atlantic"]["exclusion_reason"] == "off_land"
     assert assets["bad-latitude"]["exclusion_reason"] == "invalid"
 
@@ -119,7 +121,7 @@ def test_assets_are_classified(run_id):
 def test_results_exist_for_every_configured_scenario_and_year(run_id):
     config = _get("/config")
     trajectory = {(p["scenario"], p["year"]): p for p in _get(f"/runs/{run_id}/trajectory")}
-    assert trajectory[("historical", None)]["assets"] == 4
+    assert trajectory[("historical", None)]["assets"] == 6
     for scenario in config["scenarios"]:
         for year in config["years"]:
             assert (scenario, year) in trajectory

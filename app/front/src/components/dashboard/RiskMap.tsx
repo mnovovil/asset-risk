@@ -1,13 +1,6 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import {
-  GeoJSONSource,
-  Map as MapLibre,
-  Popup,
-  setWorkerUrl,
-  type StyleSpecification,
-} from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+import { GeoJSONSource, Map as MapLibre, Popup } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Asset } from "@/api/client";
@@ -15,37 +8,16 @@ import { type AssetRow } from "@/lib/dashboard";
 import { assetLabel, percent } from "@/lib/format";
 import { NO_RESULT_COLOR, ramp, scoreColor, totalColor } from "@/lib/mapColors";
 import { hazardLabel } from "@/lib/hazards";
+import { basemapStyle, blankStyle, pointRing } from "@/lib/mapStyle";
 import { usePrefersDark } from "@/hooks/useColorScheme";
 
 import { COLOR_BY_TOTAL } from "./Filters";
 
-// MapLibre looks for its worker next to its own file, which isn't where a bundler puts it.
-setWorkerUrl(workerUrl);
-
-const LIGHT_STYLE =
-  import.meta.env.VITE_MAP_STYLE_LIGHT ?? "https://tiles.openfreemap.org/styles/positron";
-const DARK_STYLE =
-  import.meta.env.VITE_MAP_STYLE_DARK ?? "https://tiles.openfreemap.org/styles/dark";
 const SOURCE = "assets";
 const LAYER = "assets";
 const HIT_RADIUS_PX = 12;
 const FIT_PADDING_PX = 48;
 const MAX_FIT_ZOOM = 11;
-
-/** Points still show on this if the tiles can't be reached. */
-function blankStyle(dark: boolean): StyleSpecification {
-  return {
-    version: 8,
-    sources: {},
-    layers: [
-      {
-        id: "background",
-        type: "background",
-        paint: { "background-color": dark ? "#1a1a19" : "#f9f9f7" },
-      },
-    ],
-  };
-}
 
 interface RiskMapProps {
   assets: Asset[];
@@ -89,7 +61,7 @@ function toFeatures(
         label: assetLabel(asset),
         detail: describe(asset, row, colorBy),
         color: color ?? "rgba(0,0,0,0)",
-        ring: color ? (dark ? "#1a1a19" : "#ffffff") : NO_RESULT_COLOR,
+        ring: color ? pointRing(dark) : NO_RESULT_COLOR,
         radius: asset.row_num === selected ? 9 : 6,
       },
     });
@@ -119,7 +91,7 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
     try {
       map = new MapLibre({
         container: container.current,
-        style: dark ? DARK_STYLE : LIGHT_STYLE,
+        style: basemapStyle(dark),
         attributionControl: { compact: true },
       });
     } catch {

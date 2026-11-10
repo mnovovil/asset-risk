@@ -8,11 +8,13 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 [most buildings have no known type](docs/methodology.md#building-type), so read
 [the methodology](docs/methodology.md) before relying on a number.
 
-![Uploading the sample CSV, following the geolocating, classifying and assessing stages, then going through the dashboard's figures, map, charts, asset details and data quality notes](docs/assets/demo.gif)
+![Uploading the sample CSV, following the geolocating, classifying and assessing stages, then going through the dashboard's figures, map, charts, the details of the Avilés asset with its river and coastal flood maps, and the data quality notes](docs/assets/demo.gif)
 
-*A real run of the [sample CSV](app/front/public/sample_portfolio.csv), with the stages sped up. Its
-figures are screening estimates for illustration. Map data © OpenStreetMap contributors, via
-OpenFreeMap and OpenMapTiles.*
+*A real run of the [sample CSV](app/front/public/sample_portfolio.csv), with the stages sped up. The
+asset panel shows the hazard maps around the `aviles` asset: physrisk's 1-in-1000-year river and
+coastal flood depth, the only hazard maps it publishes. Its figures are screening estimates for
+illustration. Map data © OpenStreetMap contributors, via OpenFreeMap and OpenMapTiles. Flood maps
+from WRI Aqueduct Floods, via physrisk.*
 
 ## Quick start
 

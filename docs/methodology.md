@@ -100,5 +100,23 @@ These come from physrisk's default data, and most were found while building
 - **Zero:** river flood at zero means the exact point is dry in the data, not that the area has no
   flood risk.
 
+## Hazard maps
+
+The asset panel can show a map around the asset, drawn from physrisk's own map data. It answers
+where the flood plain is, which a single point's numbers can't. Read it with these limits:
+
+- **Only river and coastal flood.** physrisk's maps of wind, fire, hail, heat and drought aren't
+  public, so these hazards are listed but can't be chosen.
+- **Only the 1-in-1000-year flood.** The maps hold no other return period. The table above the map
+  has the depths for the other return periods at the exact point.
+- **About 1 km pixels**, so the map shows the area, not the building. It stops adding detail past a
+  regional zoom.
+- **Before flood protection.** Like the river flood curve, and unlike the loss figures, the map
+  ignores defences.
+- **"Historical" is physrisk's baseline**, which for these maps is its RCP4.5 2030 data, the same
+  data the assessment uses. physrisk has flood maps for SSP2-4.5 and SSP5-8.5 from 2030 to 2080
+  only, and none for SSP1-2.6 or SSP3-7.0.
+- **A clear area means no flood in the data**, not no flood risk.
+
 **Use it to** screen many sites and find which deserve a closer look. **Don't use it for** decisions
 about a single site, or for currency estimates of loss.

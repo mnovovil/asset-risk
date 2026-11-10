@@ -12,14 +12,15 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from engine import results, schemas, store
+from engine import hazard_maps, results, schemas, store
 from engine.assess import HISTORICAL, hazard_curve
 from engine.geolocation import GeolocationError
 from engine.ingest import PortfolioError
@@ -35,6 +36,8 @@ MAX_SOURCE_NAME_LENGTH = 255
 INTERRUPTED_MESSAGE = "The app restarted before this run finished. Upload the portfolio again."
 # A spreadsheet runs a cell that starts with one of these as a formula.
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+# Tiles only change with the physrisk pin, but a run can be deleted, so not "immutable".
+TILE_CACHE_CONTROL = "private, max-age=86400"
 
 
 def _settings(request: Request) -> Settings:
@@ -189,6 +192,51 @@ def get_hazard_curve(
         return schemas.HazardCurve(**hazard_curve(row["lat"], row["lon"], scenario, year))
     except Exception as e:
         raise HTTPException(502, f"physrisk could not return a hazard curve: {e}") from e
+
+
+@router.get("/runs/{run_id}/hazard-maps")
+def get_hazard_maps(run: FinishedRunDep, pair: PairDep) -> list[schemas.HazardMapLayer]:
+    """The hazards physrisk can draw a map of. Other hazards have no public map data."""
+    scenario, year = pair
+    reason = hazard_maps.unavailable_reason(scenario, year)
+    query = urlencode({"scenario": scenario} | ({} if year is None else {"year": year}))
+    return [
+        schemas.HazardMapLayer(
+            hazard=layer.hazard,
+            available=reason is None,
+            reason=reason,
+            return_period=hazard_maps.RETURN_PERIOD,
+            units=layer.units,
+            min_value=layer.min_value,
+            max_value=layer.max_value,
+            max_zoom=hazard_maps.MAX_ZOOM,
+            legend=hazard_maps.legend(layer),
+            tile_url=None
+            if reason
+            else f"/api/runs/{run.run_id}/hazard-maps/{layer.hazard}/{{z}}/{{x}}/{{y}}.png?{query}",
+        )
+        for layer in hazard_maps.LAYERS.values()
+    ]
+
+
+@router.get(
+    "/runs/{run_id}/hazard-maps/{hazard}/{z}/{x}/{y}.png",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+def get_hazard_map_tile(
+    run: FinishedRunDep, pair: PairDep, hazard: str, z: int, x: int, y: int
+) -> Response:
+    """One 512 px map tile. 404 where physrisk has no map, which a map shows as transparent."""
+    if hazard not in hazard_maps.LAYERS:
+        raise HTTPException(404, "physrisk has no public map of this hazard")
+    try:
+        image = hazard_maps.tile(hazard, *pair, z, x, y)
+    except Exception as e:
+        raise HTTPException(502, f"physrisk could not draw this map tile: {e}") from e
+    if image is None:
+        raise HTTPException(404, "No map tile here")
+    return Response(image, media_type="image/png", headers={"Cache-Control": TILE_CACHE_CONTROL})
 
 
 @router.get("/runs/{run_id}/impacts")
