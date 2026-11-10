@@ -8,11 +8,13 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 [most buildings have no known type](docs/methodology.md#building-type), so read
 [the methodology](docs/methodology.md) before relying on a number.
 
-![Uploading the sample CSV, following the geolocating, classifying and assessing stages, then going through the dashboard's figures, map, charts, asset details and data quality notes](docs/assets/demo.gif)
+![Uploading the sample CSV, following the geolocating, classifying and assessing stages, then going through the dashboard's figures, map, charts, the details of the Avilés asset with its river and coastal flood maps, and the data quality notes](docs/assets/demo.gif)
 
-*A real run of the [sample CSV](app/front/public/sample_portfolio.csv), with the stages sped up. Its
-figures are screening estimates for illustration. Map data © OpenStreetMap contributors, via
-OpenFreeMap and OpenMapTiles.*
+*A real run of the [sample CSV](app/front/public/sample_portfolio.csv), with the stages sped up. The
+asset panel shows the hazard maps around the `aviles` asset: physrisk's 1-in-1000-year river and
+coastal flood depth, the only hazard maps it publishes. Its figures are screening estimates for
+illustration. Map data © OpenStreetMap contributors, via OpenFreeMap and OpenMapTiles. Flood maps
+from WRI Aqueduct Floods, via physrisk.*
 
 ## Quick start
 
@@ -72,6 +74,37 @@ flowchart TB
 | `vendor/geolocate` | geolocate, pinned as a submodule |
 
 Settings, the API, performance and development commands are in the [reference](docs/reference.md).
+
+## Branches and pull requests
+
+All work goes through `dev`. `main` only receives releases from `dev`.
+
+```mermaid
+gitGraph
+    commit id: "release 1"
+    branch dev
+    checkout dev
+    branch feat/42-thing
+    checkout feat/42-thing
+    commit id: "work"
+    commit id: "more work"
+    checkout dev
+    merge feat/42-thing id: "PR #42, squash" type: HIGHLIGHT
+    branch fix/43-bug
+    checkout fix/43-bug
+    commit id: "fix"
+    checkout dev
+    merge fix/43-bug id: "PR #43, squash" type: HIGHLIGHT
+    checkout main
+    merge dev id: "release PR, merge commit" type: HIGHLIGHT
+```
+
+- Branch from `dev` and open the PR against `dev`. It's squash-merged.
+- A release is a PR from `dev` to `main`, merged with a merge commit (never squashed, so the two
+  branches keep sharing history).
+- PRs into `main` from any other branch fail the `Source branch` check.
+- Every PR needs green CI: `Source branch`, `Engine`, `Front end` and `Infra`.
+- No direct pushes, force pushes or deletion on `dev` or `main`.
 
 ## License
 

@@ -8,6 +8,7 @@ export type AssetDetail = components["schemas"]["AssetDetail"];
 export type AssetTotal = components["schemas"]["AssetTotal"];
 export type Coverage = components["schemas"]["Coverage"];
 export type HazardCurve = components["schemas"]["HazardCurve"];
+export type HazardMapLayer = components["schemas"]["HazardMapLayer"];
 export type Impact = components["schemas"]["Impact"];
 export type Score = components["schemas"]["Score"];
 export type TrajectoryPoint = components["schemas"]["TrajectoryPoint"];
@@ -102,5 +103,11 @@ export const getHazardCurve = (runId: string, rowNum: number, pair: Pair, signal
   request<HazardCurve>(`${runPath(runId)}/assets/${rowNum}/hazard-curve?${pairQuery(pair)}`, {
     signal,
   });
+
+export const getHazardMaps = (runId: string, pair: Pair, signal?: AbortSignal) =>
+  request<HazardMapLayer[]>(`${runPath(runId)}/hazard-maps?${pairQuery(pair)}`, { signal });
+
+/** MapLibre loads tiles off the page, so it needs a full URL. The {z}/{x}/{y} braces must stay. */
+export const absoluteTileUrl = (tileUrl: string) => `${window.location.origin}${tileUrl}`;
 
 export const exportUrl = (runId: string) => `/api/runs/${encodeURIComponent(runId)}/export.csv`;

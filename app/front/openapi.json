@@ -818,6 +818,81 @@
         "title": "HazardCurve",
         "type": "object"
       },
+      "HazardMapLayer": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "hazard": {
+            "title": "Hazard",
+            "type": "string"
+          },
+          "legend": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Legend",
+            "type": "array"
+          },
+          "max_value": {
+            "title": "Max Value",
+            "type": "number"
+          },
+          "max_zoom": {
+            "title": "Max Zoom",
+            "type": "integer"
+          },
+          "min_value": {
+            "title": "Min Value",
+            "type": "number"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "return_period": {
+            "title": "Return Period",
+            "type": "integer"
+          },
+          "tile_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tile Url"
+          },
+          "units": {
+            "title": "Units",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hazard",
+          "available",
+          "reason",
+          "return_period",
+          "units",
+          "min_value",
+          "max_value",
+          "max_zoom",
+          "legend",
+          "tile_url"
+        ],
+        "title": "HazardMapLayer",
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -1603,6 +1678,172 @@
           }
         },
         "summary": "Export Csv"
+      }
+    },
+    "/api/runs/{run_id}/hazard-maps": {
+      "get": {
+        "description": "The hazards physrisk can draw a map of. Other hazards have no public map data.",
+        "operationId": "get_hazard_maps_api_runs__run_id__hazard_maps_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario",
+            "required": true,
+            "schema": {
+              "title": "Scenario",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HazardMapLayer"
+                  },
+                  "title": "Response Get Hazard Maps Api Runs  Run Id  Hazard Maps Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Hazard Maps"
+      }
+    },
+    "/api/runs/{run_id}/hazard-maps/{hazard}/{z}/{x}/{y}.png": {
+      "get": {
+        "description": "One 512 px map tile. 404 where physrisk has no map, which a map shows as transparent.",
+        "operationId": "get_hazard_map_tile_api_runs__run_id__hazard_maps__hazard___z___x___y__png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hazard",
+            "required": true,
+            "schema": {
+              "title": "Hazard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "z",
+            "required": true,
+            "schema": {
+              "title": "Z",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "x",
+            "required": true,
+            "schema": {
+              "title": "X",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "y",
+            "required": true,
+            "schema": {
+              "title": "Y",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario",
+            "required": true,
+            "schema": {
+              "title": "Scenario",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Hazard Map Tile"
       }
     },
     "/api/runs/{run_id}/impacts": {

@@ -14,12 +14,39 @@ vi.mock("@/components/dashboard/RiskMap", () => ({
   ),
 }));
 
+vi.mock("@/components/dashboard/HazardTileMap", () => ({
+  default: ({ tileUrl, label }: { tileUrl: string | null; label: string }) => (
+    <p>
+      Hazard map {tileUrl ?? "with no overlay"}: {label}
+    </p>
+  ),
+}));
+
 const RUN = "run-1";
+
+/** What the API lists: the two public flood maps, with no map for ssp370. */
+function hazardMaps(url: string) {
+  const query = url.split("?")[1];
+  const missing = query.includes("ssp370");
+  return ["RiverineInundation", "CoastalInundation"].map((hazard) => ({
+    hazard,
+    available: !missing,
+    reason: missing ? "physrisk has no flood map for this scenario" : null,
+    return_period: 1000,
+    units: "m",
+    min_value: 0,
+    max_value: 2,
+    max_zoom: 6,
+    legend: ["rgba(237, 176, 129, 0.78)", "rgba(75, 35, 98, 0.78)"],
+    tile_url: missing ? null : `/api/runs/${RUN}/hazard-maps/${hazard}/{z}/{x}/{y}.png?${query}`,
+  }));
+}
 
 function stub(overrides: Record<string, unknown> = {}) {
   const requests: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
     requests.push(url);
+    if (url.includes("/hazard-maps?")) return jsonResponse(hazardMaps(url));
     if (url.includes("hazard-curve")) {
       return jsonResponse({ return_periods: [100], intensities: [0.5] });
     }
@@ -292,6 +319,53 @@ describe("Dashboard", () => {
       expect(await panel.findAllByRole("cell", { name: "0.50 m" })).toHaveLength(2);
     });
 
+    it("shows hazard maps under the river flood table", async () => {
+      const panel = within(await openPanel());
+      const heading = await panel.findByRole("heading", { name: "Hazard maps" });
+      const table = panel.getByText("Show as a table");
+      expect(table.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(await panel.findByText(/Hazard map .*RiverineInundation.*scenario=ssp585&year=2050/))
+        .toBeInTheDocument();
+      expect(panel.getByText(/No flood in the data$/)).toBeInTheDocument();
+    });
+
+    it("lists hazards with no public map, but won't select them", async () => {
+      const panel = within(await openPanel());
+      const select = await panel.findByLabelText("Hazard");
+      const options = within(select).getAllByRole("option") as HTMLOptionElement[];
+      expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
+        ["River flood", false],
+        ["Coastal flood", false],
+        ["Tropical cyclone wind (no public map)", true],
+        ["Chronic heat (no public map)", true],
+      ]);
+    });
+
+    it("switches the layer and the period", async () => {
+      const requests = stub({ detail });
+      await renderDashboard();
+      await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+      const panel = within(await screen.findByRole("dialog"));
+      await userEvent.selectOptions(await panel.findByLabelText("Hazard"), "CoastalInundation");
+      expect(panel.getByText(/Hazard map .*CoastalInundation.*ssp585/)).toBeInTheDocument();
+
+      await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
+      expect(
+        await panel.findByText(/Hazard map .*CoastalInundation.*\?scenario=historical:.*Historical/),
+      ).toBeInTheDocument();
+      expect(requests.some((r) => r.endsWith("/hazard-maps?scenario=historical"))).toBe(true);
+    });
+
+    it("says why a scenario has no map", async () => {
+      stub({ detail });
+      await renderDashboard();
+      await userEvent.selectOptions(screen.getByLabelText("Scenario"), "ssp370");
+      await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+      const panel = within(await screen.findByRole("dialog"));
+      expect(await panel.findByText("physrisk has no flood map for this scenario.")).toBeInTheDocument();
+      expect(panel.getByText(/Hazard map with no overlay/)).toBeInTheDocument();
+    });
+
     it("closes with the button and with Escape", async () => {
       await openPanel();
       await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -321,6 +395,7 @@ describe("Dashboard", () => {
       const panel = within(await screen.findByRole("dialog"));
       expect(await panel.findByText(/not near any country/)).toBeInTheDocument();
       expect(requests.some((r) => r.includes("hazard-curve"))).toBe(false);
+      expect(requests.some((r) => r.includes("hazard-maps"))).toBe(false);
     });
   });
 });
