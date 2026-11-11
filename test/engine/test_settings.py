@@ -7,6 +7,8 @@ import pytest
 from engine.settings import (
     BUILDING_TYPES,
     KEYS,
+    MAX_CLUSTER_EPS_KM,
+    MIN_CLUSTER_SAMPLES,
     ROOT,
     SCENARIOS,
     SettingsError,
@@ -22,6 +24,8 @@ VALID = {
     "physrisk_batch_size": 100,
     "geolocate_workers": 16,
     "geolocate_batch_size": 20,
+    "cluster_eps_km": 50,
+    "cluster_min_samples": 5,
     "max_portfolio_rows": 5000,
     "max_upload_mb": 10,
     "data_dir": "data",
@@ -115,6 +119,14 @@ def test_missing_key(tmp_path, key):
         ("physrisk_batch_size", 1.5),
         ("geolocate_workers", True),
         ("geolocate_batch_size", -1),
+        ("cluster_eps_km", 0),
+        ("cluster_eps_km", -5),
+        ("cluster_eps_km", 1001),
+        ("cluster_eps_km", True),
+        ("cluster_eps_km", "50"),
+        ("cluster_min_samples", 1),
+        ("cluster_min_samples", 2.5),
+        ("cluster_min_samples", False),
         ("max_portfolio_rows", "5000"),
         ("max_upload_mb", 0),
         ("max_upload_mb", True),
@@ -156,3 +168,9 @@ def test_terraform_default_building_type_is_allowed():
     text = (INFRA / "variables.tf").read_text()
     default = re.search(r'variable "default_building_type".*?default\s*=\s*"(.+?)"', text, re.S)
     assert default.group(1) in BUILDING_TYPES
+
+
+def test_cluster_limits_match_terraform():
+    text = (INFRA / "variables.tf").read_text()
+    assert f"var.cluster_eps_km <= {MAX_CLUSTER_EPS_KM}" in text
+    assert f"var.cluster_min_samples >= {MIN_CLUSTER_SAMPLES}" in text

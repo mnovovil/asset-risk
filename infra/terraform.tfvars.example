@@ -10,6 +10,10 @@
 # geolocate_workers    = 16
 # geolocate_batch_size = 20
 
+# Risk-concentration bubbles on the map (DBSCAN). No cluster found means no bubbles.
+# cluster_eps_km      = 50
+# cluster_min_samples = 5
+
 # max_portfolio_rows = 5000
 # max_upload_mb      = 10
 
