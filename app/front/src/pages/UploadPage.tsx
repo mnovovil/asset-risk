@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { ApiError, createRun, getConfig, type AppConfig } from "@/api/client";
 import { CsvPreview } from "@/components/CsvPreview";
 import { DropZone } from "@/components/DropZone";
-import { RunsList } from "@/components/RunsList";
 import { inspectCsv, type CsvInspection } from "@/lib/csv";
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -105,7 +104,6 @@ export function UploadPage() {
           </div>
         )}
       </section>
-      <RunsList />
     </div>
   );
 }

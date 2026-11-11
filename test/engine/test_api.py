@@ -133,7 +133,7 @@ def test_bad_portfolio_is_rejected_with_a_readable_message(client, settings, con
     assert response.status_code == 422
     assert message in response.json()["detail"]
     assert str(settings.data_dir) not in response.json()["detail"]
-    assert client.get("/api/runs").json() == []
+    assert all_runs(settings.data_dir) == []
 
 
 def test_too_many_rows_is_rejected(client):
@@ -180,10 +180,9 @@ def test_find_run_never_builds_a_path_from_a_bad_id(tmp_path):
     assert find_run(tmp_path, "../runs/x") is None
 
 
-def test_runs_are_listed_newest_first(client):
-    first = upload(client).json()["run_id"]
-    second = upload(client).json()["run_id"]
-    assert [r["run_id"] for r in client.get("/api/runs").json()] == [second, first]
+def test_runs_are_not_listed(client):
+    upload(client)
+    assert client.get("/api/runs").status_code == 405
 
 
 class Blocking:
