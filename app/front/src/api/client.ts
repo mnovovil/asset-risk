@@ -6,6 +6,7 @@ export type Summary = components["schemas"]["Summary"];
 export type Asset = components["schemas"]["Asset"];
 export type AssetDetail = components["schemas"]["AssetDetail"];
 export type AssetTotal = components["schemas"]["AssetTotal"];
+export type Cluster = components["schemas"]["Cluster"];
 export type Coverage = components["schemas"]["Coverage"];
 export type HazardCurve = components["schemas"]["HazardCurve"];
 export type HazardMapLayer = components["schemas"]["HazardMapLayer"];
@@ -80,6 +81,9 @@ function pairQuery({ scenario, year }: Pair): string {
 
 export const getAssets = (runId: string, signal?: AbortSignal) =>
   request<Asset[]>(`${runPath(runId)}/assets`, { signal });
+
+export const getClusters = (runId: string, signal?: AbortSignal) =>
+  request<Cluster[]>(`${runPath(runId)}/clusters`, { signal });
 
 export const getAsset = (runId: string, rowNum: number, signal?: AbortSignal) =>
   request<AssetDetail>(`${runPath(runId)}/assets/${rowNum}`, { signal });
