@@ -47,6 +47,27 @@ Totals from different scenarios therefore can't be compared directly. So:
 - **Historical markers** use only the hazards in the selected scenario.
 - A scenario with no results is shown as having none, not as zero.
 
+## Risk concentration
+
+When the map opens, groups of nearby assets show as bubbles. Zooming in one level, or clicking a
+bubble, replaces them with the individual assets.
+
+The groups come from [DBSCAN](https://en.wikipedia.org/wiki/DBSCAN), which needs no number of
+clusters. An asset with at least `cluster_min_samples` assets within `cluster_eps_km` of it, itself
+included, starts a cluster, and the cluster takes in every asset within that distance of its core.
+Distances are along the Earth's surface. Assets that are in no cluster stay on the map as points at
+every zoom, and a portfolio with no dense group has no bubbles. Clusters depend only on location, so
+they're the same in every scenario and year.
+
+A bubble's size grows with its number of assets. Its colour is the equal-weighted mean over its
+members **with a result** for what the map is coloured by: total loss on the same scale as the
+points, or a hazard's score rounded to the nearest band. Members with no model, no data or no
+result are counted apart, and a bubble with no result is drawn hollow. Its tooltip says how many
+members have results and how many assume the default building type.
+
+A light bubble is not proof of low risk, for the same reasons as a low score: see
+[Limits of the model](#limits-of-the-model).
+
 ## Building type
 
 **Most assets will have an assumed type.** In a sample of 6 parquet files from Overture release

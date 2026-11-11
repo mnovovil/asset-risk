@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import math
+from collections import defaultdict
+
 import duckdb
 
 from engine.store import Run
@@ -127,6 +130,51 @@ def coverage(run: Run) -> list[dict]:
         return _rows(
             con, "SELECT * FROM v_hazard_coverage ORDER BY scenario, year NULLS FIRST, hazard"
         )
+
+
+def clusters(run: Run) -> list[dict]:
+    """The run's DBSCAN clusters with their members, centre and bounds.
+
+    Runs made before clustering existed have no asset_clusters table, and read as having none.
+    """
+    with run.connect() as con:
+        exists = con.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'asset_clusters'"
+        ).fetchone()[0]
+        if not exists:
+            return []
+        rows = con.execute(
+            "SELECT c.cluster_id, a.row_num, a.lat, a.lon FROM asset_clusters c "
+            "JOIN assets a USING (row_num) ORDER BY c.cluster_id, a.row_num"
+        ).fetchall()
+    members: dict[int, list[tuple[int, float, float]]] = defaultdict(list)
+    for cluster_id, row_num, lat, lon in rows:
+        members[cluster_id].append((row_num, lat, lon))
+    return [_cluster(cluster_id, points) for cluster_id, points in members.items()]
+
+
+def _cluster(cluster_id: int, points: list[tuple[int, float, float]]) -> dict:
+    lats = [lat for _, lat, _ in points]
+    lons = [lon for _, _, lon in points]
+    # A circular mean, so a cluster across the antimeridian isn't centred near 0°.
+    lon = math.degrees(
+        math.atan2(
+            sum(math.sin(math.radians(x)) for x in lons),
+            sum(math.cos(math.radians(x)) for x in lons),
+        )
+    )
+    west, east = min(lons), max(lons)
+    if east - west > 180:  # across the antimeridian: east goes past 180, as the map expects
+        west = min(x for x in lons if x >= 0)
+        east = max(x for x in lons if x < 0) + 360
+    return {
+        "cluster_id": cluster_id,
+        "assets": len(points),
+        "row_nums": [row_num for row_num, _, _ in points],
+        "lat": sum(lats) / len(lats),
+        "lon": lon,
+        "bounds": [west, min(lats), east, max(lats)],
+    }
 
 
 def export_rows(run: Run) -> tuple[list[str], list[tuple]]:

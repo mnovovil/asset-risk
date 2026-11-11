@@ -29,9 +29,10 @@ script/              ad-hoc CLIs
 ## Contracts
 - **`.asset-risk.json`** (written by `infra/main.tf`, read by `app/engine/settings.py`): keys
   `scenarios`, `years`, `default_building_type`, `physrisk_batch_size`, `geolocate_workers`,
-  `geolocate_batch_size`, `max_portfolio_rows`, `max_upload_mb`, `data_dir`, `api_port`,
-  `geolocate_config`. Change both sides together, including the allowed values, which are checked
-  in both places so a hand-edited file fails too. Relative paths are relative to the repo root.
+  `geolocate_batch_size`, `cluster_eps_km`, `cluster_min_samples`, `max_portfolio_rows`,
+  `max_upload_mb`, `data_dir`, `api_port`, `geolocate_config`. Change both sides together, including
+  the allowed values, which are checked in both places so a hand-edited file fails too. Relative
+  paths are relative to the repo root.
 - **`.geolocate.json`**: written to `vendor/geolocate/` by geolocate's own stack, which `infra/` calls
   as a module. `$GEOLOCATE_CONFIG` overrides the path in `.asset-risk.json`, which is only valid on
   the machine that ran `apply`.

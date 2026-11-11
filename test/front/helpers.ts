@@ -169,6 +169,7 @@ const PAIRS: Record<string, { totals: unknown[]; impacts: unknown[]; scores: unk
 const ENDPOINTS: Record<string, unknown> = {
   summary: SUMMARY,
   assets: ASSETS,
+  clusters: [],
   trajectory: TRAJECTORY,
   coverage: COVERAGE,
 };

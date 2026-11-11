@@ -1,12 +1,18 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { GeoJSONSource, Map as MapLibre, Popup } from "maplibre-gl";
+import {
+  type CircleLayerSpecification,
+  GeoJSONSource,
+  Map as MapLibre,
+  Popup,
+} from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Asset } from "@/api/client";
+import type { Asset, Cluster } from "@/api/client";
+import { type ClusterSummary, clusteredRowNums, summariseClusters } from "@/lib/clusters";
 import { type AssetRow } from "@/lib/dashboard";
 import { assetLabel, percent } from "@/lib/format";
-import { NO_RESULT_COLOR, ramp, scoreColor, totalColor } from "@/lib/mapColors";
+import { NO_RESULT_COLOR, ramp, SCORE_LABELS, scoreColor, totalColor } from "@/lib/mapColors";
 import { hazardLabel } from "@/lib/hazards";
 import { basemapStyle, blankStyle, pointRing } from "@/lib/mapStyle";
 import { usePrefersDark } from "@/hooks/useColorScheme";
@@ -15,12 +21,19 @@ import { COLOR_BY_TOTAL } from "./Filters";
 
 const SOURCE = "assets";
 const LAYER = "assets";
+const CLUSTERED_LAYER = "assets-clustered";
+const CLUSTER_SOURCE = "clusters";
+const CLUSTER_LAYER = "clusters";
+// Bubbles show from the opening view until this many zoom levels in, then give way to the points.
+const CLUSTER_ZOOM_SPAN = 1;
+const BUBBLE_OPACITY = 0.8;
 const HIT_RADIUS_PX = 12;
 const FIT_PADDING_PX = 48;
 const MAX_FIT_ZOOM = 11;
 
 interface RiskMapProps {
   assets: Asset[];
+  clusters: Cluster[];
   rows: AssetRow[];
   colorBy: string;
   selected: number | null;
@@ -39,6 +52,7 @@ function toFeatures(
   colorBy: string,
   selected: number | null,
   dark: boolean,
+  clustered: Set<number>,
 ): GeoJSON.FeatureCollection {
   const byRow = new Map(rows.map((row) => [row.rowNum, row]));
   const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
@@ -63,13 +77,40 @@ function toFeatures(
         color: color ?? "rgba(0,0,0,0)",
         ring: color ? pointRing(dark) : NO_RESULT_COLOR,
         radius: asset.row_num === selected ? 9 : 6,
+        // Drawn as part of a bubble when zoomed out. The selected asset always shows.
+        clustered: clustered.has(asset.row_num) && asset.row_num !== selected,
       },
     });
   }
   return { type: "FeatureCollection", features };
 }
 
-export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: RiskMapProps) {
+function toBubbles(summaries: ClusterSummary[], dark: boolean): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: summaries.map((summary) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [summary.lon, summary.lat] },
+      properties: {
+        clusterId: summary.clusterId,
+        label: `${summary.count} nearby assets`,
+        detail: summary.detail,
+        color: summary.color ?? "rgba(0,0,0,0)",
+        ring: summary.color ? pointRing(dark) : NO_RESULT_COLOR,
+        radius: summary.radius,
+      },
+    })),
+  };
+}
+
+export default function RiskMap({
+  assets,
+  clusters,
+  rows,
+  colorBy,
+  selected,
+  onSelect,
+}: RiskMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibre | null>(null);
   const dark = usePrefersDark();
@@ -78,12 +119,22 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
 
+  const clustered = useMemo(() => clusteredRowNums(clusters), [clusters]);
   const features = useMemo(
-    () => toFeatures(assets, rows, colorBy, selected, dark),
-    [assets, rows, colorBy, selected, dark],
+    () => toFeatures(assets, rows, colorBy, selected, dark, clustered),
+    [assets, rows, colorBy, selected, dark, clustered],
   );
   const featuresRef = useRef(features);
   featuresRef.current = features;
+  const summaries = useMemo(
+    () => summariseClusters(clusters, assets, rows, colorBy, dark),
+    [clusters, assets, rows, colorBy, dark],
+  );
+  const bubbles = useMemo(() => toBubbles(summaries, dark), [summaries, dark]);
+  const bubblesRef = useRef(bubbles);
+  bubblesRef.current = bubbles;
+  const boundsRef = useRef(new Map<number, ClusterSummary["bounds"]>());
+  boundsRef.current = new Map(summaries.map((s) => [s.clusterId, s.bounds]));
 
   useEffect(() => {
     if (!container.current) return;
@@ -103,18 +154,40 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
     let loaded = false;
     let fellBack = false;
 
+    // Set once the opening view is known, below.
+    let threshold = 0;
+
     function addPoints() {
+      const paint: CircleLayerSpecification["paint"] = {
+        "circle-color": ["get", "color"],
+        "circle-radius": ["get", "radius"],
+        "circle-stroke-color": ["get", "ring"],
+        "circle-stroke-width": 2,
+      };
       map.addSource(SOURCE, { type: "geojson", data: featuresRef.current });
+      map.addSource(CLUSTER_SOURCE, { type: "geojson", data: bubblesRef.current });
+      // Bubbles first, so a point outside any cluster stays on top of one.
+      map.addLayer({
+        id: CLUSTER_LAYER,
+        type: "circle",
+        source: CLUSTER_SOURCE,
+        maxzoom: threshold,
+        paint: { ...paint, "circle-opacity": BUBBLE_OPACITY },
+      });
+      map.addLayer({
+        id: CLUSTERED_LAYER,
+        type: "circle",
+        source: SOURCE,
+        minzoom: threshold,
+        filter: ["==", ["get", "clustered"], true],
+        paint,
+      });
       map.addLayer({
         id: LAYER,
         type: "circle",
         source: SOURCE,
-        paint: {
-          "circle-color": ["get", "color"],
-          "circle-radius": ["get", "radius"],
-          "circle-stroke-color": ["get", "ring"],
-          "circle-stroke-width": 2,
-        },
+        filter: ["!=", ["get", "clustered"], true],
+        paint,
       });
       setReady(true);
     }
@@ -148,6 +221,10 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
         { padding: FIT_PADDING_PX, maxZoom: MAX_FIT_ZOOM, animate: false },
       );
     }
+    // Relative to the opening view, so bubbles show only there, whatever the portfolio's extent.
+    threshold = map.getZoom() + CLUSTER_ZOOM_SPAN;
+
+    const LAYERS = [LAYER, CLUSTERED_LAYER, CLUSTER_LAYER];
 
     const near = (point: { x: number; y: number }) =>
       map.getLayer(LAYER)
@@ -156,9 +233,26 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
               [point.x - HIT_RADIUS_PX, point.y - HIT_RADIUS_PX],
               [point.x + HIT_RADIUS_PX, point.y + HIT_RADIUS_PX],
             ],
-            { layers: [LAYER] },
+            { layers: LAYERS },
           )[0]
         : undefined;
+
+    /** Zoom into a bubble, at least far enough for its points to replace it. */
+    function openCluster(clusterId: number) {
+      const bounds = boundsRef.current.get(clusterId);
+      if (!bounds) return;
+      const [west, south, east, north] = bounds;
+      const camera = map.cameraForBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding: FIT_PADDING_PX },
+      );
+      const fitted = camera?.zoom ?? threshold;
+      const zoom = Math.max(threshold, Math.min(fitted, Math.max(MAX_FIT_ZOOM, threshold)));
+      map.easeTo({ center: camera?.center ?? [(west + east) / 2, (south + north) / 2], zoom });
+    }
 
     map.on("mousemove", (event) => {
       const feature = near(event.point);
@@ -181,7 +275,13 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
     });
     map.on("click", (event) => {
       const feature = near(event.point);
-      if (feature) selectRef.current(Number(feature.properties.rowNum));
+      if (!feature) return;
+      if (feature.layer.id === CLUSTER_LAYER) {
+        popup.remove();
+        openCluster(Number(feature.properties.clusterId));
+      } else {
+        selectRef.current(Number(feature.properties.rowNum));
+      }
     });
 
     return () => {
@@ -197,6 +297,11 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
     if (!ready) return;
     (mapRef.current?.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(features);
   }, [features, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    (mapRef.current?.getSource(CLUSTER_SOURCE) as GeoJSONSource | undefined)?.setData(bubbles);
+  }, [bubbles, ready]);
 
   const colors = ramp(dark);
   const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
@@ -233,7 +338,7 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
             </li>
           </>
         ) : (
-          ["Very low", "Low", "Medium", "High", "Very high"].map((label, index) => (
+          SCORE_LABELS.map((label, index) => (
             <li key={label}>
               <span className="dot" style={{ background: colors[index] }} /> {label}
             </li>
@@ -242,6 +347,12 @@ export default function RiskMap({ assets, rows, colorBy, selected, onSelect }: R
         <li>
           <span className="dot dot-hollow" /> No result or excluded
         </li>
+        {clusters.length > 0 && (
+          <li>
+            <span className="dot dot-bubble" /> Bubble: nearby assets, sized by count, coloured by
+            their mean. Zoom in or click it to see each asset
+          </li>
+        )}
       </ul>
     </section>
   );

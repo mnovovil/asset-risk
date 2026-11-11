@@ -7,9 +7,17 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { asset, jsonResponse, resultsResponse, SUMMARY, TRAJECTORY } from "./helpers";
 
 vi.mock("@/components/dashboard/RiskMap", () => ({
-  default: ({ colorBy, assets }: { colorBy: string; assets: unknown[] }) => (
+  default: ({
+    colorBy,
+    assets,
+    clusters,
+  }: {
+    colorBy: string;
+    assets: unknown[];
+    clusters: unknown[];
+  }) => (
     <p>
-      Map of {assets.length} assets by {colorBy}
+      Map of {assets.length} assets in {clusters.length} clusters by {colorBy}
     </p>
   ),
 }));
@@ -86,6 +94,28 @@ describe("Dashboard", () => {
     expect(screen.getByText("50%")).toBeInTheDocument(); // assumed type
   });
 
+  it("gives the map the run's clusters", async () => {
+    const cluster = {
+      cluster_id: 0,
+      assets: 2,
+      row_nums: [1, 2],
+      lat: 40,
+      lon: -3,
+      bounds: [-3, 40, -3, 40],
+    };
+    stub({ clusters: [cluster] });
+    await renderDashboard();
+    expect(await screen.findByText("Map of 3 assets in 1 clusters by total")).toBeInTheDocument();
+  });
+
+  it("still shows every asset when the clusters can't be loaded", async () => {
+    vi.stubGlobal("fetch", async (url: string) =>
+      url.endsWith("/clusters") ? jsonResponse({ detail: "boom" }, 500) : resultsResponse(url),
+    );
+    await renderDashboard();
+    expect(await screen.findByText("Map of 3 assets in 0 clusters by total")).toBeInTheDocument();
+  });
+
   it("compares history over the same hazards, not all of them", async () => {
     await renderDashboard();
     await userEvent.selectOptions(screen.getByLabelText("Scenario"), "ssp245");
@@ -151,9 +181,9 @@ describe("Dashboard", () => {
 
   it("recolours the map from the filter row", async () => {
     await renderDashboard();
-    expect(screen.getByText("Map of 3 assets by total")).toBeInTheDocument();
+    expect(screen.getByText("Map of 3 assets in 0 clusters by total")).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("Colour the map by"), "Fire");
-    expect(screen.getByText("Map of 3 assets by Fire")).toBeInTheDocument();
+    expect(screen.getByText("Map of 3 assets in 0 clusters by Fire")).toBeInTheDocument();
   });
 
   it("warns when most building types are assumed", async () => {

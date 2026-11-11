@@ -72,6 +72,28 @@ variable "geolocate_batch_size" {
   }
 }
 
+variable "cluster_eps_km" {
+  description = "DBSCAN neighbourhood radius for the map's risk-concentration bubbles, in km."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.cluster_eps_km > 0 && var.cluster_eps_km <= 1000
+    error_message = "cluster_eps_km must be more than 0 and at most 1000."
+  }
+}
+
+variable "cluster_min_samples" {
+  description = "Assets within cluster_eps_km of a point, itself included, for DBSCAN to start a cluster there."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.cluster_min_samples >= 2 && var.cluster_min_samples == floor(var.cluster_min_samples)
+    error_message = "cluster_min_samples must be a whole number of at least 2."
+  }
+}
+
 variable "max_portfolio_rows" {
   description = "Largest portfolio accepted, in rows."
   type        = number

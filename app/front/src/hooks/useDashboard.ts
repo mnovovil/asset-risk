@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   getAssets,
+  getClusters,
   getCoverage,
   getImpacts,
   getScores,
@@ -11,6 +12,7 @@ import {
   getTrajectory,
   type Asset,
   type AssetTotal,
+  type Cluster,
   type Coverage,
   type Impact,
   type Pair,
@@ -22,6 +24,8 @@ import {
 export interface RunData {
   summary: Summary;
   assets: Asset[];
+  /** DBSCAN groups for the map. Empty when there are none, or they couldn't be loaded. */
+  clusters: Cluster[];
   trajectory: TrajectoryPoint[];
   coverage: Coverage[];
   historical: Impact[];
@@ -52,9 +56,14 @@ export function useRunData(runId: string) {
       getTrajectory(runId, signal),
       getCoverage(runId, signal),
       getImpacts(runId, HISTORICAL, signal),
+      // The bubbles only summarise the points, so without them the map still shows every asset.
+      getClusters(runId, signal).catch((e: unknown) => {
+        if (signal.aborted) throw e;
+        return [];
+      }),
     ])
-      .then(([summary, assets, trajectory, coverage, historical]) =>
-        setData({ summary, assets, trajectory, coverage, historical }),
+      .then(([summary, assets, trajectory, coverage, historical, clusters]) =>
+        setData({ summary, assets, clusters, trajectory, coverage, historical }),
       )
       .catch((e: unknown) => {
         if (!signal.aborted) setError(messageOf(e));

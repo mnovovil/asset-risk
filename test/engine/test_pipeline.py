@@ -58,6 +58,8 @@ def test_runs_every_stage_in_order(csv_path, local_settings, monkeypatch):
         assert con.execute(
             "SELECT asset_id, assessable, exclusion_reason FROM assets ORDER BY row_num"
         ).fetchall() == [("p1", True, None), ("bad", False, "invalid")]
+        # One valid point is fewer than cluster_min_samples, so no cluster, and no error.
+        assert con.execute("SELECT count(*) FROM asset_clusters").fetchone()[0] == 0
 
 
 def test_failed_stage_is_recorded_not_raised(csv_path, settings):

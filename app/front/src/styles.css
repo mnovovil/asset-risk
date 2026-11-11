@@ -473,6 +473,13 @@ progress {
   border: 2px solid var(--series-other);
 }
 
+.dot-bubble {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--series-other);
+  opacity: 0.8;
+}
+
 .map-popup {
   color: #0b0b0b;
   font-size: 0.8125rem;

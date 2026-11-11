@@ -37,6 +37,8 @@ resource "local_file" "asset_risk_config" {
     physrisk_batch_size   = var.physrisk_batch_size
     geolocate_workers     = var.geolocate_workers
     geolocate_batch_size  = var.geolocate_batch_size
+    cluster_eps_km        = var.cluster_eps_km
+    cluster_min_samples   = var.cluster_min_samples
     max_portfolio_rows    = var.max_portfolio_rows
     max_upload_mb         = var.max_upload_mb
     data_dir              = var.data_dir

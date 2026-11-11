@@ -85,6 +85,7 @@ export function Dashboard({ runId }: { runId: string }) {
         <Suspense fallback={<p className="muted">Loading the map…</p>}>
           <RiskMap
             assets={run.assets}
+            clusters={run.clusters}
             rows={rows}
             colorBy={colorBy}
             selected={selected}

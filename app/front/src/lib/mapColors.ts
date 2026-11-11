@@ -7,6 +7,9 @@ const DARK_RAMP = ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"];
 export const NO_RESULT_COLOR = "#898781";
 const SCORE_STEPS = 5;
 
+/** What each score step means, lowest first. */
+export const SCORE_LABELS = ["Very low", "Low", "Medium", "High", "Very high"];
+
 export const ramp = (dark: boolean) => (dark ? DARK_RAMP : LIGHT_RAMP);
 
 export function scoreColor(score: number, dark: boolean): string | null {

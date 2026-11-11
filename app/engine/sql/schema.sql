@@ -43,6 +43,14 @@ CREATE TABLE assets (
     exclusion_reason   VARCHAR   -- invalid | off_land | no_curve
 );
 
+-- Spatial clusters from DBSCAN (cluster.py), for the map. Only clustered assets have a row: noise
+-- has none, and a portfolio with no dense group has no rows. Runs made before this table existed
+-- don't have it, and read as having no clusters.
+CREATE TABLE asset_clusters (
+    row_num    INTEGER PRIMARY KEY,
+    cluster_id INTEGER NOT NULL
+);
+
 -- Each scenario and year physrisk was asked for, so one that returns nothing still shows up. The
 -- historical baseline has year NULL.
 CREATE TABLE assessment_pairs (
