@@ -17,15 +17,14 @@ import {
   type HazardCurve,
   type Pair,
 } from "@/api/client";
-import { SCORE_NOTES, scoreKind } from "@/lib/dashboard";
-import { assetLabel, percent, scenarioLabel } from "@/lib/format";
+import { BASELINE, BASELINE_LABEL, isBaseline, pairLabel, SCORE_NOTES, scoreKind } from "@/lib/dashboard";
+import { assetLabel, percent } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
 import { AssetHazardMap } from "./AssetHazardMap";
 import { ChartLegend } from "./ChartLegend";
 import { ChartTooltip } from "./ChartTooltip";
 
-const HISTORICAL: Pair = { scenario: "historical", year: null };
 const HISTORICAL_COLOR = "var(--series-other)";
 const SCENARIO_COLOR = "var(--series-1)";
 
@@ -62,7 +61,10 @@ const EXCLUSIONS: Record<string, string> = {
 };
 
 function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: number; pair: Pair }) {
-  const [curves, setCurves] = useState<{ historical: HazardCurve; scenario: HazardCurve } | null>(
+  const [curves, setCurves] = useState<{
+    historical: HazardCurve;
+    scenario: HazardCurve | null;
+  } | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
@@ -74,8 +76,9 @@ function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: numb
     setCurves(null);
     setError(null);
     Promise.all([
-      getHazardCurve(runId, rowNum, HISTORICAL, signal),
-      getHazardCurve(runId, rowNum, { scenario, year }, signal),
+      getHazardCurve(runId, rowNum, BASELINE, signal),
+      // The baseline is the historical curve, so it's fetched once.
+      isBaseline({ scenario, year }) ? null : getHazardCurve(runId, rowNum, { scenario, year }, signal),
     ])
       .then(([historical, selected]) => setCurves({ historical, scenario: selected }))
       .catch((e: unknown) => {
@@ -88,8 +91,10 @@ function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: numb
   if (error) return <p className="notice notice-warning">{error}</p>;
   if (!curves) return <p className="muted">Loading…</p>;
 
-  const name = `${scenarioLabel(scenario)}, ${year}`;
-  const periods = sortedPeriods(curves.historical, curves.scenario);
+  const name = pairLabel({ scenario, year });
+  const selected = curves.scenario;
+  const historicalName = selected ? "Historical" : BASELINE_LABEL;
+  const periods = sortedPeriods(curves.historical, ...(selected ? [selected] : []));
   if (periods.length === 0) return <p className="muted">No river flood data at this location.</p>;
   const lookup = (curve: HazardCurve, period: number) => {
     const index = curve.return_periods.indexOf(period);
@@ -98,7 +103,7 @@ function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: numb
   const data = periods.map((period) => ({
     period,
     historical: lookup(curves.historical, period),
-    scenario: lookup(curves.scenario, period),
+    scenario: selected ? lookup(selected, period) : null,
   }));
   const depth = (value: number | null) => (value === null ? "–" : `${value.toFixed(2)} m`);
 
@@ -151,27 +156,31 @@ function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: numb
             />
             <Line
               dataKey="historical"
-              name="Historical"
+              name={historicalName}
               stroke={HISTORICAL_COLOR}
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
             />
-            <Line
-              dataKey="scenario"
-              name={name}
-              stroke={SCENARIO_COLOR}
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive={false}
-            />
+            {selected && (
+              <Line
+                dataKey="scenario"
+                name={name}
+                stroke={SCENARIO_COLOR}
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
       <ChartLegend
         items={[
-          { key: "historical", label: "Historical", color: HISTORICAL_COLOR, kind: "line" },
-          { key: "scenario", label: name, color: SCENARIO_COLOR, kind: "line" },
+          { key: "historical", label: historicalName, color: HISTORICAL_COLOR, kind: "line" as const },
+          ...(selected
+            ? [{ key: "scenario", label: name, color: SCENARIO_COLOR, kind: "line" as const }]
+            : []),
         ]}
       />
       <details className="twin">
@@ -181,8 +190,8 @@ function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: numb
             <thead>
               <tr>
                 <th scope="col">Return period</th>
-                <th scope="col">Historical</th>
-                <th scope="col">{name}</th>
+                <th scope="col">{historicalName}</th>
+                {selected && <th scope="col">{name}</th>}
               </tr>
             </thead>
             <tbody>
@@ -190,7 +199,7 @@ function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: numb
                 <tr key={datum.period}>
                   <th scope="row">{datum.period} years</th>
                   <td>{depth(datum.historical)}</td>
-                  <td>{depth(datum.scenario)}</td>
+                  {selected && <td>{depth(datum.scenario)}</td>}
                 </tr>
               ))}
             </tbody>
@@ -243,6 +252,8 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
   const impacts = asset?.impacts.filter(matches) ?? [];
   const scores = asset?.scores.filter(matches) ?? [];
   const hazards = sortHazards([...impacts.map((i) => i.hazard), ...scores.map((s) => s.hazard)]);
+  // physrisk scores scenarios only, so the baseline's table has no score column.
+  const baseline = isBaseline(pair);
 
   return (
     <aside className="asset-panel" role="dialog" aria-label="Asset details">
@@ -301,7 +312,7 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
           {asset.assessable && (
             <>
               <h3>
-                Results for {scenarioLabel(pair.scenario)}, {pair.year}
+                Results for {pairLabel(pair)}
               </h3>
               <div className="table-scroll">
                 <table>
@@ -309,7 +320,7 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
                     <tr>
                       <th scope="col">Hazard</th>
                       <th scope="col">Annual loss</th>
-                      <th scope="col">Score</th>
+                      {!baseline && <th scope="col">Score</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -321,13 +332,15 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
                         <tr key={hazard}>
                           <th scope="row">{hazardLabel(hazard)}</th>
                           <td>{impact ? percent(impact.aal) : "–"}</td>
-                          <td className={kind === "scored" ? "" : "score-none"}>
-                            {kind === "scored"
-                              ? score?.label
-                              : kind
-                                ? SCORE_NOTES[kind]
-                                : "Not returned"}
-                          </td>
+                          {!baseline && (
+                            <td className={kind === "scored" ? "" : "score-none"}>
+                              {kind === "scored"
+                                ? score?.label
+                                : kind
+                                  ? SCORE_NOTES[kind]
+                                  : "Not returned"}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}

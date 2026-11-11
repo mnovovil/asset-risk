@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import {
   byTotalDescending,
   hazardColumns,
+  lossHazards,
   SCORE_NOTES,
   scoreKind,
   type AssetRow,
@@ -35,9 +36,16 @@ function compare(a: AssetRow, b: AssetRow, { column, ascending }: Sort): number 
   return (ascending ? result : -result) || byTotalDescending(a, b);
 }
 
-function ScoreCell({ row, hazard }: { row: AssetRow; hazard: string }) {
+function ScoreCell({ row, hazard, baseline }: { row: AssetRow; hazard: string; baseline: boolean }) {
   const score = row.scores[hazard];
   const aal = row.aal[hazard];
+  if (baseline) {
+    return (
+      <td className="score-cell">
+        <span className="score-value">{percent(aal)}</span>
+      </td>
+    );
+  }
   if (!score) return <td className="score-cell score-none">Not returned</td>;
   const kind = scoreKind(score.score);
   if (kind !== "scored") {
@@ -57,13 +65,19 @@ function ScoreCell({ row, hazard }: { row: AssetRow; hazard: string }) {
 
 interface ScoreTableProps {
   rows: AssetRow[];
+  /** physrisk's baseline has no scores, so its columns show annual loss only. */
+  baseline: boolean;
   onSelect: (rowNum: number) => void;
 }
 
-export function ScoreTable({ rows, onSelect }: ScoreTableProps) {
+export function ScoreTable({ rows, baseline, onSelect }: ScoreTableProps) {
   const [sort, setSort] = useState<Sort>({ column: TOTAL_COLUMN, ascending: false });
   const [page, setPage] = useState(0);
-  const columns = useMemo(() => hazardColumns(rows), [rows]);
+  const columns = useMemo(
+    () =>
+      baseline ? { scored: lossHazards(rows), noModel: [], noData: [] } : hazardColumns(rows),
+    [rows, baseline],
+  );
   const sorted = useMemo(() => [...rows].sort((a, b) => compare(a, b, sort)), [rows, sort]);
 
   const pages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -98,8 +112,9 @@ export function ScoreTable({ rows, onSelect }: ScoreTableProps) {
     <section className="panel" aria-labelledby="scores-heading">
       <h2 id="scores-heading">Risk by asset and hazard</h2>
       <p className="panel-note">
-        Annual loss and physrisk's score for each hazard. "No model" and "No data" mean there's no
-        result, which isn't the same as low risk.
+        {baseline
+          ? "Annual loss for each hazard. physrisk scores scenarios only, so the baseline has no scores."
+          : `Annual loss and physrisk's score for each hazard. "No model" and "No data" mean there's no result, which isn't the same as low risk.`}
       </p>
       <div className="table-scroll">
         <table>
@@ -120,7 +135,7 @@ export function ScoreTable({ rows, onSelect }: ScoreTableProps) {
                 </th>
                 <td className="total-cell">{percent(row.total)}</td>
                 {columns.scored.map((hazard) => (
-                  <ScoreCell key={hazard} row={row} hazard={hazard} />
+                  <ScoreCell key={hazard} row={row} hazard={hazard} baseline={baseline} />
                 ))}
               </tr>
             ))}

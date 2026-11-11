@@ -6,9 +6,11 @@ interface KpisProps {
   summary: Summary;
   point: TrajectoryPoint | undefined;
   rows: AssetRow[];
+  /** Showing physrisk's baseline, which has nothing to compare with. */
+  baseline: boolean;
 }
 
-export function Kpis({ summary, point, rows }: KpisProps) {
+export function Kpis({ summary, point, rows, baseline }: KpisProps) {
   const assumed = assumedShare(summary.assessable, summary.assumed_type);
   const withHistorical = rows.filter((row) => row.historical !== null);
   const historicalMean = withHistorical.length
@@ -23,8 +25,10 @@ export function Kpis({ summary, point, rows }: KpisProps) {
         <dd>
           <span className="kpi-value">{percent(point?.mean_total_aal)}</span>
           <span className="kpi-note">
-            of asset value, over {plural(point?.hazards ?? 0, "hazard")}. Historical, same hazards:{" "}
-            {percent(historicalMean)}
+            of asset value, over {plural(point?.hazards ?? 0, "hazard")}.{" "}
+            {baseline
+              ? "physrisk's present-day baseline, which it treats as 2025"
+              : `Historical, same hazards: ${percent(historicalMean)}`}
           </span>
         </dd>
       </div>

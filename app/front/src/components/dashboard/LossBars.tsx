@@ -72,10 +72,12 @@ function Diamond({ cx, cy, index, value }: DiamondProps) {
 interface LossBarsProps {
   rows: AssetRow[];
   missing: string[];
+  /** Showing physrisk's baseline: no historical markers, as it would be compared with itself. */
+  baseline: boolean;
   onSelect: (rowNum: number) => void;
 }
 
-export function LossBars({ rows, missing, onSelect }: LossBarsProps) {
+export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
   const data = barData(rows);
   const hazards = sortHazards(rows.flatMap((row) => Object.keys(row.aal)));
 
@@ -84,8 +86,8 @@ export function LossBars({ rows, missing, onSelect }: LossBarsProps) {
       <h2 id="loss-heading">Annual loss by hazard</h2>
       <p className="panel-note">
         Share of asset value lost per year on average.
-        {rows.length > TOP_ASSETS && ` The ${TOP_ASSETS} highest of ${rows.length}.`} Diamonds show
-        the historical loss over the same hazards.
+        {rows.length > TOP_ASSETS && ` The ${TOP_ASSETS} highest of ${rows.length}.`}
+        {!baseline && " Diamonds show the historical loss over the same hazards."}
         {missing.length > 0 &&
           ` ${joinList(missing.map(hazardLabel))} ${
             missing.length === 1 ? "has" : "have"
@@ -144,12 +146,16 @@ export function LossBars({ rows, missing, onSelect }: LossBarsProps) {
                         value: percent(datum.total),
                         color: "var(--ink)",
                       },
-                      {
-                        key: "historical",
-                        label: "Historical, same hazards",
-                        value: percent(datum.historical),
-                        color: "var(--muted)",
-                      },
+                      ...(baseline
+                        ? []
+                        : [
+                            {
+                              key: "historical",
+                              label: "Historical, same hazards",
+                              value: percent(datum.historical),
+                              color: "var(--muted)",
+                            },
+                          ]),
                     ]}
                   />
                 );
@@ -167,13 +173,15 @@ export function LossBars({ rows, missing, onSelect }: LossBarsProps) {
                 shape={(props: object) => <Segment {...props} hazard={hazard} />}
               />
             ))}
-            <Line
-              dataKey="historical"
-              stroke="none"
-              isAnimationActive={false}
-              activeDot={false}
-              dot={(props: DiamondProps) => <Diamond {...props} />}
-            />
+            {!baseline && (
+              <Line
+                dataKey="historical"
+                stroke="none"
+                isAnimationActive={false}
+                activeDot={false}
+                dot={(props: DiamondProps) => <Diamond {...props} />}
+              />
+            )}
             <Line
               dataKey="labelEnd"
               stroke="none"
@@ -206,12 +214,16 @@ export function LossBars({ rows, missing, onSelect }: LossBarsProps) {
             color: hazardColor(hazard),
             kind: "bar" as const,
           })),
-          {
-            key: "historical",
-            label: "Historical, same hazards",
-            color: "var(--ink)",
-            kind: "diamond" as const,
-          },
+          ...(baseline
+            ? []
+            : [
+                {
+                  key: "historical",
+                  label: "Historical, same hazards",
+                  color: "var(--ink)",
+                  kind: "diamond" as const,
+                },
+              ]),
         ]}
       />
     </section>

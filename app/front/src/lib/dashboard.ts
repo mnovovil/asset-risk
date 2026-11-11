@@ -1,7 +1,7 @@
 /** Turn API responses into what the dashboard shows. No rendering here, so it's easy to test. */
 
 import type { AssetTotal, Coverage, Impact, Pair, Score, TrajectoryPoint } from "@/api/client";
-import { assetLabel } from "@/lib/format";
+import { assetLabel, scenarioLabel } from "@/lib/format";
 import { sortHazards } from "@/lib/hazards";
 
 export type ScoreKind = "scored" | "no_model" | "no_data" | "error";
@@ -106,6 +106,26 @@ export const pointFor = (trajectory: TrajectoryPoint[], pair: Pair) =>
 export const missingHazards = (coverage: Coverage[], pair: Pair) =>
   sortHazards(coverage.filter((c) => samePair(c, pair) && !c.covered).map((c) => c.hazard));
 
+/**
+ * physrisk's historical baseline: present-day risk, which it treats as the year 2025. It comes back
+ * with every request, with impacts but no scores, and is stored with no year.
+ */
+export const BASELINE: Pair = { scenario: "historical", year: null };
+export const BASELINE_LABEL = "Today (baseline)";
+
+export const isBaseline = (pair: Pair | null) => pair?.scenario === BASELINE.scenario;
+
+/** Whether the baseline can be shown on its own: it has results for at least one asset. */
+export const hasBaseline = (trajectory: TrajectoryPoint[]) =>
+  trajectory.some((p) => samePair(p, BASELINE) && p.assets > 0);
+
+export const pairLabel = (pair: Pair) =>
+  isBaseline(pair) ? BASELINE_LABEL : `${scenarioLabel(pair.scenario)}, ${pair.year}`;
+
+/** Hazards with an annual loss for any asset: the baseline's columns, as it has no scores. */
+export const lossHazards = (rows: AssetRow[]) =>
+  sortHazards(rows.flatMap((row) => Object.keys(row.aal)));
+
 export const scenariosOf = (trajectory: TrajectoryPoint[]) => [
   ...new Set(trajectory.filter((p) => p.year !== null).map((p) => p.scenario)),
 ];
@@ -118,15 +138,18 @@ export const yearsOf = (trajectory: TrajectoryPoint[], scenario: string) =>
 
 const PREFERRED_YEAR = 2050;
 
+/** The year nearest mid-century, or undefined when there are none. */
+export const preferredYear = (years: number[]) =>
+  years.length
+    ? years.reduce((a, b) => (Math.abs(b - PREFERRED_YEAR) < Math.abs(a - PREFERRED_YEAR) ? b : a))
+    : undefined;
+
 /** Start on the scenario with the most hazards, at the year nearest mid-century. */
 export function defaultPair(trajectory: TrajectoryPoint[]): Pair | null {
   const candidates = trajectory.filter((p) => p.year !== null);
   if (candidates.length === 0) return null;
   const best = candidates.reduce((a, b) => (b.hazards > a.hazards ? b : a));
-  const years = yearsOf(trajectory, best.scenario);
-  const year = years.reduce((a, b) =>
-    Math.abs(b - PREFERRED_YEAR) < Math.abs(a - PREFERRED_YEAR) ? b : a,
-  );
+  const year = preferredYear(yearsOf(trajectory, best.scenario)) as number;
   return { scenario: best.scenario, year };
 }
 
