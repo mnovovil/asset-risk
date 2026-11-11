@@ -15,6 +15,7 @@ import {
   scoreKind,
   TOP_ASSETS,
   trajectorySeries,
+  yearsOf,
 } from "@/lib/dashboard";
 import { joinList, percent, percentTick, truncate } from "@/lib/format";
 import { hazardColor, sortHazards } from "@/lib/hazards";
@@ -169,6 +170,17 @@ describe("barData", () => {
 describe("the selected scenario", () => {
   it("starts on the scenario with the most hazards, near 2050", () => {
     expect(defaultPair(TRAJECTORY)).toEqual({ scenario: "ssp585", year: 2050 });
+  });
+
+  it("leaves out years with no results, as 2025 had", () => {
+    const empty2025 = { ...TRAJECTORY[3], year: 2025, assets: 0, mean_total_aal: null, mean_shared_aal: null };
+    const trajectory = [...TRAJECTORY, empty2025];
+    expect(yearsOf(trajectory, "ssp585")).toEqual([2030, 2050]);
+    expect(defaultPair(trajectory)).toEqual({ scenario: "ssp585", year: 2050 });
+  });
+
+  it("keeps every year of a scenario with no results anywhere", () => {
+    expect(yearsOf(TRAJECTORY, "ssp370")).toEqual([2050]);
   });
 
   it("never starts on the baseline", () => {

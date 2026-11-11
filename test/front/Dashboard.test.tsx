@@ -130,6 +130,14 @@ describe("Dashboard", () => {
     });
   });
 
+  it("doesn't offer a year with no results", async () => {
+    const empty = { ...TRAJECTORY[3], year: 2025, assets: 0, mean_total_aal: null, mean_shared_aal: null };
+    stub({ trajectory: [...TRAJECTORY, empty] });
+    await renderDashboard();
+    const years = within(screen.getByLabelText("Year")).getAllByRole("option").map((o) => o.textContent);
+    expect(years).toEqual(["2030", "2050"]);
+  });
+
   it("gives the map the run's clusters", async () => {
     const cluster = {
       cluster_id: 0,
