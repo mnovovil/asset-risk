@@ -68,7 +68,7 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/runs` | Upload a CSV as the `file` field. Returns 202, or 413 or 422 with the reason |
-| `GET /api/runs`, `GET /api/runs/{id}` | Status, stage, progress and any error |
+| `GET /api/runs/{id}` | Status, stage, progress and any error. Runs aren't listed: open one by its link |
 | `GET /api/runs/{id}/summary` | Counts, exclusions and shared hazards |
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
 | `GET /api/runs/{id}/clusters` | DBSCAN clusters with their members, centre and bounds. Empty when none was found |

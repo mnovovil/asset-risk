@@ -143,12 +143,6 @@ def _without_path(message: str, path: str) -> str:
     return message.replace(f"{path} ", "The file ").replace(path, "the file")
 
 
-@router.get("/runs")
-def list_runs(settings: SettingsDep, queue: QueueDep) -> list[schemas.RunStatus]:
-    runs = [_status(run, queue) for run in store.all_runs(settings.data_dir)]
-    return sorted(runs, key=lambda r: r.created_at, reverse=True)
-
-
 @router.get("/runs/{run_id}")
 def get_run(run: RunDep, queue: QueueDep) -> schemas.RunStatus:
     return _status(run, queue)
