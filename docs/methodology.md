@@ -29,6 +29,21 @@ differ by hazard group.
 
 **The historical baseline** comes from physrisk's own historical data.
 
+### Today (baseline)
+
+Choosing **Today (baseline)** in the Scenario filter shows the historical baseline on its own, as
+present-day risk, on the map, the headline figures, the loss bars and the table.
+
+- physrisk treats the baseline as the year **2025**. Its future data starts at 2030. A year between
+  them is a straight-line blend of the two, not new data, and years before 2025 are extrapolated
+  backwards, so the settings only accept years from 2025.
+- It isn't always observed data. For flood it's physrisk's RCP4.5 2030 data, the same as the hazard
+  maps use.
+- physrisk **scores scenarios only**, so the baseline has annual losses but no scores. The table shows
+  each hazard's loss, and the map can only be coloured by total loss.
+- Its total covers the baseline's own hazards, which can be more than some scenarios have. Compare it
+  with a scenario only through the historical markers, which use the scenario's hazards.
+
 ## Comparing scenarios
 
 physrisk's data doesn't cover the same hazards in every scenario, and it doesn't warn about this. For
