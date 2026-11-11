@@ -164,6 +164,12 @@ def get_assets(run: FinishedRunDep) -> list[schemas.Asset]:
     return [schemas.Asset(**row) for row in results.assets(run)]
 
 
+@router.get("/runs/{run_id}/clusters")
+def get_clusters(run: FinishedRunDep) -> list[schemas.Cluster]:
+    """Spatial clusters of assets, from DBSCAN. Empty when no group is dense enough."""
+    return [schemas.Cluster(**row) for row in results.clusters(run)]
+
+
 def _asset(run: FinishedRunDep, row_num: int) -> dict:
     row = results.asset(run, row_num)
     if row is None:

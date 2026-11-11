@@ -1,9 +1,19 @@
 import { exportUrl, type Pair, type TrajectoryPoint } from "@/api/client";
-import { scenariosOf, yearsOf } from "@/lib/dashboard";
+import {
+  BASELINE,
+  BASELINE_LABEL,
+  hasBaseline,
+  isBaseline,
+  preferredYear,
+  scenariosOf,
+  yearsOf,
+} from "@/lib/dashboard";
 import { hazardLabel } from "@/lib/hazards";
 import { scenarioLabel } from "@/lib/format";
 
-export const COLOR_BY_TOTAL = "total";
+import { COLOR_BY_TOTAL } from "@/lib/mapFeatures";
+
+export { COLOR_BY_TOTAL };
 
 interface FiltersProps {
   runId: string;
@@ -37,11 +47,15 @@ export function Filters({
           value={pair.scenario}
           onChange={(event) => {
             const scenario = event.target.value;
+            if (scenario === BASELINE.scenario) return onPairChange(BASELINE);
             const options = yearsOf(trajectory, scenario);
-            const year = options.includes(pair.year as number) ? pair.year : options[0];
-            onPairChange({ scenario, year });
+            const year = options.includes(pair.year as number) ? pair.year : preferredYear(options);
+            onPairChange({ scenario, year: year ?? null });
           }}
         >
+          {hasBaseline(trajectory) && (
+            <option value={BASELINE.scenario}>{BASELINE_LABEL}</option>
+          )}
           {scenariosOf(trajectory).map((scenario) => (
             <option key={scenario} value={scenario}>
               {scenarioLabel(scenario)}
@@ -54,10 +68,12 @@ export function Filters({
         Year
         <select
           value={pair.year ?? ""}
+          disabled={isBaseline(pair)}
           onChange={(event) =>
             onPairChange({ scenario: pair.scenario, year: Number(event.target.value) })
           }
         >
+          {isBaseline(pair) && <option value="">–</option>}
           {years.map((year) => (
             <option key={year} value={year}>
               {year}

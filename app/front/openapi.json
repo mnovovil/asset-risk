@@ -718,6 +718,51 @@
         "title": "Body_create_run_api_runs_post",
         "type": "object"
       },
+      "Cluster": {
+        "description": "A DBSCAN group of nearby assets. Noise assets are in no cluster.",
+        "properties": {
+          "assets": {
+            "title": "Assets",
+            "type": "integer"
+          },
+          "bounds": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Bounds",
+            "type": "array"
+          },
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "integer"
+          },
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "row_nums": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Row Nums",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "assets",
+          "row_nums",
+          "lat",
+          "lon",
+          "bounds"
+        ],
+        "title": "Cluster",
+        "type": "object"
+      },
       "Coverage": {
         "properties": {
           "assets": {
@@ -1598,6 +1643,50 @@
           }
         },
         "summary": "Get Hazard Curve"
+      }
+    },
+    "/api/runs/{run_id}/clusters": {
+      "get": {
+        "description": "Spatial clusters of assets, from DBSCAN. Empty when no group is dense enough.",
+        "operationId": "get_clusters_api_runs__run_id__clusters_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Cluster"
+                  },
+                  "title": "Response Get Clusters Api Runs  Run Id  Clusters Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Clusters"
       }
     },
     "/api/runs/{run_id}/coverage": {

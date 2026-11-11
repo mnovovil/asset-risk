@@ -22,6 +22,8 @@ KEYS = (
     "physrisk_batch_size",
     "geolocate_workers",
     "geolocate_batch_size",
+    "cluster_eps_km",
+    "cluster_min_samples",
     "max_portfolio_rows",
     "max_upload_mb",
     "data_dir",
@@ -30,7 +32,10 @@ KEYS = (
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
-MIN_YEAR, MAX_YEAR = 2020, 2100
+# physrisk treats its baseline as 2025 and only extrapolates backwards from there.
+MIN_YEAR, MAX_YEAR = 2025, 2100
+MAX_CLUSTER_EPS_KM = 1000
+MIN_CLUSTER_SAMPLES = 2
 _APPLY_HINT = "run `terraform -chdir=infra apply` to generate it"
 
 
@@ -46,6 +51,8 @@ class Settings:
     physrisk_batch_size: int
     geolocate_workers: int
     geolocate_batch_size: int
+    cluster_eps_km: float
+    cluster_min_samples: int
     max_portfolio_rows: int
     max_upload_mb: float
     data_dir: Path
@@ -102,8 +109,15 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         if not _is_int(raw[key]) or raw[key] < 1:
             raise bad(key, "a whole number of at least 1")
 
+    eps = raw["cluster_eps_km"]
+    if not _is_number(eps) or not 0 < eps <= MAX_CLUSTER_EPS_KM:
+        raise bad("cluster_eps_km", f"a number more than 0 and at most {MAX_CLUSTER_EPS_KM}")
+
+    if not _is_int(raw["cluster_min_samples"]) or raw["cluster_min_samples"] < MIN_CLUSTER_SAMPLES:
+        raise bad("cluster_min_samples", f"a whole number of at least {MIN_CLUSTER_SAMPLES}")
+
     upload = raw["max_upload_mb"]
-    if isinstance(upload, bool) or not isinstance(upload, (int, float)) or upload <= 0:
+    if not _is_number(upload) or upload <= 0:
         raise bad("max_upload_mb", "a positive number")
 
     for key in ("data_dir", "geolocate_config"):
@@ -120,6 +134,8 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         physrisk_batch_size=raw["physrisk_batch_size"],
         geolocate_workers=raw["geolocate_workers"],
         geolocate_batch_size=raw["geolocate_batch_size"],
+        cluster_eps_km=float(eps),
+        cluster_min_samples=raw["cluster_min_samples"],
         max_portfolio_rows=raw["max_portfolio_rows"],
         max_upload_mb=float(upload),
         # In a container, data lives on its volume wherever the settings put it on the host.
@@ -139,6 +155,10 @@ def _distinct_list(value) -> bool:
 
 def _is_int(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _from_root(path: str) -> Path:

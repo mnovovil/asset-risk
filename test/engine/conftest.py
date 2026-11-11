@@ -48,6 +48,8 @@ def settings(tmp_path):
         physrisk_batch_size=100,
         geolocate_workers=2,
         geolocate_batch_size=3,
+        cluster_eps_km=50.0,
+        cluster_min_samples=5,
         max_portfolio_rows=100,
         max_upload_mb=1.0,
         data_dir=tmp_path / "data",

@@ -7,9 +7,17 @@ import { Dashboard } from "@/components/dashboard/Dashboard";
 import { asset, jsonResponse, resultsResponse, SUMMARY, TRAJECTORY } from "./helpers";
 
 vi.mock("@/components/dashboard/RiskMap", () => ({
-  default: ({ colorBy, assets }: { colorBy: string; assets: unknown[] }) => (
+  default: ({
+    colorBy,
+    assets,
+    clusters,
+  }: {
+    colorBy: string;
+    assets: unknown[];
+    clusters: unknown[];
+  }) => (
     <p>
-      Map of {assets.length} assets by {colorBy}
+      Map of {assets.length} assets in {clusters.length} clusters by {colorBy}
     </p>
   ),
 }));
@@ -86,6 +94,64 @@ describe("Dashboard", () => {
     expect(screen.getByText("50%")).toBeInTheDocument(); // assumed type
   });
 
+  describe("today's baseline", () => {
+    async function selectBaseline() {
+      const requests = stub();
+      await renderDashboard();
+      await userEvent.selectOptions(screen.getByLabelText("Scenario"), "Today (baseline)");
+      await screen.findByText(/physrisk scores scenarios only/);
+      return requests;
+    }
+
+    it("is offered first, and loads results with no year", async () => {
+      const requests = await selectBaseline();
+      const options = within(screen.getByLabelText("Scenario")).getAllByRole("option");
+      expect(options[0]).toHaveTextContent("Today (baseline)");
+      expect(screen.getByLabelText("Year")).toBeDisabled();
+      expect(requests).toContain(`/api/runs/${RUN}/totals?scenario=historical`);
+    });
+
+    it("shows annual loss without scores, and nothing compared with itself", async () => {
+      await selectBaseline();
+      expect(screen.getByText("Map of 3 assets in 0 clusters by total")).toBeInTheDocument();
+      const colourBy = within(screen.getByLabelText("Colour the map by")).getAllByRole("option");
+      expect(colourBy.map((o) => o.textContent)).toEqual(["Total annual loss"]);
+      expect(screen.getByText(/present-day baseline, which it treats as 2025/)).toBeInTheDocument();
+      expect(screen.queryByText(/Diamonds show/)).not.toBeInTheDocument();
+      expect(scoreTable().queryByText("Not returned")).not.toBeInTheDocument();
+      expect(scoreTable().getByRole("columnheader", { name: "Wildfire" })).toBeInTheDocument();
+    });
+
+    it("goes back to a scenario at its preferred year", async () => {
+      await selectBaseline();
+      await userEvent.selectOptions(screen.getByLabelText("Scenario"), "ssp585");
+      expect(screen.getByLabelText("Year")).toHaveValue("2050");
+      expect(await screen.findByText(/Diamonds show/)).toBeInTheDocument();
+    });
+  });
+
+  it("gives the map the run's clusters", async () => {
+    const cluster = {
+      cluster_id: 0,
+      assets: 2,
+      row_nums: [1, 2],
+      lat: 40,
+      lon: -3,
+      bounds: [-3, 40, -3, 40],
+    };
+    stub({ clusters: [cluster] });
+    await renderDashboard();
+    expect(await screen.findByText("Map of 3 assets in 1 clusters by total")).toBeInTheDocument();
+  });
+
+  it("still shows every asset when the clusters can't be loaded", async () => {
+    vi.stubGlobal("fetch", async (url: string) =>
+      url.endsWith("/clusters") ? jsonResponse({ detail: "boom" }, 500) : resultsResponse(url),
+    );
+    await renderDashboard();
+    expect(await screen.findByText("Map of 3 assets in 0 clusters by total")).toBeInTheDocument();
+  });
+
   it("compares history over the same hazards, not all of them", async () => {
     await renderDashboard();
     await userEvent.selectOptions(screen.getByLabelText("Scenario"), "ssp245");
@@ -151,9 +217,9 @@ describe("Dashboard", () => {
 
   it("recolours the map from the filter row", async () => {
     await renderDashboard();
-    expect(screen.getByText("Map of 3 assets by total")).toBeInTheDocument();
+    expect(screen.getByText("Map of 3 assets in 0 clusters by total")).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("Colour the map by"), "Fire");
-    expect(screen.getByText("Map of 3 assets by Fire")).toBeInTheDocument();
+    expect(screen.getByText("Map of 3 assets in 0 clusters by Fire")).toBeInTheDocument();
   });
 
   it("warns when most building types are assumed", async () => {
@@ -289,6 +355,15 @@ describe("Dashboard", () => {
           aal_std: null,
           hazard_paths: [],
         },
+        {
+          scenario: "historical",
+          year: null,
+          hazard: "Wind",
+          impact_type: "damage",
+          aal: 0.0042,
+          aal_std: null,
+          hazard_paths: [],
+        },
       ],
       scores: [
         { scenario: "ssp585", year: 2050, hazard: "Wind", score: 1, label: "Low impact" },
@@ -364,6 +439,19 @@ describe("Dashboard", () => {
       const panel = within(await screen.findByRole("dialog"));
       expect(await panel.findByText("physrisk has no flood map for this scenario.")).toBeInTheDocument();
       expect(panel.getByText(/Hazard map with no overlay/)).toBeInTheDocument();
+    });
+
+    it("shows the baseline on its own, with no scores and one curve", async () => {
+      const requests = stub({ detail });
+      await renderDashboard();
+      await userEvent.selectOptions(screen.getByLabelText("Scenario"), "Today (baseline)");
+      await screen.findByText(/physrisk scores scenarios only/);
+      await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+      const panel = within(await screen.findByRole("dialog", { name: "Asset details" }));
+      expect(await panel.findByRole("heading", { name: "Results for Today (baseline)" })).toBeInTheDocument();
+      expect(panel.getByText("0.420%")).toBeInTheDocument();
+      expect(panel.queryByRole("columnheader", { name: "Score" })).not.toBeInTheDocument();
+      await waitFor(() => expect(requests.filter((r) => r.includes("hazard-curve"))).toHaveLength(1));
     });
 
     it("closes with the button and with Escape", async () => {

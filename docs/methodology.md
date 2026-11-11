@@ -29,6 +29,21 @@ differ by hazard group.
 
 **The historical baseline** comes from physrisk's own historical data.
 
+### Today (baseline)
+
+Choosing **Today (baseline)** in the Scenario filter shows the historical baseline on its own, as
+present-day risk, on the map, the headline figures, the loss bars and the table.
+
+- physrisk treats the baseline as the year **2025**. Its future data starts at 2030. A year between
+  them is a straight-line blend of the two, not new data, and years before 2025 are extrapolated
+  backwards, so the settings only accept years from 2025.
+- It isn't always observed data. For flood it's physrisk's RCP4.5 2030 data, the same as the hazard
+  maps use.
+- physrisk **scores scenarios only**, so the baseline has annual losses but no scores. The table shows
+  each hazard's loss, and the map can only be coloured by total loss.
+- Its total covers the baseline's own hazards, which can be more than some scenarios have. Compare it
+  with a scenario only through the historical markers, which use the scenario's hazards.
+
 ## Comparing scenarios
 
 physrisk's data doesn't cover the same hazards in every scenario, and it doesn't warn about this. For
@@ -46,6 +61,38 @@ Totals from different scenarios therefore can't be compared directly. So:
 - **Change over time** uses only the hazards every scenario has, and names them.
 - **Historical markers** use only the hazards in the selected scenario.
 - A scenario with no results is shown as having none, not as zero.
+
+## Risk concentration
+
+When the map opens, it shows only bubbles, one per group of nearby assets. Zooming in one level, or
+clicking a bubble, replaces them with every individual asset, including those outside any group.
+The legend says how many assets that is, and the score table and loss bars list every asset at any
+zoom. An asset selected from them shows on the map whatever the zoom.
+
+The groups come from [DBSCAN](https://en.wikipedia.org/wiki/DBSCAN), which needs no number of
+clusters. An asset with at least `cluster_min_samples` assets within `cluster_eps_km` of it, itself
+included, starts a cluster, and the cluster takes in every asset within that distance of its core.
+Distances are along the Earth's surface. A portfolio with no dense group has no bubbles, and its
+map shows every asset from the start. Clusters depend only on location, so
+they're the same in every scenario and year.
+
+A bubble's size grows with its number of assets. Its colour is the equal-weighted mean over its
+members **with a result** for what the map is coloured by: total loss on the same scale as the
+points, or a hazard's score rounded to the nearest band. Members with no model, no data or no
+result are counted apart, and a bubble with no result is drawn hollow. Its tooltip says how many
+members have results and how many assume the default building type.
+
+Points and bubbles share one scale, from green (lowest) to red (highest). Each step is also darker
+than the last (lighter, in dark mode), so the order reads without telling green from red.
+
+For total loss, the five colours are **quintiles**: each holds about a fifth of the assets with a
+result, for the selected scenario and year. One extreme loss then only moves the top class, instead
+of pushing every other asset into the lowest one. The legend gives the range of losses in each
+colour. The colour shows an asset's rank within this portfolio, so the same loss can be a different
+colour in another portfolio or scenario. Hazard scores keep physrisk's fixed bands.
+
+A green bubble or point is not proof of low risk, for the same reasons as a low score: see
+[Limits of the model](#limits-of-the-model).
 
 ## Building type
 

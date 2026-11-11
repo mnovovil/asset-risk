@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 
 import { getConfig, type Pair } from "@/api/client";
 import { useRunData, usePairData } from "@/hooks/useDashboard";
-import { buildRows, defaultPair, missingHazards, pointFor } from "@/lib/dashboard";
+import { buildRows, defaultPair, isBaseline, missingHazards, pointFor } from "@/lib/dashboard";
 import { sortHazards } from "@/lib/hazards";
 
 import { AssetPanel } from "./AssetPanel";
@@ -37,12 +37,14 @@ export function Dashboard({ runId }: { runId: string }) {
     return () => controller.abort();
   }, []);
 
+  const baseline = isBaseline(pair);
   const rows = useMemo(
     () =>
       results && run
-        ? buildRows(results.totals, results.impacts, results.scores, run.historical)
+        ? // The baseline is never compared with itself.
+          buildRows(results.totals, results.impacts, results.scores, baseline ? [] : run.historical)
         : [],
-    [results, run],
+    [results, run, baseline],
   );
   const scoreHazards = useMemo(
     () => sortHazards((results?.scores ?? []).filter((s) => s.score >= 0).map((s) => s.hazard)),
@@ -81,10 +83,11 @@ export function Dashboard({ runId }: { runId: string }) {
         </p>
       )}
       <div className="dashboard-body" aria-busy={loading}>
-        <Kpis summary={run.summary} point={point} rows={rows} />
+        <Kpis summary={run.summary} point={point} rows={rows} baseline={baseline} />
         <Suspense fallback={<p className="muted">Loading the map…</p>}>
           <RiskMap
             assets={run.assets}
+            clusters={run.clusters}
             rows={rows}
             colorBy={colorBy}
             selected={selected}
@@ -93,8 +96,8 @@ export function Dashboard({ runId }: { runId: string }) {
         </Suspense>
         {rows.length > 0 ? (
           <>
-            <LossBars rows={rows} missing={missing} onSelect={setSelected} />
-            <ScoreTable rows={rows} onSelect={setSelected} />
+            <LossBars rows={rows} missing={missing} baseline={baseline} onSelect={setSelected} />
+            <ScoreTable rows={rows} baseline={baseline} onSelect={setSelected} />
             <Trajectory trajectory={run.trajectory} sharedHazards={run.summary.shared_hazards} />
           </>
         ) : (

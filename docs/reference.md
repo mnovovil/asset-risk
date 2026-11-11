@@ -12,11 +12,13 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | Variable | Default | Meaning |
 |---|---|---|
 | `scenarios` | `ssp245`, `ssp585` | Scenarios to assess. Data [differs by scenario](methodology.md#comparing-scenarios) |
-| `years` | `2030`, `2050`, `2080` | Years to assess. Each scenario and year pair adds run time |
+| `years` | `2030`, `2050`, `2080` | Years to assess, from 2025 to 2100. Each scenario and year pair adds run time. The [baseline](methodology.md#today-baseline) always comes back too |
 | `default_building_type` | `Buildings/Commercial` | Type for assets with no usable class or subtype |
 | `physrisk_batch_size` | `100` | Assets per physrisk request |
 | `geolocate_workers` | `16` | Threads matching points. Lower it if you see S3 errors |
 | `geolocate_batch_size` | `20` | Points per geolocate batch |
+| `cluster_eps_km` | `50` | DBSCAN radius for the map's [risk-concentration bubbles](methodology.md#risk-concentration), more than 0 and at most 1000 |
+| `cluster_min_samples` | `5` | Assets within that radius, itself included, for DBSCAN to start a cluster. At least 2 |
 | `max_portfolio_rows` | `5000` | Largest portfolio accepted |
 | `max_upload_mb` | `10` | Largest upload accepted |
 | `data_dir` | `data` | Where `script/serve.py` keeps runs. Docker always uses its volume |
@@ -69,6 +71,7 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs`, `GET /api/runs/{id}` | Status, stage, progress and any error |
 | `GET /api/runs/{id}/summary` | Counts, exclusions and shared hazards |
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
+| `GET /api/runs/{id}/clusters` | DBSCAN clusters with their members, centre and bounds. Empty when none was found |
 | `GET /api/runs/{id}/assets/{row_num}/hazard-curve` | River flood depth by return period |
 | `GET /api/runs/{id}/hazard-maps` | The hazards physrisk can draw a map of for one `scenario` and `year`, each with its tile URL and legend, or the reason it has none |
 | `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to 6, for the same `scenario` and `year`. 404 where there's no map |
@@ -94,6 +97,7 @@ Each run has `runs/<uuid>/run.duckdb`, which you can query directly:
 |---|---|
 | `runs` | Status and progress |
 | `assets` | One row per input row: geolocate's output plus classification |
+| `asset_clusters` | The DBSCAN cluster of each clustered asset. Noise has no row, and runs made before clustering have no table |
 | `assessment_pairs` | Each scenario and year requested |
 | `impacts`, `scores` | Results, keyed on `row_num`, `scenario` and `year`. The baseline has year NULL |
 | `assess_failures` | Failed batches |

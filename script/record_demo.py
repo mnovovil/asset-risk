@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["playwright==1.64.1", "imageio-ffmpeg==0.7.0"]
 # ///
-"""Record docs/assets/demo.gif from a real run of the sample CSV: uv run script/record_demo.py
+"""Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
 It starts its own compose project, port and volume, so other runs can't appear in the GIF and a
 running stack isn't touched. It needs a browser (uvx playwright@1.64.1 install
@@ -26,7 +26,8 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE = ROOT / "app" / "front" / "public" / "sample_portfolio.csv"
+# 500 properties in the USA and Spain: 13 dense metro clusters and 48 isolated towns.
+SAMPLE = ROOT / "docs" / "assets" / "demo_portfolio.csv"
 OUTPUT = ROOT / "docs" / "assets" / "demo.gif"
 PROJECT = "asset-risk-demo"
 PORT = "18768"
@@ -38,15 +39,18 @@ GIF_FPS = 10
 # Without these, headless Chromium has no WebGL and the map stays blank.
 CHROMIUM_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
 
-RUN_TIMEOUT_SECONDS = 300
-PROGRESS_SPEEDUP = 4
-SAMPLE_EVERY_SECONDS = 0.25
+# 500 assets take several minutes, nearly all of it assessing: see .claude/learnings.md.
+RUN_TIMEOUT_SECONDS = 1800
+PROGRESS_SPEEDUP = 30
+SAMPLE_EVERY_SECONDS = 1
 MAP_SETTLE_SECONDS = 4
 SCROLL_STEPS = 4
 SCROLL_STEP_SECONDS = 0.08
 SCROLL_MARGIN_PX = 40
-# Avilés has about 1.1 m of river flood at 1 in 1000 years, so its map has colour at the asset.
-DETAIL_ASSET = "aviles"
+# Hovering the map in steps this far apart finds every bubble (the smallest has a 12 px radius).
+BUBBLE_SCAN_STEP_PX = 16
+ZOOM_FRAMES = 8
+ZOOM_FRAME_SECONDS = 0.1
 HAZARD_MAPS = [
     ("RiverineInundation", "Hazard maps around the asset: river flood depth, 1 in 1000 years"),
     ("CoastalInundation", "Switch hazards: clear means no flood in the data, not no risk"),
@@ -170,6 +174,57 @@ def record_progress(rec: Recorder) -> list[str]:
     return seen
 
 
+FIND_BUBBLES = """({step}) => {
+  const map = document.querySelector(".map");
+  const canvas = map.querySelector("canvas");
+  const box = map.getBoundingClientRect();
+  const top = Math.max(box.top, 0) + 8, bottom = Math.min(box.bottom, innerHeight) - 8;
+  const found = new Map();
+  for (let y = top; y < bottom; y += step) {
+    for (let x = box.left + 8; x < box.right - 8; x += step) {
+      canvas.dispatchEvent(new MouseEvent("mousemove", {clientX: x, clientY: y, bubbles: true}));
+      const popup = document.querySelector(".maplibregl-popup");
+      const title = popup?.querySelector("strong")?.textContent ?? "";
+      if (!title.endsWith("nearby assets")) continue;
+      const key = popup.textContent;
+      const hit = found.get(key) ?? {count: parseInt(title, 10), xs: [], ys: []};
+      hit.xs.push(x);
+      hit.ys.push(y);
+      found.set(key, hit);
+    }
+  }
+  canvas.dispatchEvent(new MouseEvent("mousemove", {clientX: 0, clientY: 0, bubbles: true}));
+  const mean = values => values.reduce((a, b) => a + b, 0) / values.length;
+  return [...found.values()].map(h => ({count: h.count, x: mean(h.xs), y: mean(h.ys)}));
+}"""
+
+
+def record_clusters(rec: Recorder) -> None:
+    """Show the opening bubbles, open the biggest one, and zoom in to its assets."""
+    page = rec.page
+    rec.caption("Where the risk is: groups of nearby assets, from green (lowest) to red (highest)")
+    rec.scroll_to("Where the risk is", 4)
+    bubbles = page.evaluate(FIND_BUBBLES, {"step": BUBBLE_SCAN_STEP_PX})
+    if not bubbles:
+        raise RuntimeError("no cluster bubbles on the map")
+    print(f"Bubbles on screen: {len(bubbles)}")
+    biggest = max(bubbles, key=lambda b: b["count"])
+    page.mouse.move(biggest["x"], biggest["y"])
+    page.wait_for_timeout(300)
+    rec.caption("Each bubble's mean, and how many of its assets have results")
+    rec.shot(4)
+    rec.caption("Click a bubble, or zoom in, to see each asset")
+    page.mouse.click(biggest["x"], biggest["y"])
+    page.mouse.move(0, 0)
+    for _ in range(ZOOM_FRAMES):
+        page.wait_for_timeout(ZOOM_FRAME_SECONDS * 1000)
+        rec.shot(ZOOM_FRAME_SECONDS)
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
+    fail_on_alert(page)
+    rec.shot(4.5)
+
+
 def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
     """Scroll the panel to its hazard map, then show river and coastal flood around the asset."""
     page = rec.page
@@ -201,14 +256,15 @@ def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[st
 
     rec.caption("Step 3: see the results, including how many building types were assumed")
     rec.shot(4.5)
-    rec.caption("Where the risk is, by asset")
-    rec.scroll_to("Where the risk is", 3.5)
+    record_clusters(rec)
     rec.caption("What drives the loss, against the historical baseline")
     rec.scroll_to("Annual loss by hazard", 3.5)
     rec.caption('Scores per hazard: "No model" and "No data" are not low risk')
     rec.scroll_to("Risk by asset and hazard", 4)
     rec.caption("The details of one asset")
-    rec.click(page.get_by_role("button", name=DETAIL_ASSET).first)
+    # The table starts sorted by total loss, so its first asset is the riskiest.
+    table = page.get_by_role("region", name="Risk by asset and hazard")
+    rec.click(table.locator("button.link-button").first)
     panel = page.get_by_role("dialog", name="Asset details")
     panel.wait_for()
     page.wait_for_load_state("networkidle")

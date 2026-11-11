@@ -14,7 +14,7 @@ variable "scenarios" {
 }
 
 variable "years" {
-  description = "Projection years to assess. Each scenario and year pair is one physrisk calculation."
+  description = "Projection years to assess, from 2025 (physrisk's baseline year) to 2100. Each scenario and year pair is one physrisk calculation."
   type        = list(number)
   default     = [2030, 2050, 2080]
 
@@ -22,9 +22,9 @@ variable "years" {
     condition = (
       length(var.years) > 0
       && length(distinct(var.years)) == length(var.years)
-      && alltrue([for y in var.years : y == floor(y) && y >= 2020 && y <= 2100])
+      && alltrue([for y in var.years : y == floor(y) && y >= 2025 && y <= 2100])
     )
-    error_message = "years must be distinct whole years from 2020 to 2100."
+    error_message = "years must be distinct whole years from 2025 to 2100."
   }
 }
 
@@ -69,6 +69,28 @@ variable "geolocate_batch_size" {
   validation {
     condition     = var.geolocate_batch_size >= 1 && var.geolocate_batch_size == floor(var.geolocate_batch_size)
     error_message = "geolocate_batch_size must be a whole number of at least 1."
+  }
+}
+
+variable "cluster_eps_km" {
+  description = "DBSCAN neighbourhood radius for the map's risk-concentration bubbles, in km."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.cluster_eps_km > 0 && var.cluster_eps_km <= 1000
+    error_message = "cluster_eps_km must be more than 0 and at most 1000."
+  }
+}
+
+variable "cluster_min_samples" {
+  description = "Assets within cluster_eps_km of a point, itself included, for DBSCAN to start a cluster there."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.cluster_min_samples >= 2 && var.cluster_min_samples == floor(var.cluster_min_samples)
+    error_message = "cluster_min_samples must be a whole number of at least 2."
   }
 }
 

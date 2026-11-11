@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   barData,
   buildRows,
+  BASELINE,
   defaultPair,
+  hasBaseline,
+  isBaseline,
+  lossHazards,
+  pairLabel,
+  preferredYear,
   hazardColumns,
   missingHazards,
   scoreKind,
@@ -12,7 +18,7 @@ import {
 } from "@/lib/dashboard";
 import { joinList, percent, percentTick, truncate } from "@/lib/format";
 import { hazardColor, sortHazards } from "@/lib/hazards";
-import { scoreColor, totalColor } from "@/lib/mapColors";
+import { lossBreaks, lossClass, lossLegend, ramp, scoreColor, totalColor } from "@/lib/mapColors";
 
 import { COVERAGE, TRAJECTORY } from "./helpers";
 
@@ -165,6 +171,41 @@ describe("the selected scenario", () => {
     expect(defaultPair(TRAJECTORY)).toEqual({ scenario: "ssp585", year: 2050 });
   });
 
+  it("never starts on the baseline", () => {
+    expect(isBaseline(defaultPair(TRAJECTORY))).toBe(false);
+  });
+
+  it("knows the baseline, and only offers it when it has results", () => {
+    expect(isBaseline(BASELINE)).toBe(true);
+    expect(isBaseline({ scenario: "ssp585", year: 2050 })).toBe(false);
+    expect(hasBaseline(TRAJECTORY)).toBe(true);
+    const empty = TRAJECTORY.map((p) => (p.year === null ? { ...p, assets: 0 } : p));
+    expect(hasBaseline(empty)).toBe(false);
+  });
+
+  it("names the selected pair", () => {
+    expect(pairLabel(BASELINE)).toBe("Today (baseline)");
+    expect(pairLabel({ scenario: "ssp585", year: 2050 })).toBe("SSP5-8.5, 2050");
+  });
+
+  it("prefers the year nearest 2050", () => {
+    expect(preferredYear([2030, 2045, 2080])).toBe(2045);
+    expect(preferredYear([])).toBeUndefined();
+  });
+
+  it("takes the baseline's columns from its losses, as it has no scores", () => {
+    const rows = buildRows(
+      [{ row_num: 1, asset_id: "a", total_aal: 0.01, shared_aal: 0.01, hazards: 2 }],
+      [
+        { row_num: 1, asset_id: "a", lat: 0, lon: 0, hazard: "Wind", impact_type: "damage", aal: 0.004, aal_std: null },
+        { row_num: 1, asset_id: "a", lat: 0, lon: 0, hazard: "Fire", impact_type: "damage", aal: 0.006, aal_std: null },
+      ],
+      [],
+      [],
+    );
+    expect(lossHazards(rows)).toEqual(sortHazards(["Wind", "Fire"]));
+  });
+
   it("copes with no scenarios", () => {
     expect(defaultPair([])).toBeNull();
   });
@@ -206,10 +247,35 @@ describe("colours", () => {
     expect(scoreColor(4, false)).not.toBe(scoreColor(4, true));
   });
 
-  it("keep the largest loss in the top class", () => {
-    expect(totalColor(0.02, 0.02, false)).toBe(scoreColor(4, false));
-    expect(totalColor(0, 0.02, false)).toBe(scoreColor(0, false));
-    expect(totalColor(0, 0, false)).toBe(scoreColor(0, false));
+  it("keep the largest loss in the top class and the smallest in the bottom one", () => {
+    const breaks = lossBreaks([0, 0.005, 0.01, 0.015, 0.02]);
+    expect(totalColor(0.02, breaks, false)).toBe(scoreColor(4, false));
+    expect(totalColor(0, breaks, false)).toBe(scoreColor(0, false));
+    expect(totalColor(0, lossBreaks([0, 0]), false)).toBe(scoreColor(0, false));
+  });
+
+  it("put about a fifth of assets in each class, however extreme the largest loss", () => {
+    // 99 losses from 0.01% to 0.99%, and one outlier at 50%. Equal-width classes from zero to the
+    // largest would put all 99 in the lowest class.
+    const totals = [...Array.from({ length: 99 }, (_, i) => (i + 1) / 10000), 0.5];
+    const breaks = lossBreaks(totals);
+    const counts = [0, 0, 0, 0, 0];
+    for (const total of totals) counts[lossClass(total, breaks)] += 1;
+    expect(counts).toEqual([20, 20, 20, 20, 20]);
+    expect(lossClass(0.5, breaks)).toBe(4);
+  });
+
+  it("let tied losses share a class, and leave empty classes out of the legend", () => {
+    const totals = [0, 0, 0, 0, 0, 0, 0.01, 0.02, 0.03, 0.04];
+    const legend = lossLegend(totals, lossBreaks(totals), false);
+    expect(legend[0]).toEqual({ color: ramp(false)[0], min: 0, max: 0, assets: 6 });
+    expect(legend.reduce((sum, item) => sum + item.assets, 0)).toBe(10);
+    expect(legend.at(-1)?.max).toBe(0.04);
+  });
+
+  it("have no breaks without losses", () => {
+    expect(lossBreaks([])).toEqual([]);
+    expect(totalColor(0.01, [], false)).toBe(ramp(false)[0]);
   });
 });
 

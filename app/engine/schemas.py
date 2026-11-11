@@ -64,6 +64,17 @@ class Asset(BaseModel):
     exclusion_reason: str | None
 
 
+class Cluster(BaseModel):
+    """A DBSCAN group of nearby assets. Noise assets are in no cluster."""
+
+    cluster_id: int
+    assets: int
+    row_nums: list[int]
+    lat: float  # centre
+    lon: float
+    bounds: list[float]  # west, south, east, north; east is past 180 across the antimeridian
+
+
 class AssetImpact(BaseModel):
     scenario: str
     year: int | None  # None is the historical baseline

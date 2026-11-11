@@ -131,7 +131,7 @@ const total = (row_num: number, total_aal: number, shared_aal: number, hazards: 
 /** Results that differ by scenario, as the real ones do: ssp245 has no fire. */
 const PAIRS: Record<string, { totals: unknown[]; impacts: unknown[]; scores: unknown[] }> = {
   "scenario=historical": {
-    totals: [],
+    totals: [total(1, 0.002, 0.001, 2), total(2, 0.004, 0.003, 2)],
     scores: [],
     impacts: [
       impact(1, "Wind", 0.001),
@@ -169,6 +169,7 @@ const PAIRS: Record<string, { totals: unknown[]; impacts: unknown[]; scores: unk
 const ENDPOINTS: Record<string, unknown> = {
   summary: SUMMARY,
   assets: ASSETS,
+  clusters: [],
   trajectory: TRAJECTORY,
   coverage: COVERAGE,
 };

@@ -244,6 +244,7 @@ def test_failed_run_reports_its_error_and_has_no_results(settings):
         assert (body["status"], body["error"]) == ("failed", "geolocate failed: S3 is down")
         assert client.get(f"/api/runs/{run_id}/assets").status_code == 409
         assert client.get(f"/api/runs/{run_id}/export.csv").status_code == 409
+        assert client.get(f"/api/runs/{run_id}/clusters").status_code == 409
 
 
 def test_a_crash_in_the_pipeline_does_not_stop_the_queue(settings):
@@ -308,6 +309,43 @@ def test_asset_detail(client, finished):
     ]
     assert body["impacts"][1]["hazard_paths"] == ["wind/path"]
     assert {s["label"] for s in body["scores"]} == {"Low impact", "No hazard data"}
+
+
+def test_no_clusters(client, finished):
+    assert client.get(f"/api/runs/{finished}/clusters").json() == []
+
+
+def _run(settings, run_id):
+    from engine.store import find_run
+
+    return find_run(settings.data_dir, run_id)
+
+
+def test_clusters_have_members_centre_and_bounds(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("INSERT INTO asset_clusters VALUES (1, 0), (2, 0)")
+    [body] = client.get(f"/api/runs/{finished}/clusters").json()
+    assert body["cluster_id"] == 0
+    assert (body["assets"], body["row_nums"]) == (2, [1, 2])
+    assert body["lat"] == pytest.approx((40.4 + 29.7) / 2)
+    assert body["bounds"] == [-95.3, 29.7, -3.7, 40.4]
+
+
+def test_cluster_across_the_antimeridian_is_centred_on_it(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("UPDATE assets SET lon = 179.0 WHERE row_num = 1")
+        con.execute("UPDATE assets SET lon = -179.0 WHERE row_num = 2")
+        con.execute("INSERT INTO asset_clusters VALUES (1, 0), (2, 0)")
+    [body] = client.get(f"/api/runs/{finished}/clusters").json()
+    assert abs(body["lon"]) == pytest.approx(180)
+    assert (body["bounds"][0], body["bounds"][2]) == (179.0, 181.0)
+
+
+def test_a_run_from_before_clustering_has_no_clusters(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("DROP TABLE asset_clusters")
+    response = client.get(f"/api/runs/{finished}/clusters")
+    assert (response.status_code, response.json()) == (200, [])
 
 
 @pytest.mark.parametrize("row_num", ["99", "abc"])

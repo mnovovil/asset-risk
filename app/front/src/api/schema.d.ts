@@ -130,6 +130,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Clusters
+         * @description Spatial clusters of assets, from DBSCAN. Empty when no group is dense enough.
+         */
+        get: operations["get_clusters_api_runs__run_id__clusters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/coverage": {
         parameters: {
             query?: never;
@@ -445,6 +465,24 @@ export interface components {
         Body_create_run_api_runs_post: {
             /** File */
             file: string;
+        };
+        /**
+         * Cluster
+         * @description A DBSCAN group of nearby assets. Noise assets are in no cluster.
+         */
+        Cluster: {
+            /** Assets */
+            assets: number;
+            /** Bounds */
+            bounds: number[];
+            /** Cluster Id */
+            cluster_id: number;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Row Nums */
+            row_nums: number[];
         };
         /** Coverage */
         Coverage: {
@@ -840,6 +878,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HazardCurve"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clusters_api_runs__run_id__clusters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cluster"][];
                 };
             };
             /** @description Validation Error */
