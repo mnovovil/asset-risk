@@ -14,7 +14,7 @@ variable "scenarios" {
 }
 
 variable "years" {
-  description = "Projection years to assess, from 2025 (physrisk's baseline year) to 2100. Each scenario and year pair is one physrisk calculation."
+  description = "Projection years to assess, from 2030, 2050 and 2080. 2025 returns no losses from physrisk; present-day risk is the historical baseline, which always comes back. Each scenario and year pair is one physrisk calculation."
   type        = list(number)
   default     = [2030, 2050, 2080]
 
@@ -22,9 +22,9 @@ variable "years" {
     condition = (
       length(var.years) > 0
       && length(distinct(var.years)) == length(var.years)
-      && alltrue([for y in var.years : y == floor(y) && y >= 2025 && y <= 2100])
+      && alltrue([for y in var.years : contains([2030, 2050, 2080], y)])
     )
-    error_message = "years must be distinct whole years from 2025 to 2100."
+    error_message = "years must be distinct values from 2030, 2050, 2080."
   }
 }
 

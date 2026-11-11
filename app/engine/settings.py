@@ -32,8 +32,9 @@ KEYS = (
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
-# physrisk treats its baseline as 2025 and only extrapolates backwards from there.
-MIN_YEAR, MAX_YEAR = 2025, 2100
+# The years the app assesses. Asking physrisk for 2025 returned scores but no impacts, without an
+# error. Present-day risk is the historical baseline, which always comes back.
+YEARS = (2030, 2050, 2080)
 MAX_CLUSTER_EPS_KM = 1000
 MIN_CLUSTER_SAMPLES = 2
 _APPLY_HINT = "run `terraform -chdir=infra apply` to generate it"
@@ -92,10 +93,8 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         raise bad("scenarios", f"a distinct, non-empty list from {SCENARIOS}")
 
     years = raw["years"]
-    if not _distinct_list(years) or not all(
-        _is_int(y) and MIN_YEAR <= y <= MAX_YEAR for y in years
-    ):
-        raise bad("years", f"a distinct, non-empty list of years from {MIN_YEAR} to {MAX_YEAR}")
+    if not _distinct_list(years) or not all(_is_int(y) and y in YEARS for y in years):
+        raise bad("years", f"a distinct, non-empty list from {YEARS}")
 
     if raw["default_building_type"] not in BUILDING_TYPES:
         raise bad("default_building_type", f"one of {BUILDING_TYPES}")

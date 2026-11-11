@@ -236,40 +236,6 @@ td {
   color: var(--success);
 }
 
-.runs-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.runs-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  align-items: baseline;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.runs-list a {
-  overflow-wrap: anywhere;
-}
-
-.runs-list .status {
-  margin-left: auto;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.status-completed {
-  color: var(--success);
-}
-
-.status-failed,
-.status-interrupted {
-  color: var(--error);
-}
-
 .stages {
   margin: 24px 0 0;
   padding: 0;

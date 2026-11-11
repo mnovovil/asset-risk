@@ -12,7 +12,7 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | Variable | Default | Meaning |
 |---|---|---|
 | `scenarios` | `ssp245`, `ssp585` | Scenarios to assess. Data [differs by scenario](methodology.md#comparing-scenarios) |
-| `years` | `2030`, `2050`, `2080` | Years to assess, from 2025 to 2100. Each scenario and year pair adds run time. The [baseline](methodology.md#today-baseline) always comes back too |
+| `years` | `2030`, `2050`, `2080` | Years to assess, from `2030`, `2050` and `2080` (2025 returns no losses). Each scenario and year pair adds run time. The [baseline](methodology.md#today-baseline) always comes back too |
 | `default_building_type` | `Buildings/Commercial` | Type for assets with no usable class or subtype |
 | `physrisk_batch_size` | `100` | Assets per physrisk request |
 | `geolocate_workers` | `16` | Threads matching points. Lower it if you see S3 errors |
@@ -68,7 +68,7 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/runs` | Upload a CSV as the `file` field. Returns 202, or 413 or 422 with the reason |
-| `GET /api/runs`, `GET /api/runs/{id}` | Status, stage, progress and any error |
+| `GET /api/runs/{id}` | Status, stage, progress and any error. Runs aren't listed: open one by its link |
 | `GET /api/runs/{id}/summary` | Counts, exclusions and shared hazards |
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
 | `GET /api/runs/{id}/clusters` | DBSCAN clusters with their members, centre and bounds. Empty when none was found |

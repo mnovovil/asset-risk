@@ -57,8 +57,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getConfig = (signal?: AbortSignal) => request<AppConfig>("/config", { signal });
 
-export const listRuns = (signal?: AbortSignal) => request<RunStatus[]>("/runs", { signal });
-
 export const getRun = (runId: string, signal?: AbortSignal) =>
   request<RunStatus>(`/runs/${encodeURIComponent(runId)}`, { signal });
 

@@ -130,11 +130,18 @@ export const scenariosOf = (trajectory: TrajectoryPoint[]) => [
   ...new Set(trajectory.filter((p) => p.year !== null).map((p) => p.scenario)),
 ];
 
-export const yearsOf = (trajectory: TrajectoryPoint[], scenario: string) =>
-  trajectory
-    .filter((p) => p.scenario === scenario && p.year !== null)
+/**
+ * A scenario's years, leaving out any with no results for any asset: physrisk can return scores
+ * but no losses for a year, as older runs that asked for 2025 show. A scenario with no results at
+ * all keeps every year, and the Scenario filter marks it "(no data)".
+ */
+export const yearsOf = (trajectory: TrajectoryPoint[], scenario: string) => {
+  const points = trajectory.filter((p) => p.scenario === scenario && p.year !== null);
+  const withResults = points.filter((p) => p.assets > 0);
+  return (withResults.length ? withResults : points)
     .map((p) => p.year as number)
     .sort((a, b) => a - b);
+};
 
 const PREFERRED_YEAR = 2050;
 

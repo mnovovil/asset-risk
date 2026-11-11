@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,7 +35,6 @@ describe("UploadPage", () => {
       "fetch",
       fakeFetch({
         "GET /api/config": () => jsonResponse(CONFIG),
-        "GET /api/runs": () => jsonResponse([]),
       }),
     );
   });
@@ -47,6 +46,15 @@ describe("UploadPage", () => {
       "/sample_portfolio.csv",
     );
     expect(await screen.findByText(/Limits: 3 rows, 1 MB/)).toBeInTheDocument();
+  });
+
+  it("lists no past runs, so the sample is the only file offered", async () => {
+    renderPage();
+    await screen.findByText(/Limits:/);
+    expect(screen.queryByRole("heading", { name: "Past runs" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      "/sample_portfolio.csv",
+    ]);
   });
 
   it("previews a good file before uploading", async () => {
@@ -111,7 +119,6 @@ describe("UploadPage", () => {
       "fetch",
       fakeFetch({
         "GET /api/config": () => jsonResponse(CONFIG),
-        "GET /api/runs": () => jsonResponse([]),
         "POST /api/runs": () => jsonResponse(run, 202),
       }),
     );
@@ -129,7 +136,6 @@ describe("UploadPage", () => {
       "fetch",
       fakeFetch({
         "GET /api/config": () => jsonResponse(CONFIG),
-        "GET /api/runs": () => jsonResponse([]),
         "POST /api/runs": () => jsonResponse({ detail }, status),
       }),
     );
@@ -140,12 +146,11 @@ describe("UploadPage", () => {
     expect(screen.getByRole("button", { name: "Assess this portfolio" })).toBeEnabled();
   });
 
-  it("still works when the config and runs list can't load", async () => {
+  it("still works when the config can't load", async () => {
     vi.stubGlobal(
       "fetch",
       fakeFetch({
         "GET /api/config": () => jsonResponse({ detail: "down" }, 500),
-        "GET /api/runs": () => jsonResponse({ detail: "down" }, 500),
       }),
     );
     renderPage();
@@ -153,20 +158,4 @@ describe("UploadPage", () => {
     expect(await screen.findByRole("button", { name: "Assess this portfolio" })).toBeEnabled();
   });
 
-  it("lists past runs with links, rendering file names as text", async () => {
-    const name = "<img src=x onerror=alert(1)>.csv";
-    vi.stubGlobal(
-      "fetch",
-      fakeFetch({
-        "GET /api/config": () => jsonResponse(CONFIG),
-        "GET /api/runs": () =>
-          jsonResponse([runStatus({ run_id: "abc", source_name: name, status: "completed" })]),
-      }),
-    );
-    renderPage();
-    const link = await screen.findByRole("link", { name });
-    expect(link).toHaveAttribute("href", "/runs/abc");
-    expect(screen.getByText("Completed")).toBeInTheDocument();
-    await waitFor(() => expect(document.querySelector("img")).toBeNull());
-  });
 });

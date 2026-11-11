@@ -154,7 +154,7 @@ def test_the_stack_starts_and_serves_the_app():
             raise AssertionError(_compose("logs").stdout)
         assert b'<div id="root">' in _get("/")
         assert b"id,lat,lon" in _get("/sample_portfolio.csv")
-        assert json.loads(_get("/api/runs")) == []
+        assert json.loads(_get("/api/health")) == {"status": "ok"}
     finally:
         _compose("down", "--volumes")
 
