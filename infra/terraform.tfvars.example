@@ -1,7 +1,7 @@
 # Copy to terraform.tfvars (git-ignored) and uncomment what you need.
 
 # scenarios = ["ssp245", "ssp585"]
-# years     = [2030, 2050, 2080]
+# years     = [2025, 2030, 2050, 2080]
 
 # Used for assets with no usable Overture class or subtype. Results are sensitive to this.
 # default_building_type = "Buildings/Commercial"

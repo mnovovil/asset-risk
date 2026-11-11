@@ -16,7 +16,7 @@ variable "scenarios" {
 variable "years" {
   description = "Projection years to assess, from 2025 (physrisk's baseline year) to 2100. Each scenario and year pair is one physrisk calculation."
   type        = list(number)
-  default     = [2030, 2050, 2080]
+  default     = [2025, 2030, 2050, 2080]
 
   validation {
     condition = (
