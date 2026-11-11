@@ -32,7 +32,8 @@ KEYS = (
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
-MIN_YEAR, MAX_YEAR = 2020, 2100
+# physrisk treats its baseline as 2025 and only extrapolates backwards from there.
+MIN_YEAR, MAX_YEAR = 2025, 2100
 MAX_CLUSTER_EPS_KM = 1000
 MIN_CLUSTER_SAMPLES = 2
 _APPLY_HINT = "run `terraform -chdir=infra apply` to generate it"
