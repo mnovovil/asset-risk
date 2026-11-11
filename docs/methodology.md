@@ -35,8 +35,7 @@ Choosing **Today (baseline)** in the Scenario filter shows the historical baseli
 present-day risk, on the map, the headline figures, the loss bars and the table.
 
 - physrisk treats the baseline as the year **2025**, but asking a scenario for 2025 returns scores
-  and no losses, without an error. The settings only accept the years physrisk has future data
-  for, 2030, 2050 and 2080, so present-day risk comes from this baseline only. The Year filter
+  and no losses, without an error. The settings only accept 2030, 2050 and 2080, so present-day risk comes from this baseline only. The Year filter
   also hides any year with no results, as older runs that asked for 2025 have.
 - It isn't always observed data. For flood it's physrisk's RCP4.5 2030 data, the same as the hazard
   maps use.

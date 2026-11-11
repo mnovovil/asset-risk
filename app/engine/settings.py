@@ -32,8 +32,8 @@ KEYS = (
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
-# The years physrisk has future data for. Other years return scores but no impacts, without an
-# error: 2025 did. Present-day risk is the historical baseline, which always comes back.
+# The years the app assesses. Asking physrisk for 2025 returned scores but no impacts, without an
+# error. Present-day risk is the historical baseline, which always comes back.
 YEARS = (2030, 2050, 2080)
 MAX_CLUSTER_EPS_KM = 1000
 MIN_CLUSTER_SAMPLES = 2

@@ -14,7 +14,7 @@ variable "scenarios" {
 }
 
 variable "years" {
-  description = "Projection years to assess, from 2030, 2050 and 2080: the years physrisk has future data for. Present-day risk is the historical baseline, which always comes back. Each scenario and year pair is one physrisk calculation."
+  description = "Projection years to assess, from 2030, 2050 and 2080. 2025 returns no losses from physrisk; present-day risk is the historical baseline, which always comes back. Each scenario and year pair is one physrisk calculation."
   type        = list(number)
   default     = [2030, 2050, 2080]
 
