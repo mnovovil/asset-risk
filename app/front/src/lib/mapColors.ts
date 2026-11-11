@@ -1,9 +1,18 @@
-/** Map point colours: one hue from light to dark, stepped per theme, as MapLibre needs real hex. */
+/**
+ * Map colours, from green (lowest) to red (highest), stepped per theme, as MapLibre needs real hex.
+ *
+ * A semantic heat scale, so several hues on purpose. Lightness only ever moves one way (light to
+ * dark on the light surface, dark to light on the dark one), so the order still reads for red-green
+ * colour-blind readers and in greyscale. Both ramps pass the dataviz validator's --ordinal checks
+ * (lightness monotone, adjacent steps >= 0.06 apart, light end >= 2:1 on the surface) against the
+ * --surface colours in styles.css; its "single hue" check fails by design. Re-run it before changing
+ * them. A missing result is told apart by being hollow, not by its colour.
+ */
 
 import { scoreKind } from "@/lib/dashboard";
 
-const LIGHT_RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#0d366b"];
-const DARK_RAMP = ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"];
+const LIGHT_RAMP = ["#68c85f", "#93a703", "#ad7c0e", "#af4e03", "#a50e15"];
+const DARK_RAMP = ["#186a23", "#637505", "#a4780a", "#e66e0a", "#ff7f73"];
 export const NO_RESULT_COLOR = "#898781";
 const SCORE_STEPS = 5;
 

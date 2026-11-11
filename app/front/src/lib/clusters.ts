@@ -5,9 +5,8 @@ import { type AssetRow, scoreKind } from "@/lib/dashboard";
 import { percent } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
 import { SCORE_LABELS, scoreColor, totalColor } from "@/lib/mapColors";
+import { COLOR_BY_TOTAL } from "@/lib/mapFeatures";
 
-/** Matches COLOR_BY_TOTAL in the Filters component, which a lib module shouldn't import. */
-const TOTAL = "total";
 const MIN_RADIUS_PX = 12;
 const MAX_RADIUS_PX = 36;
 
@@ -56,7 +55,7 @@ export function summariseClusters(
     let color: string | null = null;
     let value: string;
     let withResults: number;
-    if (colorBy === TOTAL) {
+    if (colorBy === COLOR_BY_TOTAL) {
       const totals = members.flatMap((row) => (row?.total == null ? [] : [row.total]));
       withResults = totals.length;
       const average = totals.length ? mean(totals) : null;
