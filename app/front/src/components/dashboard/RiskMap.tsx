@@ -11,20 +11,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Asset, Cluster } from "@/api/client";
 import { type ClusterSummary, clusteredRowNums, summariseClusters } from "@/lib/clusters";
 import { type AssetRow } from "@/lib/dashboard";
-import { assetLabel, percent } from "@/lib/format";
-import { NO_RESULT_COLOR, ramp, SCORE_LABELS, scoreColor, totalColor } from "@/lib/mapColors";
-import { hazardLabel } from "@/lib/hazards";
+import { count, percent } from "@/lib/format";
+import { lossBreaks, lossLegend, NO_RESULT_COLOR, ramp, SCORE_LABELS } from "@/lib/mapColors";
+import { COLOR_BY_TOTAL, placeable, toFeatures, totalsOf } from "@/lib/mapFeatures";
 import { basemapStyle, blankStyle, pointRing } from "@/lib/mapStyle";
 import { usePrefersDark } from "@/hooks/useColorScheme";
 
-import { COLOR_BY_TOTAL } from "./Filters";
 
 const SOURCE = "assets";
 const LAYER = "assets";
-const CLUSTERED_LAYER = "assets-clustered";
+const ZOOMED_IN_LAYER = "assets-zoomed-in";
 const CLUSTER_SOURCE = "clusters";
 const CLUSTER_LAYER = "clusters";
-// Bubbles show from the opening view until this many zoom levels in, then give way to the points.
+// With clusters, the opening view shows only bubbles, until this many zoom levels in. Then they give
+// way to every asset.
 const CLUSTER_ZOOM_SPAN = 1;
 const BUBBLE_OPACITY = 0.8;
 const HIT_RADIUS_PX = 12;
@@ -38,51 +38,6 @@ interface RiskMapProps {
   colorBy: string;
   selected: number | null;
   onSelect: (rowNum: number) => void;
-}
-
-function describe(asset: Asset, row: AssetRow | undefined, colorBy: string): string {
-  if (!asset.assessable) return "Excluded";
-  if (colorBy === COLOR_BY_TOTAL) return `Total annual loss ${percent(row?.total)}`;
-  return `${hazardLabel(colorBy)}: ${row?.scores[colorBy]?.label ?? "No result"}`;
-}
-
-function toFeatures(
-  assets: Asset[],
-  rows: AssetRow[],
-  colorBy: string,
-  selected: number | null,
-  dark: boolean,
-  clustered: Set<number>,
-): GeoJSON.FeatureCollection {
-  const byRow = new Map(rows.map((row) => [row.rowNum, row]));
-  const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
-  const features: GeoJSON.Feature[] = [];
-  for (const asset of assets) {
-    if (asset.lat === null || asset.lon === null) continue;
-    if (Math.abs(asset.lat) > 90 || Math.abs(asset.lon) > 180) continue;
-    const row = byRow.get(asset.row_num);
-    let color: string | null = null;
-    if (row && colorBy === COLOR_BY_TOTAL && row.total !== null) {
-      color = totalColor(row.total, max, dark);
-    } else if (row && colorBy !== COLOR_BY_TOTAL && row.scores[colorBy]) {
-      color = scoreColor(row.scores[colorBy].score, dark);
-    }
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [asset.lon, asset.lat] },
-      properties: {
-        rowNum: asset.row_num,
-        label: assetLabel(asset),
-        detail: describe(asset, row, colorBy),
-        color: color ?? "rgba(0,0,0,0)",
-        ring: color ? pointRing(dark) : NO_RESULT_COLOR,
-        radius: asset.row_num === selected ? 9 : 6,
-        // Drawn as part of a bubble when zoomed out. The selected asset always shows.
-        clustered: clustered.has(asset.row_num) && asset.row_num !== selected,
-      },
-    });
-  }
-  return { type: "FeatureCollection", features };
 }
 
 function toBubbles(summaries: ClusterSummary[], dark: boolean): GeoJSON.FeatureCollection {
@@ -119,11 +74,16 @@ export default function RiskMap({
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
 
-  const clustered = useMemo(() => clusteredRowNums(clusters), [clusters]);
+  const hasClusters = clusters.length > 0;
   const features = useMemo(
-    () => toFeatures(assets, rows, colorBy, selected, dark, clustered),
-    [assets, rows, colorBy, selected, dark, clustered],
+    () => toFeatures(assets, rows, colorBy, selected, dark, pointRing(dark), hasClusters),
+    [assets, rows, colorBy, selected, dark, hasClusters],
   );
+  // Shown in the legend, so assets outside every bubble don't vanish without a word.
+  const outside = useMemo(() => {
+    const clustered = clusteredRowNums(clusters);
+    return placeable(assets).filter((a) => !clustered.has(a.row_num)).length;
+  }, [assets, clusters]);
   const featuresRef = useRef(features);
   featuresRef.current = features;
   const summaries = useMemo(
@@ -166,7 +126,7 @@ export default function RiskMap({
       };
       map.addSource(SOURCE, { type: "geojson", data: featuresRef.current });
       map.addSource(CLUSTER_SOURCE, { type: "geojson", data: bubblesRef.current });
-      // Bubbles first, so a point outside any cluster stays on top of one.
+      // Bubbles first, so the selected asset stays on top of one.
       map.addLayer({
         id: CLUSTER_LAYER,
         type: "circle",
@@ -175,18 +135,19 @@ export default function RiskMap({
         paint: { ...paint, "circle-opacity": BUBBLE_OPACITY },
       });
       map.addLayer({
-        id: CLUSTERED_LAYER,
+        id: ZOOMED_IN_LAYER,
         type: "circle",
         source: SOURCE,
         minzoom: threshold,
-        filter: ["==", ["get", "clustered"], true],
+        filter: ["==", ["get", "zoomedIn"], true],
         paint,
       });
+      // The selected asset, or every asset when the run has no clusters.
       map.addLayer({
         id: LAYER,
         type: "circle",
         source: SOURCE,
-        filter: ["!=", ["get", "clustered"], true],
+        filter: ["!=", ["get", "zoomedIn"], true],
         paint,
       });
       setReady(true);
@@ -224,7 +185,7 @@ export default function RiskMap({
     // Relative to the opening view, so bubbles show only there, whatever the portfolio's extent.
     threshold = map.getZoom() + CLUSTER_ZOOM_SPAN;
 
-    const LAYERS = [LAYER, CLUSTERED_LAYER, CLUSTER_LAYER];
+    const LAYERS = [LAYER, ZOOMED_IN_LAYER, CLUSTER_LAYER];
 
     const near = (point: { x: number; y: number }) =>
       map.getLayer(LAYER)
@@ -304,7 +265,8 @@ export default function RiskMap({
   }, [bubbles, ready]);
 
   const colors = ramp(dark);
-  const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
+  const totals = totalsOf(rows);
+  const lossItems = lossLegend(totals, lossBreaks(totals), dark);
 
   return (
     <section className="panel" aria-labelledby="map-heading">
@@ -324,18 +286,15 @@ export default function RiskMap({
       <ul className="map-legend">
         {colorBy === COLOR_BY_TOTAL ? (
           <>
-            <li>
-              <span className="dot" style={{ background: colors[0] }} /> Lowest (0%)
-            </li>
-            {colors.slice(1, -1).map((color) => (
-              <li key={color}>
-                <span className="dot" style={{ background: color }} />
+            <li>Total annual loss, about a fifth of assets per colour:</li>
+            {lossItems.map((item) => (
+              <li key={item.color}>
+                <span className="dot" style={{ background: item.color }} />{" "}
+                {item.min === item.max
+                  ? percent(item.min)
+                  : `${percent(item.min)} to ${percent(item.max)}`}
               </li>
             ))}
-            <li>
-              <span className="dot" style={{ background: colors[colors.length - 1] }} /> Highest (
-              {percent(max)})
-            </li>
           </>
         ) : (
           SCORE_LABELS.map((label, index) => (
@@ -347,10 +306,16 @@ export default function RiskMap({
         <li>
           <span className="dot dot-hollow" /> No result or excluded
         </li>
-        {clusters.length > 0 && (
+        {hasClusters && (
           <li>
-            <span className="dot dot-bubble" /> Bubble: nearby assets, sized by count, coloured by
-            their mean. Zoom in or click it to see each asset
+            <span className="dot dot-bubble" /> Bubbles: groups of nearby assets, sized by count and
+            coloured by their mean. Zoom in or click one to see each asset
+          </li>
+        )}
+        {hasClusters && outside > 0 && (
+          <li>
+            {count(outside)} {outside === 1 ? "asset" : "assets"} outside any group{" "}
+            {outside === 1 ? "shows" : "show"} when you zoom in
           </li>
         )}
       </ul>

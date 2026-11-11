@@ -4,10 +4,9 @@ import type { Asset, Cluster } from "@/api/client";
 import { type AssetRow, scoreKind } from "@/lib/dashboard";
 import { percent } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
-import { SCORE_LABELS, scoreColor, totalColor } from "@/lib/mapColors";
+import { lossBreaks, SCORE_LABELS, scoreColor, totalColor } from "@/lib/mapColors";
+import { COLOR_BY_TOTAL, totalsOf } from "@/lib/mapFeatures";
 
-/** Matches COLOR_BY_TOTAL in the Filters component, which a lib module shouldn't import. */
-const TOTAL = "total";
 const MIN_RADIUS_PX = 12;
 const MAX_RADIUS_PX = 36;
 
@@ -49,18 +48,19 @@ export function summariseClusters(
   const assumed = new Set(
     assets.filter((a) => a.assessable && a.type_source === "assumed").map((a) => a.row_num),
   );
-  const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
+  // The points' classes, so a bubble and its assets read on one scale.
+  const breaks = lossBreaks(totalsOf(rows));
 
   return clusters.map((cluster) => {
     const members = cluster.row_nums.map((rowNum) => byRow.get(rowNum));
     let color: string | null = null;
     let value: string;
     let withResults: number;
-    if (colorBy === TOTAL) {
+    if (colorBy === COLOR_BY_TOTAL) {
       const totals = members.flatMap((row) => (row?.total == null ? [] : [row.total]));
       withResults = totals.length;
       const average = totals.length ? mean(totals) : null;
-      if (average !== null) color = totalColor(average, max, dark);
+      if (average !== null) color = totalColor(average, breaks, dark);
       value = `Mean total annual loss ${percent(average)}`;
     } else {
       const scores = members.flatMap((row) => {

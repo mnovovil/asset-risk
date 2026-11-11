@@ -3,7 +3,9 @@ import { scenariosOf, yearsOf } from "@/lib/dashboard";
 import { hazardLabel } from "@/lib/hazards";
 import { scenarioLabel } from "@/lib/format";
 
-export const COLOR_BY_TOTAL = "total";
+import { COLOR_BY_TOTAL } from "@/lib/mapFeatures";
+
+export { COLOR_BY_TOTAL };
 
 interface FiltersProps {
   runId: string;

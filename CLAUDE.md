@@ -69,6 +69,8 @@ script/              ad-hoc CLIs
 
 - **Dashboard colours**: `lib/hazards.ts` fixes each hazard's colour, in the order validated with the
   dataviz palette validator, against the surfaces in `styles.css`. Re-validate before changing them.
+  The map's green-to-red ramp in `lib/mapColors.ts` is validated with `--ordinal` too, and must keep
+  its lightness monotonic so the order reads without hue.
 
 ## Branches
 - `dev` is the default branch. Branch from it, open PRs against it, and squash-merge.
