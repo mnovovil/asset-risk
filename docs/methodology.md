@@ -49,14 +49,16 @@ Totals from different scenarios therefore can't be compared directly. So:
 
 ## Risk concentration
 
-When the map opens, groups of nearby assets show as bubbles. Zooming in one level, or clicking a
-bubble, replaces them with the individual assets.
+When the map opens, it shows only bubbles, one per group of nearby assets. Zooming in one level, or
+clicking a bubble, replaces them with every individual asset, including those outside any group.
+The legend says how many assets that is, and the score table and loss bars list every asset at any
+zoom. An asset selected from them shows on the map whatever the zoom.
 
 The groups come from [DBSCAN](https://en.wikipedia.org/wiki/DBSCAN), which needs no number of
 clusters. An asset with at least `cluster_min_samples` assets within `cluster_eps_km` of it, itself
 included, starts a cluster, and the cluster takes in every asset within that distance of its core.
-Distances are along the Earth's surface. Assets that are in no cluster stay on the map as points at
-every zoom, and a portfolio with no dense group has no bubbles. Clusters depend only on location, so
+Distances are along the Earth's surface. A portfolio with no dense group has no bubbles, and its
+map shows every asset from the start. Clusters depend only on location, so
 they're the same in every scenario and year.
 
 A bubble's size grows with its number of assets. Its colour is the equal-weighted mean over its
@@ -65,7 +67,10 @@ points, or a hazard's score rounded to the nearest band. Members with no model, 
 result are counted apart, and a bubble with no result is drawn hollow. Its tooltip says how many
 members have results and how many assume the default building type.
 
-A light bubble is not proof of low risk, for the same reasons as a low score: see
+Points and bubbles share one scale, from green (lowest) to red (highest). Each step is also darker
+than the last (lighter, in dark mode), so the order reads without telling green from red.
+
+A green bubble or point is not proof of low risk, for the same reasons as a low score: see
 [Limits of the model](#limits-of-the-model).
 
 ## Building type
