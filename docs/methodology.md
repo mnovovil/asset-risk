@@ -70,6 +70,12 @@ members have results and how many assume the default building type.
 Points and bubbles share one scale, from green (lowest) to red (highest). Each step is also darker
 than the last (lighter, in dark mode), so the order reads without telling green from red.
 
+For total loss, the five colours are **quintiles**: each holds about a fifth of the assets with a
+result, for the selected scenario and year. One extreme loss then only moves the top class, instead
+of pushing every other asset into the lowest one. The legend gives the range of losses in each
+colour. The colour shows an asset's rank within this portfolio, so the same loss can be a different
+colour in another portfolio or scenario. Hazard scores keep physrisk's fixed bands.
+
 A green bubble or point is not proof of low risk, for the same reasons as a low score: see
 [Limits of the model](#limits-of-the-model).
 

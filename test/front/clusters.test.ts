@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Asset, Cluster } from "@/api/client";
 import type { AssetRow } from "@/lib/dashboard";
 import { bubbleRadius, clusteredRowNums, summariseClusters } from "@/lib/clusters";
-import { scoreColor, totalColor } from "@/lib/mapColors";
+import { lossBreaks, scoreColor, totalColor } from "@/lib/mapColors";
 
 import { asset } from "./helpers";
 
@@ -38,8 +38,8 @@ describe("summariseClusters", () => {
     const [summary] = summariseClusters([cluster(0, [1, 2, 3])], ASSETS, rows, "total", false);
     expect(summary.withResults).toBe(2);
     expect(summary.count).toBe(3);
-    // Coloured on the same scale as the points: up to the portfolio's largest loss.
-    expect(summary.color).toBe(totalColor(0.02, 0.04, false));
+    // Coloured on the same classes as the points: the quintiles of every asset's loss.
+    expect(summary.color).toBe(totalColor(0.02, lossBreaks([0.01, 0.03, 0.04]), false));
     expect(summary.detail).toContain("2 of 3 with results");
   });
 

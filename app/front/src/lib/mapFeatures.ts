@@ -4,7 +4,7 @@ import type { Asset } from "@/api/client";
 import type { AssetRow } from "@/lib/dashboard";
 import { assetLabel, percent } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
-import { NO_RESULT_COLOR, scoreColor, totalColor } from "@/lib/mapColors";
+import { lossBreaks, NO_RESULT_COLOR, scoreColor, totalColor } from "@/lib/mapColors";
 
 /** The "Colour by" value for total annual loss. Any other value is a hazard. */
 export const COLOR_BY_TOTAL = "total";
@@ -14,6 +14,10 @@ function describe(asset: Asset, row: AssetRow | undefined, colorBy: string): str
   if (colorBy === COLOR_BY_TOTAL) return `Total annual loss ${percent(row?.total)}`;
   return `${hazardLabel(colorBy)}: ${row?.scores[colorBy]?.label ?? "No result"}`;
 }
+
+/** The losses the colour classes are drawn from: assets with a result only. */
+export const totalsOf = (rows: AssetRow[]) =>
+  rows.flatMap((row) => (row.total === null ? [] : [row.total]));
 
 /** Assets the map can place: real coordinates only. */
 export const placeable = (assets: Asset[]) =>
@@ -36,12 +40,12 @@ export function toFeatures(
   hasClusters: boolean,
 ): GeoJSON.FeatureCollection {
   const byRow = new Map(rows.map((row) => [row.rowNum, row]));
-  const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
+  const breaks = lossBreaks(totalsOf(rows));
   const features: GeoJSON.Feature[] = placeable(assets).map((asset) => {
     const row = byRow.get(asset.row_num);
     let color: string | null = null;
     if (row && colorBy === COLOR_BY_TOTAL && row.total !== null) {
-      color = totalColor(row.total, max, dark);
+      color = totalColor(row.total, breaks, dark);
     } else if (row && colorBy !== COLOR_BY_TOTAL && row.scores[colorBy]) {
       color = scoreColor(row.scores[colorBy].score, dark);
     }

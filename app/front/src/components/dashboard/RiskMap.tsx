@@ -12,8 +12,8 @@ import type { Asset, Cluster } from "@/api/client";
 import { type ClusterSummary, clusteredRowNums, summariseClusters } from "@/lib/clusters";
 import { type AssetRow } from "@/lib/dashboard";
 import { count, percent } from "@/lib/format";
-import { NO_RESULT_COLOR, ramp, SCORE_LABELS } from "@/lib/mapColors";
-import { COLOR_BY_TOTAL, placeable, toFeatures } from "@/lib/mapFeatures";
+import { lossBreaks, lossLegend, NO_RESULT_COLOR, ramp, SCORE_LABELS } from "@/lib/mapColors";
+import { COLOR_BY_TOTAL, placeable, toFeatures, totalsOf } from "@/lib/mapFeatures";
 import { basemapStyle, blankStyle, pointRing } from "@/lib/mapStyle";
 import { usePrefersDark } from "@/hooks/useColorScheme";
 
@@ -265,7 +265,8 @@ export default function RiskMap({
   }, [bubbles, ready]);
 
   const colors = ramp(dark);
-  const max = Math.max(0, ...rows.map((row) => row.total ?? 0));
+  const totals = totalsOf(rows);
+  const lossItems = lossLegend(totals, lossBreaks(totals), dark);
 
   return (
     <section className="panel" aria-labelledby="map-heading">
@@ -285,18 +286,15 @@ export default function RiskMap({
       <ul className="map-legend">
         {colorBy === COLOR_BY_TOTAL ? (
           <>
-            <li>
-              <span className="dot" style={{ background: colors[0] }} /> Lowest (0%)
-            </li>
-            {colors.slice(1, -1).map((color) => (
-              <li key={color}>
-                <span className="dot" style={{ background: color }} />
+            <li>Total annual loss, about a fifth of assets per colour:</li>
+            {lossItems.map((item) => (
+              <li key={item.color}>
+                <span className="dot" style={{ background: item.color }} />{" "}
+                {item.min === item.max
+                  ? percent(item.min)
+                  : `${percent(item.min)} to ${percent(item.max)}`}
               </li>
             ))}
-            <li>
-              <span className="dot" style={{ background: colors[colors.length - 1] }} /> Highest (
-              {percent(max)})
-            </li>
           </>
         ) : (
           SCORE_LABELS.map((label, index) => (
