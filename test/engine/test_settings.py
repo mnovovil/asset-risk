@@ -8,7 +8,9 @@ from engine.settings import (
     BUILDING_TYPES,
     KEYS,
     MAX_CLUSTER_EPS_KM,
+    MAX_YEAR,
     MIN_CLUSTER_SAMPLES,
+    MIN_YEAR,
     ROOT,
     SCENARIOS,
     SettingsError,
@@ -110,6 +112,7 @@ def test_missing_key(tmp_path, key):
         ("years", []),
         ("years", [2050, 2050]),
         ("years", [1999]),
+        ("years", [2024]),
         ("years", [2101]),
         ("years", [2050.5]),
         ("years", [True]),
@@ -174,3 +177,12 @@ def test_cluster_limits_match_terraform():
     text = (INFRA / "variables.tf").read_text()
     assert f"var.cluster_eps_km <= {MAX_CLUSTER_EPS_KM}" in text
     assert f"var.cluster_min_samples >= {MIN_CLUSTER_SAMPLES}" in text
+
+
+def test_the_first_year_is_physrisks_baseline(tmp_path):
+    assert load_settings(write(tmp_path, years=[2025])).years == (2025,)
+
+
+def test_year_limits_match_terraform():
+    text = (INFRA / "variables.tf").read_text()
+    assert f"y >= {MIN_YEAR} && y <= {MAX_YEAR}" in text

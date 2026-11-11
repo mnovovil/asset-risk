@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   barData,
   buildRows,
+  BASELINE,
   defaultPair,
+  hasBaseline,
+  isBaseline,
+  lossHazards,
+  pairLabel,
+  preferredYear,
   hazardColumns,
   missingHazards,
   scoreKind,
@@ -163,6 +169,41 @@ describe("barData", () => {
 describe("the selected scenario", () => {
   it("starts on the scenario with the most hazards, near 2050", () => {
     expect(defaultPair(TRAJECTORY)).toEqual({ scenario: "ssp585", year: 2050 });
+  });
+
+  it("never starts on the baseline", () => {
+    expect(isBaseline(defaultPair(TRAJECTORY))).toBe(false);
+  });
+
+  it("knows the baseline, and only offers it when it has results", () => {
+    expect(isBaseline(BASELINE)).toBe(true);
+    expect(isBaseline({ scenario: "ssp585", year: 2050 })).toBe(false);
+    expect(hasBaseline(TRAJECTORY)).toBe(true);
+    const empty = TRAJECTORY.map((p) => (p.year === null ? { ...p, assets: 0 } : p));
+    expect(hasBaseline(empty)).toBe(false);
+  });
+
+  it("names the selected pair", () => {
+    expect(pairLabel(BASELINE)).toBe("Today (baseline)");
+    expect(pairLabel({ scenario: "ssp585", year: 2050 })).toBe("SSP5-8.5, 2050");
+  });
+
+  it("prefers the year nearest 2050", () => {
+    expect(preferredYear([2030, 2045, 2080])).toBe(2045);
+    expect(preferredYear([])).toBeUndefined();
+  });
+
+  it("takes the baseline's columns from its losses, as it has no scores", () => {
+    const rows = buildRows(
+      [{ row_num: 1, asset_id: "a", total_aal: 0.01, shared_aal: 0.01, hazards: 2 }],
+      [
+        { row_num: 1, asset_id: "a", lat: 0, lon: 0, hazard: "Wind", impact_type: "damage", aal: 0.004, aal_std: null },
+        { row_num: 1, asset_id: "a", lat: 0, lon: 0, hazard: "Fire", impact_type: "damage", aal: 0.006, aal_std: null },
+      ],
+      [],
+      [],
+    );
+    expect(lossHazards(rows)).toEqual(sortHazards(["Wind", "Fire"]));
   });
 
   it("copes with no scenarios", () => {
