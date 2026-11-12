@@ -170,10 +170,11 @@ uv run script/record_demo.py --build
 ```
 
 It runs the [demo portfolio](assets/demo_portfolio.csv) for real in its own compose project and
-volume, opens the New Orleans cluster on the map and clicks `US-241`, in the Mississippi. It stops
-if the run fails, the map doesn't load, no cluster contains New Orleans, no bubble on screen can be
-matched to that cluster, `US-241` can't be clicked on the map, or its hazard maps load no tile.
-Without `--build` it reuses the existing image. Check that it reports all three
+volume, opens the New Orleans cluster on the map, clicks `US-312`, and zooms its hazard map out to
+southern Louisiana. It stops if the run fails, the map doesn't load, no cluster contains New
+Orleans, no bubble on screen can be matched to that cluster, `US-312` can't be clicked on the map,
+or its hazard maps load no tile. Without `--build` it reuses the existing image. Check that it
+reports all three
 stages: Classifying is short, and the page only checks progress every 1.5 s, so it can be missed.
 
 `script/overture_values.py` audits the building type map against a live release, and

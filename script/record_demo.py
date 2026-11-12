@@ -5,8 +5,9 @@
 """Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
 After the upload and progress screens, it opens the New Orleans risk-concentration bubble on the
-map, clicks an asset in the middle of the Mississippi to show its details and hazard maps, then
-goes through the rest of the dashboard, including the present-day (baseline) view.
+map, clicks one of its assets to show its details, river flood depth curve and hazard maps, zooms
+the hazard map out to all of southern Louisiana, then goes through the rest of the dashboard,
+including the present-day (baseline) view.
 
 It starts its own compose project, port and volume, so other runs can't appear in the GIF and a
 running stack isn't touched. It needs a browser (uvx playwright@1.64.1 install
@@ -61,14 +62,20 @@ ZOOM_FRAME_SECONDS = 0.1
 # point is in the city centre, so it falls inside the cluster's bounds whatever DBSCAN's settings.
 FOCUS_NAME = "New Orleans"
 FOCUS_LAT, FOCUS_LON = 29.95, -90.07
-# The asset the GIF opens: a point in mid-channel off Algiers Point, with no building found.
-# physrisk gives it no river or coastal flood loss, because the flood data has that exact point as
-# dry, while its hazard map shows the area around it flooding: a zero isn't proof of low risk.
-FOCUS_ASSET = "US-241"
+# The asset the GIF opens, by the French Quarter.
+FOCUS_ASSET = "US-312"
 HAZARD_MAPS = [
-    ("RiverineInundation", "Yet the area around it floods: river flood depth, 1 in 1000 years"),
-    ("CoastalInundation", "Coastal flood depth: a dry point in the data is not proof of low risk"),
+    ("RiverineInundation", "Hazard maps around it: river flood depth, 1 in 1000 years"),
+    ("CoastalInundation", "The same view, a different hazard: coastal flood depth"),
 ]
+# Scrolling out over the panel's hazard map, from street level (zoom 14) to about zoom 5.6, where it
+# is about 6 degrees of longitude wide. Each step is about 0.56 zoom levels in headless Chromium.
+# Zooming keeps the asset under the pointer, so a pointer right of centre puts the asset there and
+# shows more to its west: all of southern Louisiana. physrisk's tiles stop at zoom 6.
+ZOOM_OUT_STEPS = 15
+ZOOM_OUT_POINTER = (0.72, 0.45)  # share of the map's width and height
+ZOOM_OUT_WHEEL_PX = 500
+ZOOM_OUT_STEP_SECONDS = 0.15
 BASELINE_LABEL = "Today (baseline)"
 
 SHOW_CAPTION = """text => {
@@ -368,32 +375,68 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
     fail_on_alert(page)
-    rec.caption("No building found, so its type is assumed")
+    rec.caption("Its building, and how it was modelled")
     rec.shot(4)
-    rec.caption("No river or coastal flood loss: the data has this exact point as dry")
-    panel.get_by_role("heading", name="Results for", level=3).evaluate(
-        "e => e.scrollIntoView({block: 'start', behavior: 'instant'})"
-    )
-    rec.shot(4.5)
+    rec.caption("Its loss by hazard")
+    scroll_panel_to(panel, "Results for")
+    rec.shot(4)
+    rec.caption("River flood depth at the asset, by how rare the flood is")
+    scroll_panel_to(panel, "River flood depth")
+    page.wait_for_timeout(500)
+    rec.shot(5)
     return panel
 
 
+def scroll_panel_to(panel: Locator, heading: str) -> None:
+    panel.get_by_role("heading", name=heading, level=3).evaluate(
+        "e => e.scrollIntoView({block: 'start', behavior: 'instant'})"
+    )
+
+
 def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
-    """Scroll the panel to its hazard map, then show river and coastal flood around the asset."""
+    """Show river flood around the asset, zoom out to the region, then switch to coastal flood."""
     page = rec.page
     heading = panel.get_by_role("heading", name="Hazard maps", level=3)
     heading.wait_for()
     heading.evaluate("e => e.scrollIntoView({block: 'start', behavior: 'instant'})")
-    for hazard, caption in HAZARD_MAPS:
+    for index, (hazard, caption) in enumerate(HAZARD_MAPS):
         panel.get_by_label("Hazard").select_option(hazard)
         rec.caption(caption)
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
-        fail_on_alert(page)
+        settle_map(page)
         # A tile only loads where physrisk has one: none would mean an empty hazard map.
         if not any(f"/hazard-maps/{hazard}/" in url for url in hazard_tiles):
             raise RuntimeError(f"no {hazard} map tile loaded")
         rec.shot(4.5)
+        if index == 0:
+            zoom_out_hazard_map(rec, panel)
+
+
+def settle_map(page: Page) -> None:
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
+    fail_on_alert(page)
+
+
+def zoom_out_hazard_map(rec: Recorder, panel: Locator) -> None:
+    """Scroll out over the panel's map until it shows all of southern Louisiana."""
+    page = rec.page
+    box = panel.locator(".asset-map").bounding_box()
+    if box is None:
+        raise RuntimeError("the asset panel has no hazard map")
+    rec.caption("Zoom out: physrisk's flood maps cover all of southern Louisiana")
+    # Start at the asset, in the map's centre, so the pointer's spot is the asset's.
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.wheel(0, ZOOM_OUT_WHEEL_PX)
+    page.wait_for_timeout(ZOOM_OUT_STEP_SECONDS * 1000)
+    share_x, share_y = ZOOM_OUT_POINTER
+    page.mouse.move(box["x"] + box["width"] * share_x, box["y"] + box["height"] * share_y)
+    for _ in range(ZOOM_OUT_STEPS - 1):
+        page.mouse.wheel(0, ZOOM_OUT_WHEEL_PX)
+        page.wait_for_timeout(ZOOM_OUT_STEP_SECONDS * 1000)
+        rec.shot(ZOOM_OUT_STEP_SECONDS)
+    page.mouse.move(0, 0)
+    settle_map(page)
+    rec.shot(5)
 
 
 def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[str]) -> None:
