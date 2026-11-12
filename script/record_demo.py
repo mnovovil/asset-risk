@@ -4,6 +4,10 @@
 # ///
 """Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
+After the upload and progress screens, it opens the New Orleans risk-concentration bubble on the
+map, clicks that cluster's riskiest asset to show its details and hazard maps, then goes through the
+rest of the dashboard, including the present-day (baseline) view.
+
 It starts its own compose project, port and volume, so other runs can't appear in the GIF and a
 running stack isn't touched. It needs a browser (uvx playwright@1.64.1 install
 chromium-headless-shell), and reuses the asset-risk:local image unless --build is passed, so pass
@@ -13,11 +17,13 @@ that after changing the app.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,10 +57,15 @@ SCROLL_MARGIN_PX = 40
 BUBBLE_SCAN_STEP_PX = 16
 ZOOM_FRAMES = 8
 ZOOM_FRAME_SECONDS = 0.1
+# The cluster the GIF opens: New Orleans has the portfolio's highest flood and wind losses. The
+# point is in the city centre, so it falls inside the cluster's bounds whatever DBSCAN's settings.
+FOCUS_NAME = "New Orleans"
+FOCUS_LAT, FOCUS_LON = 29.95, -90.07
 HAZARD_MAPS = [
     ("RiverineInundation", "Hazard maps around the asset: river flood depth, 1 in 1000 years"),
-    ("CoastalInundation", "Switch hazards: clear means no flood in the data, not no risk"),
+    ("CoastalInundation", "The same asset, a different hazard: coastal flood depth"),
 ]
+BASELINE_LABEL = "Today (baseline)"
 
 SHOW_CAPTION = """text => {
   let caption = document.getElementById("demo-caption");
@@ -71,6 +82,11 @@ SHOW_CAPTION = """text => {
   }
   caption.textContent = text;
 }"""
+
+
+# The map closes its popup on a mousemove with nothing under it.
+HIDE_MAP_POPUP = """() => document.querySelector(".map canvas")
+  .dispatchEvent(new MouseEvent("mousemove", {clientX: 0, clientY: 0, bubbles: true}))"""
 
 
 @dataclass
@@ -93,6 +109,12 @@ class Recorder:
         # A pointer left over a chart would open its tooltip in later frames.
         self.page.mouse.move(0, 0)
 
+    def click_at(self, x: float, y: float) -> None:
+        """Click the map, then close its popup, which a pointer leaving the page leaves open."""
+        self.page.mouse.click(x, y)
+        self.page.mouse.move(0, 0)
+        self.page.evaluate(HIDE_MAP_POPUP)
+
     def shot(self, seconds: float) -> None:
         path = self.folder / f"{len(self.frames):04d}.png"
         self.page.screenshot(path=path)
@@ -109,6 +131,9 @@ class Recorder:
         target = section.evaluate(
             f"e => e.getBoundingClientRect().top + scrollY - {SCROLL_MARGIN_PX}"
         )
+        self.scroll_to_y(target, hold)
+
+    def scroll_to_y(self, target: float, hold: float) -> None:
         start = self.page.evaluate("scrollY")
         for step in range(1, SCROLL_STEPS + 1):
             y = start + (target - start) * step / SCROLL_STEPS
@@ -126,6 +151,12 @@ def compose(*args: str) -> None:
     subprocess.run(
         ["docker", "compose", "-p", PROJECT, "-f", compose_file, *args], env=env, check=True
     )
+
+
+def dashboard_filter(page: Page, name: str) -> Locator:
+    # Not get_by_label: a select's accessible name includes its options, and a chart's label
+    # mentions "scenario" too.
+    return page.locator(".filters label", has_text=name).locator("select")
 
 
 def fail_on_alert(page: Page) -> None:
@@ -174,7 +205,10 @@ def record_progress(rec: Recorder) -> list[str]:
     return seen
 
 
-FIND_BUBBLES = """({step}) => {
+# Hovers the map in a grid and groups the points by the popup they open, so the script finds bubbles
+# and assets where a viewer would, without reaching into the app. A popup's title is either "N
+# nearby assets" (a bubble) or an asset's label.
+SCAN_MAP = """({step}) => {
   const map = document.querySelector(".map");
   const canvas = map.querySelector("canvas");
   const box = map.getBoundingClientRect();
@@ -185,9 +219,9 @@ FIND_BUBBLES = """({step}) => {
       canvas.dispatchEvent(new MouseEvent("mousemove", {clientX: x, clientY: y, bubbles: true}));
       const popup = document.querySelector(".maplibregl-popup");
       const title = popup?.querySelector("strong")?.textContent ?? "";
-      if (!title.endsWith("nearby assets")) continue;
+      if (!title) continue;
       const key = popup.textContent;
-      const hit = found.get(key) ?? {count: parseInt(title, 10), xs: [], ys: []};
+      const hit = found.get(key) ?? {title, xs: [], ys: []};
       hit.xs.push(x);
       hit.ys.push(y);
       found.set(key, hit);
@@ -195,34 +229,157 @@ FIND_BUBBLES = """({step}) => {
   }
   canvas.dispatchEvent(new MouseEvent("mousemove", {clientX: 0, clientY: 0, bubbles: true}));
   const mean = values => values.reduce((a, b) => a + b, 0) / values.length;
-  return [...found.values()].map(h => ({count: h.count, x: mean(h.xs), y: mean(h.ys)}));
+  return [...found.values()].map(h => ({title: h.title, x: mean(h.xs), y: mean(h.ys)}));
 }"""
+BUBBLE_SUFFIX = " nearby assets"
 
 
-def record_clusters(rec: Recorder) -> None:
-    """Show the opening bubbles, open the biggest one, and zoom in to its assets."""
+def scan_map(page: Page) -> tuple[list[dict], list[dict]]:
+    """The bubbles (with their asset count) and the asset points on screen."""
+    hits = page.evaluate(SCAN_MAP, {"step": BUBBLE_SCAN_STEP_PX})
+    bubbles = [
+        h | {"count": int(h["title"].removesuffix(BUBBLE_SUFFIX))}
+        for h in hits
+        if h["title"].endswith(BUBBLE_SUFFIX)
+    ]
+    points = [h for h in hits if not h["title"].endswith(BUBBLE_SUFFIX)]
+    return bubbles, points
+
+
+def api(page: Page, path: str, **params) -> list[dict]:
+    run_id = page.url.rstrip("/").rsplit("/", 1)[-1]
+    response = page.request.get(f"{BASE}/api/runs/{run_id}/{path}", params=params or None)
+    if not response.ok:
+        raise RuntimeError(f"GET {path} returned {response.status}")
+    return response.json()
+
+
+def contains(bounds: list[float], lat: float, lon: float) -> bool:
+    west, south, east, north = bounds
+    # East is past 180 for a cluster across the antimeridian.
+    return south <= lat <= north and any(west <= x <= east for x in (lon, lon + 360))
+
+
+def mercator_y(lat: float) -> float:
+    return math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+
+
+def fit_line(pairs: list[tuple[float, float]]) -> tuple[float, float]:
+    """Least squares slope and intercept of screen position against map coordinate."""
+    n = len(pairs)
+    mean_u = sum(u for u, _ in pairs) / n
+    mean_v = sum(v for _, v in pairs) / n
+    spread = sum((u - mean_u) ** 2 for u, _ in pairs)
+    if spread == 0:
+        raise RuntimeError("the matched bubbles are in a line, so they can't place the others")
+    slope = sum((u - mean_u) * (v - mean_v) for u, v in pairs) / spread
+    return slope, mean_v - slope * mean_u
+
+
+def find_bubble(bubbles: list[dict], clusters: list[dict], target: dict) -> dict:
+    """The bubble on screen for the API's target cluster.
+
+    A popup doesn't give a bubble's coordinates, so match by asset count. When another bubble has
+    the same count, place the target on screen from the bubbles whose count is unique.
+    """
+    candidates = [b for b in bubbles if b["count"] == target["assets"]]
+    if not candidates:
+        raise RuntimeError(f"no bubble on screen has {FOCUS_NAME}'s {target['assets']} assets")
+    if len(candidates) == 1:
+        return candidates[0]
+    on_screen = Counter(b["count"] for b in bubbles)
+    in_api = Counter(c["assets"] for c in clusters)
+    anchors = [
+        (next(c for c in clusters if c["assets"] == b["count"]), b)
+        for b in bubbles
+        if on_screen[b["count"]] == 1 and in_api[b["count"]] == 1
+    ]
+    if len(anchors) < 2:
+        raise RuntimeError(f"can't tell which of {len(candidates)} bubbles is {FOCUS_NAME}")
+    ax, bx = fit_line([(c["lon"], b["x"]) for c, b in anchors])
+    ay, by = fit_line([(mercator_y(c["lat"]), b["y"]) for c, b in anchors])
+    x, y = ax * target["lon"] + bx, ay * mercator_y(target["lat"]) + by
+    return min(candidates, key=lambda b: (b["x"] - x) ** 2 + (b["y"] - y) ** 2)
+
+
+def record_clusters(rec: Recorder) -> dict:
+    """Show the opening bubbles, open New Orleans', and return that cluster."""
     page = rec.page
     rec.caption("Where the risk is: groups of nearby assets, from green (lowest) to red (highest)")
     rec.scroll_to("Where the risk is", 4)
-    bubbles = page.evaluate(FIND_BUBBLES, {"step": BUBBLE_SCAN_STEP_PX})
-    if not bubbles:
-        raise RuntimeError("no cluster bubbles on the map")
-    print(f"Bubbles on screen: {len(bubbles)}")
-    biggest = max(bubbles, key=lambda b: b["count"])
-    page.mouse.move(biggest["x"], biggest["y"])
+    clusters = api(page, "clusters")
+    target = next((c for c in clusters if contains(c["bounds"], FOCUS_LAT, FOCUS_LON)), None)
+    if target is None:
+        raise RuntimeError(f"no cluster contains {FOCUS_NAME}")
+    bubbles, _ = scan_map(page)
+    print(f"Bubbles on screen: {len(bubbles)}, API clusters: {len(clusters)}")
+    bubble = find_bubble(bubbles, clusters, target)
+    print(
+        f"{FOCUS_NAME}: cluster {target['cluster_id']} of {target['assets']} assets, "
+        f"bubble at ({bubble['x']:.0f}, {bubble['y']:.0f})"
+    )
+    page.mouse.move(bubble["x"], bubble["y"])
     page.wait_for_timeout(300)
-    rec.caption("Each bubble's mean, and how many of its assets have results")
+    rec.caption(f"{FOCUS_NAME}: the bubble's mean, and how many of its assets have results")
     rec.shot(4)
-    rec.caption("Click a bubble, or zoom in, to see each asset")
-    page.mouse.click(biggest["x"], biggest["y"])
-    page.mouse.move(0, 0)
+    rec.caption("Click a bubble to zoom in to its assets")
+    rec.click_at(bubble["x"], bubble["y"])
     for _ in range(ZOOM_FRAMES):
         page.wait_for_timeout(ZOOM_FRAME_SECONDS * 1000)
         rec.shot(ZOOM_FRAME_SECONDS)
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
     fail_on_alert(page)
-    rec.shot(4.5)
+    rec.caption(f"Every asset in {FOCUS_NAME}, coloured by its own annual loss")
+    rec.shot(4)
+    return target
+
+
+def open_riskiest_asset(rec: Recorder, cluster: dict) -> Locator:
+    """Click the cluster's riskiest asset on the map, and return the panel it opens."""
+    page = rec.page
+    bubbles, points = scan_map(page)
+    if bubbles or not points:
+        raise RuntimeError(f"the map didn't zoom in to {FOCUS_NAME}'s assets")
+    # The same scenario and year the dashboard is showing.
+    scenario = dashboard_filter(page, "Scenario").input_value()
+    year = dashboard_filter(page, "Year").input_value()
+    totals = api(page, "totals", scenario=scenario, year=year)
+    members = set(cluster["row_nums"])
+    ranked = sorted(
+        (t for t in totals if t["row_num"] in members and t["total_aal"] is not None),
+        key=lambda t: t["total_aal"],
+        reverse=True,
+    )
+    at = {p["title"]: p for p in points}
+    panel = page.get_by_role("dialog", name="Asset details")
+    for total in ranked:
+        label = total["asset_id"] or f"Row {total['row_num']}"
+        # A point under another one never opens its own popup, so try the next riskiest.
+        point = at.get(label)
+        if point is None:
+            continue
+        page.mouse.move(point["x"], point["y"])
+        page.wait_for_timeout(300)
+        if page.locator(".maplibregl-popup strong").first.text_content() != label:
+            continue
+        print(f"Asset: {label}, total annual loss {total['total_aal']:.4f} ({scenario} {year})")
+        rec.caption(f"Click an asset to see its details: {label}, the riskiest in {FOCUS_NAME}")
+        rec.shot(3)
+        rec.click_at(point["x"], point["y"])
+        panel.wait_for()
+        # The heading reads "Asset" until the asset's details load.
+        try:
+            panel.get_by_role("heading", name=label, exact=True, level=2).wait_for(timeout=10_000)
+        except PlaywrightError:
+            raise RuntimeError(f"clicking {label} didn't open its details") from None
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(1000)
+        fail_on_alert(page)
+        rec.caption("Its building, how it was modelled, and its loss by hazard")
+        rec.shot(4.5)
+        return panel
+    raise RuntimeError(f"none of {FOCUS_NAME}'s assets with results could be clicked on the map")
 
 
 def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
@@ -256,28 +413,34 @@ def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[st
 
     rec.caption("Step 3: see the results, including how many building types were assumed")
     rec.shot(4.5)
-    record_clusters(rec)
+    cluster = record_clusters(rec)
+    panel = open_riskiest_asset(rec, cluster)
+    record_hazard_maps(rec, panel, hazard_tiles)
+    page.keyboard.press("Escape")
+    panel.wait_for(state="hidden")
     rec.caption("What drives the loss, against the historical baseline")
     rec.scroll_to("Annual loss by hazard", 3.5)
     rec.caption('Scores per hazard: "No model" and "No data" are not low risk')
     rec.scroll_to("Risk by asset and hazard", 4)
-    rec.caption("The details of one asset")
-    # The table starts sorted by total loss, so its first asset is the riskiest.
-    table = page.get_by_role("region", name="Risk by asset and hazard")
-    rec.click(table.locator("button.link-button").first)
-    panel = page.get_by_role("dialog", name="Asset details")
-    panel.wait_for()
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(1000)
-    fail_on_alert(page)
-    rec.shot(4.5)
-    record_hazard_maps(rec, panel, hazard_tiles)
-    page.keyboard.press("Escape")
-    panel.wait_for(state="hidden")
     rec.caption("Change over time, comparing scenarios on shared hazards only")
     rec.scroll_to("Change over time", 3.5)
+    record_baseline(rec)
     rec.caption("How far to trust these results: a screening tool, not a site assessment")
     rec.scroll_to("How far to trust these results", 5.5)
+
+
+def record_baseline(rec: Recorder) -> None:
+    """Switch the whole dashboard to present-day risk."""
+    page = rec.page
+    rec.caption("Or see present-day risk: physrisk's historical baseline")
+    rec.scroll_to_y(0, 1.5)
+    dashboard_filter(page, "Scenario").select_option(label=BASELINE_LABEL)
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
+    fail_on_alert(page)
+    rec.shot(4.5)
+    rec.caption("Today's loss by hazard, on the hazards the baseline has")
+    rec.scroll_to("Annual loss by hazard", 4)
 
 
 def encode(frames: list[Frame], folder: Path, output: Path) -> None:
