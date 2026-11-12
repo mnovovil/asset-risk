@@ -22,10 +22,19 @@ interface HazardTileMapProps {
   tileUrl: string | null;
   maxZoom: number;
   label: string;
+  /** "small" fits the asset panel; "large" fills the full-size page. */
+  size?: "small" | "large";
 }
 
 /** A small map centred on one asset, with a physrisk hazard map drawn over the basemap. */
-export default function HazardTileMap({ lat, lon, tileUrl, maxZoom, label }: HazardTileMapProps) {
+export default function HazardTileMap({
+  lat,
+  lon,
+  tileUrl,
+  maxZoom,
+  label,
+  size = "small",
+}: HazardTileMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibre | null>(null);
   const dark = usePrefersDark();
@@ -124,5 +133,5 @@ export default function HazardTileMap({ lat, lon, tileUrl, maxZoom, label }: Haz
       </p>
     );
   }
-  return <div ref={container} className="map asset-map" role="img" aria-label={label} />;
+  return <div ref={container} className={`map ${size === "large" ? "asset-map-large" : "asset-map"}`} role="img" aria-label={label} />;
 }
