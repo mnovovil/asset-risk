@@ -150,7 +150,8 @@ These come from physrisk's default data, and most were found while building
 ## Hazard maps
 
 The asset panel can show a map around the asset, drawn from physrisk's own map data. It answers
-where the flood plain is, which a single point's numbers can't. Read it with these limits:
+where the flood plain is, which a single point's numbers can't. **Open larger map** opens the same
+map, hazard and period full-size in a new tab. Read it, at any size, with these limits:
 
 - **Only river and coastal flood.** physrisk's maps of wind, fire, hail, heat and drought aren't
   public, so these hazards are listed but can't be chosen.

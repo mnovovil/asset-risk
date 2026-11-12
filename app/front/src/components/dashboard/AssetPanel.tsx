@@ -358,6 +358,7 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
                   <h3>Hazard maps</h3>
                   <AssetHazardMap
                     runId={runId}
+                    rowNum={rowNum}
                     pair={pair}
                     lat={asset.lat}
                     lon={asset.lon}

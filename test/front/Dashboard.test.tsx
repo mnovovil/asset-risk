@@ -439,6 +439,40 @@ describe("Dashboard", () => {
       expect(requests.some((r) => r.endsWith("/hazard-maps?scenario=historical"))).toBe(true);
     });
 
+    it("links to a larger map in a new tab, on the same hazard and period", async () => {
+      stub({ detail });
+      await renderDashboard();
+      await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+      const panel = within(await screen.findByRole("dialog"));
+      const link = await panel.findByRole("link", { name: "Open a larger map in a new tab" });
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link.getAttribute("rel")).toContain("noopener");
+      const base = `/runs/${RUN}/assets/1/hazard-map?scenario=ssp585&year=2050`;
+      expect(link).toHaveAttribute("href", `${base}&hazard=RiverineInundation`);
+
+      await userEvent.selectOptions(panel.getByLabelText("Hazard"), "CoastalInundation");
+      expect(link).toHaveAttribute("href", `${base}&hazard=CoastalInundation`);
+      await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
+      await panel.findByText(/Hazard map .*\?scenario=historical/);
+      expect(panel.getByRole("link", { name: /larger map/ })).toHaveAttribute(
+        "href",
+        `${base}&hazard=CoastalInundation&period=historical`,
+      );
+    });
+
+    it("links the baseline's larger map with no year", async () => {
+      stub({ detail });
+      await renderDashboard();
+      await userEvent.selectOptions(screen.getByLabelText("Scenario"), "Today (baseline)");
+      await screen.findByText(/physrisk scores scenarios only/);
+      await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+      const panel = within(await screen.findByRole("dialog"));
+      expect(await panel.findByRole("link", { name: /larger map/ })).toHaveAttribute(
+        "href",
+        `/runs/${RUN}/assets/1/hazard-map?scenario=historical&hazard=RiverineInundation`,
+      );
+    });
+
     it("says why a scenario has no map", async () => {
       stub({ detail });
       await renderDashboard();

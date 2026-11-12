@@ -628,6 +628,12 @@ th[scope="row"] {
   height: 240px;
 }
 
+/* The full-size page: most of the window, leaving the controls and legend in view. */
+.asset-map-large {
+  height: calc(100vh - 360px);
+  min-height: 360px;
+}
+
 .map-controls {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useId, useState } from "react";
 
 import { ApiError, getHazardMaps, type HazardMapLayer, type Pair } from "@/api/client";
+import { assetMapPath } from "@/lib/assetMapRoute";
 import { scenarioLabel } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
@@ -11,18 +12,34 @@ const HISTORICAL: Pair = { scenario: "historical", year: null };
 
 interface AssetHazardMapProps {
   runId: string;
+  rowNum: number;
   pair: Pair;
   lat: number;
   lon: number;
   /** The asset's hazards with results, so the ones with no map are listed too. */
   hazards: string[];
+  /** The hazard and period to open on, as the full-size page passes them from its address. */
+  initialHazard?: string | null;
+  initialHistorical?: boolean;
+  /** "panel" is the small map in the asset panel, with a link to open "page", the full-size one. */
+  variant?: "panel" | "page";
 }
 
-export function AssetHazardMap({ runId, pair, lat, lon, hazards }: AssetHazardMapProps) {
-  const [historical, setHistorical] = useState(false);
+export function AssetHazardMap({
+  runId,
+  rowNum,
+  pair,
+  lat,
+  lon,
+  hazards,
+  initialHazard = null,
+  initialHistorical = false,
+  variant = "panel",
+}: AssetHazardMapProps) {
+  const [historical, setHistorical] = useState(initialHistorical);
   const [layers, setLayers] = useState<HazardMapLayer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hazard, setHazard] = useState<string | null>(null);
+  const [hazard, setHazard] = useState<string | null>(initialHazard);
   const selectId = useId();
   const shown = historical || pair.scenario === HISTORICAL.scenario ? HISTORICAL : pair;
   const { scenario, year } = shown;
@@ -52,8 +69,14 @@ export function AssetHazardMap({ runId, pair, lat, lon, hazards }: AssetHazardMa
     `Map around this asset of ${hazardLabel(current.hazard)} depth, 1 in ` +
     `${current.return_period} years, ${shownName}. Clear areas have no flood in the data.`;
 
+  const largerMap = assetMapPath(runId, rowNum, {
+    pair,
+    hazard: current.hazard,
+    historical: shown === HISTORICAL && pair.scenario !== HISTORICAL.scenario,
+  });
+
   return (
-    <div className="asset-hazard-map">
+    <div className={`asset-hazard-map asset-hazard-map-${variant}`}>
       <div className="map-controls">
         <label htmlFor={selectId}>
           Hazard
@@ -102,6 +125,7 @@ export function AssetHazardMap({ runId, pair, lat, lon, hazards }: AssetHazardMa
           tileUrl={current.tile_url}
           maxZoom={current.max_zoom}
           label={label}
+          size={variant === "page" ? "large" : "small"}
         />
       </Suspense>
       <ul className="map-legend">
@@ -122,6 +146,19 @@ export function AssetHazardMap({ runId, pair, lat, lon, hazards }: AssetHazardMa
         as a map, at about 1 km resolution and before any flood protection. No flood in the data is
         not proof of no risk. Other hazards have no public map data.
       </p>
+      {variant === "panel" && (
+        <p>
+          <a
+            className="button"
+            href={largerMap}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open a larger map in a new tab"
+          >
+            Open larger map ↗
+          </a>
+        </p>
+      )}
     </div>
   );
 }
