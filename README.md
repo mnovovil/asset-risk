@@ -8,11 +8,14 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 [most buildings have no known type](docs/methodology.md#building-type), so read
 [the methodology](docs/methodology.md) before relying on a number.
 
-![Uploading the sample CSV, following the geolocating, classifying and assessing stages, then going through the dashboard's figures, map, charts, the details of the Avilés asset with its river and coastal flood maps, and the data quality notes](docs/assets/demo.gif)
+![Uploading the 500-asset demo portfolio, following the geolocating, classifying and assessing stages, then the dashboard's figures, the map's risk-concentration bubbles, a click on the New Orleans bubble that zooms in to its assets, a click on one of its assets to show its details, its river flood depth by return period and its river flood map zoomed out to all of southern Louisiana, then its coastal flood map, the charts, the present-day view and the data quality notes](docs/assets/demo.gif)
 
-*A real run of the [sample CSV](app/front/public/sample_portfolio.csv), with the stages sped up. The
-asset panel shows the hazard maps around the `aviles` asset: physrisk's 1-in-1000-year river and
-coastal flood depth, the only hazard maps it publishes. Its figures are screening estimates for
+*A real run of the [demo portfolio](docs/assets/demo_portfolio.csv), 500 properties in the USA and
+Spain, with the stages sped up. New Orleans is opened because it has some of the portfolio's
+highest flood and wind losses: scoring below it doesn't make an asset low risk. The asset shown,
+`US-312`, is by the French Quarter. The panel shows its river flood depth by return period, then
+physrisk's 1-in-1000-year river and coastal flood maps, zoomed out to all of southern Louisiana:
+they are the only hazard maps physrisk publishes. Its figures are screening estimates for
 illustration. Map data © OpenStreetMap contributors, via OpenFreeMap and OpenMapTiles. Flood maps
 from WRI Aqueduct Floods, via physrisk.*
 
