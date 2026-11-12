@@ -5,8 +5,8 @@
 """Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
 After the upload and progress screens, it opens the New Orleans risk-concentration bubble on the
-map, clicks that cluster's riskiest asset to show its details and hazard maps, then goes through the
-rest of the dashboard, including the present-day (baseline) view.
+map, clicks an asset in the middle of the Mississippi to show its details and hazard maps, then
+goes through the rest of the dashboard, including the present-day (baseline) view.
 
 It starts its own compose project, port and volume, so other runs can't appear in the GIF and a
 running stack isn't touched. It needs a browser (uvx playwright@1.64.1 install
@@ -61,9 +61,13 @@ ZOOM_FRAME_SECONDS = 0.1
 # point is in the city centre, so it falls inside the cluster's bounds whatever DBSCAN's settings.
 FOCUS_NAME = "New Orleans"
 FOCUS_LAT, FOCUS_LON = 29.95, -90.07
+# The asset the GIF opens: a point in mid-channel off Algiers Point, with no building found.
+# physrisk gives it no river or coastal flood loss, because the flood data has that exact point as
+# dry, while its hazard map shows the area around it flooding: a zero isn't proof of low risk.
+FOCUS_ASSET = "US-241"
 HAZARD_MAPS = [
-    ("RiverineInundation", "Hazard maps around the asset: river flood depth, 1 in 1000 years"),
-    ("CoastalInundation", "The same asset, a different hazard: coastal flood depth"),
+    ("RiverineInundation", "Yet the area around it floods: river flood depth, 1 in 1000 years"),
+    ("CoastalInundation", "Coastal flood depth: a dry point in the data is not proof of low risk"),
 ]
 BASELINE_LABEL = "Today (baseline)"
 
@@ -335,51 +339,43 @@ def record_clusters(rec: Recorder) -> dict:
     return target
 
 
-def open_riskiest_asset(rec: Recorder, cluster: dict) -> Locator:
-    """Click the cluster's riskiest asset on the map, and return the panel it opens."""
+def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
+    """Click the focus asset on the map, and return the panel it opens."""
     page = rec.page
     bubbles, points = scan_map(page)
     if bubbles or not points:
         raise RuntimeError(f"the map didn't zoom in to {FOCUS_NAME}'s assets")
-    # The same scenario and year the dashboard is showing.
-    scenario = dashboard_filter(page, "Scenario").input_value()
-    year = dashboard_filter(page, "Year").input_value()
-    totals = api(page, "totals", scenario=scenario, year=year)
-    members = set(cluster["row_nums"])
-    ranked = sorted(
-        (t for t in totals if t["row_num"] in members and t["total_aal"] is not None),
-        key=lambda t: t["total_aal"],
-        reverse=True,
-    )
-    at = {p["title"]: p for p in points}
+    rows = [a["row_num"] for a in api(page, "assets") if a["asset_id"] == FOCUS_ASSET]
+    if len(rows) != 1 or rows[0] not in cluster["row_nums"]:
+        raise RuntimeError(f"{FOCUS_ASSET} isn't one asset in the {FOCUS_NAME} cluster")
+    point = next((p for p in points if p["title"] == FOCUS_ASSET), None)
+    if point is None:
+        raise RuntimeError(f"{FOCUS_ASSET} isn't on the map, or is hidden under another point")
+    page.mouse.move(point["x"], point["y"])
+    page.wait_for_timeout(300)
+    if page.locator(".maplibregl-popup strong").first.text_content() != FOCUS_ASSET:
+        raise RuntimeError(f"hovering {FOCUS_ASSET}'s point shows another asset")
+    rec.caption(f"Click an asset to see its details: {FOCUS_ASSET}, in the Mississippi")
+    rec.shot(3)
+    rec.click_at(point["x"], point["y"])
     panel = page.get_by_role("dialog", name="Asset details")
-    for total in ranked:
-        label = total["asset_id"] or f"Row {total['row_num']}"
-        # A point under another one never opens its own popup, so try the next riskiest.
-        point = at.get(label)
-        if point is None:
-            continue
-        page.mouse.move(point["x"], point["y"])
-        page.wait_for_timeout(300)
-        if page.locator(".maplibregl-popup strong").first.text_content() != label:
-            continue
-        print(f"Asset: {label}, total annual loss {total['total_aal']:.4f} ({scenario} {year})")
-        rec.caption(f"Click an asset to see its details: {label}, the riskiest in {FOCUS_NAME}")
-        rec.shot(3)
-        rec.click_at(point["x"], point["y"])
-        panel.wait_for()
-        # The heading reads "Asset" until the asset's details load.
-        try:
-            panel.get_by_role("heading", name=label, exact=True, level=2).wait_for(timeout=10_000)
-        except PlaywrightError:
-            raise RuntimeError(f"clicking {label} didn't open its details") from None
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(1000)
-        fail_on_alert(page)
-        rec.caption("Its building, how it was modelled, and its loss by hazard")
-        rec.shot(4.5)
-        return panel
-    raise RuntimeError(f"none of {FOCUS_NAME}'s assets with results could be clicked on the map")
+    panel.wait_for()
+    # The heading reads "Asset" until the asset's details load.
+    try:
+        panel.get_by_role("heading", name=FOCUS_ASSET, exact=True, level=2).wait_for(timeout=10_000)
+    except PlaywrightError:
+        raise RuntimeError(f"clicking {FOCUS_ASSET} didn't open its details") from None
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1000)
+    fail_on_alert(page)
+    rec.caption("No building found, so its type is assumed")
+    rec.shot(4)
+    rec.caption("No river or coastal flood loss: the data has this exact point as dry")
+    panel.get_by_role("heading", name="Results for", level=3).evaluate(
+        "e => e.scrollIntoView({block: 'start', behavior: 'instant'})"
+    )
+    rec.shot(4.5)
+    return panel
 
 
 def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
@@ -414,7 +410,7 @@ def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[st
     rec.caption("Step 3: see the results, including how many building types were assumed")
     rec.shot(4.5)
     cluster = record_clusters(rec)
-    panel = open_riskiest_asset(rec, cluster)
+    panel = open_focus_asset(rec, cluster)
     record_hazard_maps(rec, panel, hazard_tiles)
     page.keyboard.press("Escape")
     panel.wait_for(state="hidden")
