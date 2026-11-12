@@ -1,5 +1,7 @@
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 
+import { ASSET_MAP_ROUTE } from "@/lib/assetMapRoute";
+import { AssetMapPage } from "@/pages/AssetMapPage";
 import { RunPage } from "@/pages/RunPage";
 import { UploadPage } from "@/pages/UploadPage";
 
@@ -8,6 +10,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<UploadPage />} />
       <Route path="/runs/:runId" element={<RunPage />} />
+      <Route path={ASSET_MAP_ROUTE} element={<AssetMapPage />} />
       <Route path="*" element={<p role="alert">This page doesn't exist.</p>} />
     </Routes>
   );

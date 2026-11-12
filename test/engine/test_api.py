@@ -569,6 +569,8 @@ def test_front_end_routes_serve_the_app(settings, tmp_path):
         assert client.get("/").text == "<html>app</html>"
         assert client.get("/assets/main.js").text == "console.log(1)"
         assert client.get(f"/runs/{uuid.uuid4()}").text == "<html>app</html>"
+        hazard_map = f"/runs/{uuid.uuid4()}/assets/3/hazard-map?scenario=ssp585&year=2050"
+        assert client.get(hazard_map).text == "<html>app</html>"
 
 
 def test_unknown_api_paths_stay_404_with_a_front_end(settings, tmp_path):
