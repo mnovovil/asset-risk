@@ -30,6 +30,10 @@ terraform -chdir=infra init && terraform -chdir=infra apply   # writes the setti
 script/start.sh                                               # http://127.0.0.1:8000
 ```
 
+For FEMA flood zones on US assets, build their database once from FEMA's flood hazard data (see
+[Data sources](docs/data-sources.md#fema-flood-zones)). Without it, runs work as usual and show the
+zones as unavailable.
+
 Open the address and drop in a CSV. The page has a sample to download, and your file needs a header
 with these columns:
 
@@ -51,12 +55,14 @@ flowchart TB
     subgraph run["Each run: app/engine/pipeline.py"]
         ingest["Check the CSV"] --> locate["Find each point's building<br/>geolocate"]
         locate --> classify["Choose the physrisk type and region<br/>classify.py"]
-        classify --> assess["Calculate risk per scenario and year<br/>physrisk"]
+        classify --> flood["Find each US point's FEMA flood zone<br/>flood_zones.py"]
+        flood --> assess["Calculate risk per scenario and year<br/>physrisk"]
     end
 
     api --> ingest
     overture[("Overture buildings<br/>on S3")] --> locate
     hazards[("physrisk hazard data<br/>on S3")] --> assess
+    fema[("FEMA flood zones<br/>data/fema")] --> flood
     assess --> db[("One DuckDB file per run")]
     db --> api
     tf["Terraform variables<br/>infra/"] --> settings[".asset-risk.json"]
