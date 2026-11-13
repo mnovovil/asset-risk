@@ -67,10 +67,32 @@ class BuildReport:
 
 
 @cache
+def _lookup() -> dict:
+    return json.loads(ZONES_FILE.read_text())
+
+
 def known_zones() -> frozenset[str]:
     """The FLD_ZONE values fema_zones.json describes."""
-    zones = json.loads(ZONES_FILE.read_text())["zones"]
-    return frozenset(zone["fld_zone"] for zone in zones)
+    return frozenset(zone["fld_zone"] for zone in _lookup()["zones"])
+
+
+def zone_ranks() -> dict[str, int]:
+    """Each zone key's risk rank, 1 being the highest risk."""
+    return {zone["key"]: zone["risk_rank"] for zone in _lookup()["zones"]}
+
+
+def definitions() -> dict:
+    """What every zone, insurance rule and status means, with each source as a title and URL."""
+    lookup = _lookup()
+
+    def cite(item: dict) -> dict:
+        return item | {"sources": [lookup["sources"][key] for key in item["sources"]]}
+
+    return {
+        "zones": [cite(zone) for zone in lookup["zones"]],
+        "insurance": [cite(rule) for rule in lookup["insurance"]],
+        "statuses": lookup["statuses"],
+    }
 
 
 def connect(path: str | os.PathLike[str] = ":memory:", **kwargs) -> duckdb.DuckDBPyConnection:
