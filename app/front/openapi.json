@@ -64,6 +64,39 @@
             ],
             "title": "Asset Id"
           },
+          "base_flood_elevation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Flood Elevation"
+          },
+          "base_flood_elevation_datum": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Flood Elevation Datum"
+          },
+          "base_flood_elevation_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Flood Elevation Unit"
+          },
           "building_id": {
             "anyOf": [
               {
@@ -108,6 +141,84 @@
             ],
             "title": "Exclusion Reason"
           },
+          "fema_conflict": {
+            "title": "Fema Conflict",
+            "type": "boolean"
+          },
+          "fema_depth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Depth"
+          },
+          "fema_depth_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Depth Unit"
+          },
+          "fema_dfirm_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Dfirm Id"
+          },
+          "fema_matches": {
+            "title": "Fema Matches",
+            "type": "integer"
+          },
+          "fema_status": {
+            "title": "Fema Status",
+            "type": "string"
+          },
+          "fema_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Zone"
+          },
+          "fema_zone_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Zone Key"
+          },
+          "fema_zone_subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Zone Subtype"
+          },
           "height": {
             "anyOf": [
               {
@@ -118,6 +229,17 @@
               }
             ],
             "title": "Height"
+          },
+          "in_sfha": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Sfha"
           },
           "lat": {
             "anyOf": [
@@ -269,7 +391,20 @@
           "location_fallback",
           "type_source",
           "assessable",
-          "exclusion_reason"
+          "exclusion_reason",
+          "fema_status",
+          "fema_zone",
+          "fema_zone_subtype",
+          "fema_zone_key",
+          "in_sfha",
+          "base_flood_elevation",
+          "base_flood_elevation_unit",
+          "base_flood_elevation_datum",
+          "fema_depth",
+          "fema_depth_unit",
+          "fema_dfirm_id",
+          "fema_matches",
+          "fema_conflict"
         ],
         "title": "Asset",
         "type": "object"
@@ -297,6 +432,39 @@
               }
             ],
             "title": "Asset Id"
+          },
+          "base_flood_elevation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Flood Elevation"
+          },
+          "base_flood_elevation_datum": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Flood Elevation Datum"
+          },
+          "base_flood_elevation_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Flood Elevation Unit"
           },
           "building_id": {
             "anyOf": [
@@ -342,6 +510,96 @@
             ],
             "title": "Exclusion Reason"
           },
+          "fema_conflict": {
+            "title": "Fema Conflict",
+            "type": "boolean"
+          },
+          "fema_depth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Depth"
+          },
+          "fema_depth_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Depth Unit"
+          },
+          "fema_dfirm_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Dfirm Id"
+          },
+          "fema_map_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Map As Of"
+          },
+          "fema_matches": {
+            "title": "Fema Matches",
+            "type": "integer"
+          },
+          "fema_status": {
+            "title": "Fema Status",
+            "type": "string"
+          },
+          "fema_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Zone"
+          },
+          "fema_zone_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Zone Key"
+          },
+          "fema_zone_subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fema Zone Subtype"
+          },
           "geometry_wkt": {
             "anyOf": [
               {
@@ -370,6 +628,17 @@
             },
             "title": "Impacts",
             "type": "array"
+          },
+          "in_sfha": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Sfha"
           },
           "lat": {
             "anyOf": [
@@ -529,7 +798,21 @@
           "type_source",
           "assessable",
           "exclusion_reason",
+          "fema_status",
+          "fema_zone",
+          "fema_zone_subtype",
+          "fema_zone_key",
+          "in_sfha",
+          "base_flood_elevation",
+          "base_flood_elevation_unit",
+          "base_flood_elevation_datum",
+          "fema_depth",
+          "fema_depth_unit",
+          "fema_dfirm_id",
+          "fema_matches",
+          "fema_conflict",
           "geometry_wkt",
+          "fema_map_as_of",
           "impacts",
           "scores"
         ],
@@ -826,6 +1109,129 @@
         "title": "Exclusion",
         "type": "object"
       },
+      "FloodZoneDefinition": {
+        "properties": {
+          "annual_chance": {
+            "title": "Annual Chance",
+            "type": "string"
+          },
+          "fld_zone": {
+            "title": "Fld Zone",
+            "type": "string"
+          },
+          "insurance": {
+            "title": "Insurance",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "risk": {
+            "title": "Risk",
+            "type": "string"
+          },
+          "risk_rank": {
+            "title": "Risk Rank",
+            "type": "integer"
+          },
+          "sfha": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sfha"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "fld_zone",
+          "risk_rank",
+          "label",
+          "risk",
+          "annual_chance",
+          "sfha",
+          "insurance",
+          "summary",
+          "sources"
+        ],
+        "title": "FloodZoneDefinition",
+        "type": "object"
+      },
+      "FloodZoneDefinitions": {
+        "properties": {
+          "insurance": {
+            "items": {
+              "$ref": "#/components/schemas/InsuranceRule"
+            },
+            "title": "Insurance",
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/FloodZoneStatus"
+            },
+            "title": "Statuses",
+            "type": "array"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/FloodZoneDefinition"
+            },
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "zones",
+          "insurance",
+          "statuses"
+        ],
+        "title": "FloodZoneDefinitions",
+        "type": "object"
+      },
+      "FloodZoneStatus": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "summary"
+        ],
+        "title": "FloodZoneStatus",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1034,6 +1440,37 @@
         "title": "Impact",
         "type": "object"
       },
+      "InsuranceRule": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "text",
+          "sources"
+        ],
+        "title": "InsuranceRule",
+        "type": "object"
+      },
       "RunStatus": {
         "properties": {
           "created_at": {
@@ -1172,6 +1609,24 @@
           "label"
         ],
         "title": "Score",
+        "type": "object"
+      },
+      "Source": {
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "Source",
         "type": "object"
       },
       "Summary": {
@@ -1361,6 +1816,25 @@
           }
         },
         "summary": "Config"
+      }
+    },
+    "/api/flood-zone-definitions": {
+      "get": {
+        "description": "What each FEMA flood zone, insurance rule and lookup status means, with sources.",
+        "operationId": "flood_zone_definitions_api_flood_zone_definitions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloodZoneDefinitions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Flood Zone Definitions"
       }
     },
     "/api/health": {
