@@ -35,6 +35,7 @@ CREATE TABLE assets (
     region             VARCHAR,  -- continent from the country data; NULL when there is none nearby
     region_source      VARCHAR,  -- contains | nearest
     region_distance_km DOUBLE,   -- how far away the nearest country is; 0 when inside one
+    country            VARCHAR,  -- countries.geojson name, trusted on the same terms as region
     physrisk_type      VARCHAR,
     physrisk_location  VARCHAR,
     location_fallback  BOOLEAN,  -- physrisk_location is Global because region has no curve
