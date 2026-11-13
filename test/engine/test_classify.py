@@ -101,6 +101,28 @@ def test_regions(tmp_path, settings, point, region):
     assert a["assessable"] is True
 
 
+@pytest.mark.parametrize(
+    ("point", "country"),
+    [
+        (MADRID, "Spain"),
+        (HOUSTON, "United States of America"),
+        ((18.4655, -66.1057), "Puerto Rico"),
+        ((13.4443, 144.7937), "Guam"),
+        ((-14.2756, -170.7020), "American Samoa"),
+    ],
+)
+def test_countries(tmp_path, settings, point, country):
+    assert one(tmp_path, settings, point, subtype="industrial")["country"] == country
+
+
+def test_country_is_trusted_like_the_region(tmp_path, settings):
+    # Near a coast counts, mid-ocean with no building doesn't, and a building counts anywhere.
+    assert one(tmp_path, settings, OFF_LISBON, match_type="none")["country"] == "Portugal"
+    assert one(tmp_path, settings, MID_ATLANTIC, match_type="none")["country"] is None
+    assert one(tmp_path, settings, REMOTE, match_type="intersects")["country"] is not None
+    assert one(tmp_path, settings, None, match_type="invalid")["country"] is None
+
+
 def test_exact_location_is_used_when_a_curve_exists(tmp_path, settings):
     a = one(tmp_path, settings, MADRID, subtype="commercial")
     assert (a["physrisk_location"], a["location_fallback"]) == ("Europe", False)
