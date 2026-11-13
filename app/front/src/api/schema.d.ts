@@ -149,6 +149,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/assets/{row_num}/hazard-grids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hazard Grids
+         * @description The non-flood hazard grids, and whether each has this scenario and year. Reads nothing:
+         *     each layer's detail_url reads its window.
+         */
+        get: operations["get_hazard_grids_api_runs__run_id__assets__row_num__hazard_grids_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/assets/{row_num}/hazard-grids/{layer}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hazard Grid
+         * @description A layer's window around the asset: bounds, colour scale, the asset's cell and image_url.
+         */
+        get: operations["get_hazard_grid_api_runs__run_id__assets__row_num__hazard_grids__layer__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/assets/{row_num}/hazard-grids/{layer}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hazard Grid Image
+         * @description The window as a PNG, one pixel per cell, north up, with no-data cells transparent.
+         */
+        get: operations["get_hazard_grid_image_api_runs__run_id__assets__row_num__hazard_grids__layer__png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/clusters": {
         parameters: {
             query?: never;
@@ -632,6 +693,62 @@ export interface components {
             /** Return Periods */
             return_periods: number[];
         };
+        /**
+         * HazardGridLayer
+         * @description A non-flood hazard grid, without reading it. Its window comes from detail_url.
+         */
+        HazardGridLayer: {
+            /** Attribution */
+            attribution: string;
+            /** Available */
+            available: boolean;
+            /** Caveat */
+            caveat: string | null;
+            /** Dataset */
+            dataset: string;
+            /** Detail Url */
+            detail_url: string | null;
+            /** Feeds Damage */
+            feeds_damage: boolean;
+            /** Hazard */
+            hazard: string;
+            /** Id */
+            id: string;
+            /** Index Label */
+            index_label: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /** Units */
+            units: string;
+        };
+        /**
+         * HazardGridWindow
+         * @description A layer's cells around an asset, on a scale spanning the baseline and the selected pair.
+         */
+        HazardGridWindow: {
+            /** Asset Value */
+            asset_value: number | null;
+            /** Available */
+            available: boolean;
+            /** Bounds */
+            bounds: number[] | null;
+            /** Cell Km */
+            cell_km: number[] | null;
+            /** Id */
+            id: string;
+            /** Image Url */
+            image_url: string | null;
+            /** Legend */
+            legend: string[];
+            /** Max Value */
+            max_value: number | null;
+            /** Min Value */
+            min_value: number | null;
+            /** Reason */
+            reason: string | null;
+        };
         /** HazardMapLayer */
         HazardMapLayer: {
             /** Available */
@@ -1010,6 +1127,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HazardCurve"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hazard_grids_api_runs__run_id__assets__row_num__hazard_grids_get: {
+        parameters: {
+            query: {
+                scenario: string;
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+                row_num: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HazardGridLayer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hazard_grid_api_runs__run_id__assets__row_num__hazard_grids__layer__get: {
+        parameters: {
+            query: {
+                theme?: "light" | "dark";
+                scenario: string;
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+                row_num: number;
+                layer: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HazardGridWindow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hazard_grid_image_api_runs__run_id__assets__row_num__hazard_grids__layer__png_get: {
+        parameters: {
+            query: {
+                theme?: "light" | "dark";
+                scenario: string;
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                row_num: number;
+                run_id: string;
+                layer: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
                 };
             };
             /** @description Validation Error */

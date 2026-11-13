@@ -11,7 +11,7 @@ import tempfile
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, UploadFile
@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from engine import hazard_maps, results, schemas, store
+from engine import hazard_grids, hazard_maps, results, schemas, store
 from engine.assess import HISTORICAL, hazard_curve
 from engine.flood_zone_data import definitions
 from engine.geolocation import GeolocationError
@@ -244,6 +244,127 @@ def get_hazard_map_tile(
     if image is None:
         raise HTTPException(404, "No map tile here")
     return Response(image, media_type="image/png", headers={"Cache-Control": TILE_CACHE_CONTROL})
+
+
+Theme = Annotated[Literal["light", "dark"], Query()]
+
+
+def _located(row: AssetDep) -> dict:
+    if not row["assessable"]:
+        raise HTTPException(409, "This asset was excluded, so it has no hazard grids")
+    return row
+
+
+LocatedAssetDep = Annotated[dict, Depends(_located)]
+
+
+def _grid_layer(layer: str) -> hazard_grids.GridLayer:
+    try:
+        return hazard_grids.catalogue()[layer]
+    except KeyError:
+        raise HTTPException(404, "There is no hazard grid with this id") from None
+
+
+GridLayerDep = Annotated[hazard_grids.GridLayer, Depends(_grid_layer)]
+
+
+def _pair_query(pair: tuple[str, int | None], **extra: str) -> str:
+    scenario, year = pair
+    return urlencode({"scenario": scenario} | ({} if year is None else {"year": year}) | extra)
+
+
+@router.get("/runs/{run_id}/assets/{row_num}/hazard-grids")
+def get_hazard_grids(
+    run: FinishedRunDep, row: LocatedAssetDep, pair: PairDep
+) -> list[schemas.HazardGridLayer]:
+    """The non-flood hazard grids, and whether each has this scenario and year. Reads nothing:
+    each layer's detail_url reads its window."""
+    base = f"/api/runs/{run.run_id}/assets/{row['row_num']}/hazard-grids"
+    layers = []
+    for layer in hazard_grids.catalogue().values():
+        reason = hazard_grids.unavailable_reason(layer, *pair)
+        layers.append(
+            schemas.HazardGridLayer(
+                id=layer.id,
+                hazard=layer.hazard,
+                name=layer.name,
+                dataset=layer.dataset,
+                attribution=layer.attribution,
+                units=layer.units,
+                index_label=layer.index_label,
+                feeds_damage=layer.feeds_damage,
+                caveat=layer.caveat,
+                available=reason is None,
+                reason=reason,
+                detail_url=None if reason else f"{base}/{layer.id}?{_pair_query(pair)}",
+            )
+        )
+    return layers
+
+
+# Registered before the window's route, whose {layer} would also match "id.png".
+@router.get(
+    "/runs/{run_id}/assets/{row_num}/hazard-grids/{layer}.png",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+def get_hazard_grid_image(
+    row: LocatedAssetDep, pair: PairDep, layer: GridLayerDep, theme: Theme = "light"
+) -> Response:
+    """The window as a PNG, one pixel per cell, north up, with no-data cells transparent."""
+    try:
+        image = hazard_grids.image(layer.id, *pair, row["lat"], row["lon"], theme)
+    except hazard_grids.NoGridData as e:
+        raise HTTPException(404, f"No data for this scenario and year: {e}") from e
+    except Exception as e:
+        raise HTTPException(502, f"Could not read this hazard grid: {e}") from e
+    return Response(image, media_type="image/png", headers={"Cache-Control": TILE_CACHE_CONTROL})
+
+
+@router.get("/runs/{run_id}/assets/{row_num}/hazard-grids/{layer}")
+def get_hazard_grid(
+    run: FinishedRunDep,
+    row: LocatedAssetDep,
+    pair: PairDep,
+    layer: GridLayerDep,
+    theme: Theme = "light",
+) -> schemas.HazardGridWindow:
+    """A layer's window around the asset: bounds, colour scale, the asset's cell and image_url."""
+    legend = hazard_grids.legend(theme)
+    try:
+        shown = hazard_grids.view(layer.id, *pair, row["lat"], row["lon"])
+    except Exception as e:
+        raise HTTPException(502, f"Could not read this hazard grid: {e}") from e
+    window = shown.window
+    reason = shown.reason or (
+        "No data around this point" if window is not None and shown.min_value is None else None
+    )
+    if window is None or reason:
+        return schemas.HazardGridWindow(
+            id=layer.id,
+            available=False,
+            reason=reason,
+            bounds=None,
+            min_value=None,
+            max_value=None,
+            asset_value=None,
+            cell_km=None,
+            legend=legend,
+            image_url=None,
+        )
+    path = f"/api/runs/{run.run_id}/assets/{row['row_num']}/hazard-grids/{layer.id}.png"
+    return schemas.HazardGridWindow(
+        id=layer.id,
+        available=True,
+        reason=None,
+        bounds=list(window.bounds),
+        min_value=shown.min_value,
+        max_value=shown.max_value,
+        asset_value=window.asset_value,
+        cell_km=list(window.cell_km),
+        legend=legend,
+        image_url=f"{path}?{_pair_query(pair, theme=theme)}",
+    )
 
 
 @router.get("/runs/{run_id}/impacts")
