@@ -12,9 +12,6 @@ export type FloodZoneDefinition = components["schemas"]["FloodZoneDefinition"];
 export type Coverage = components["schemas"]["Coverage"];
 export type HazardCurve = components["schemas"]["HazardCurve"];
 export type HazardMapLayer = components["schemas"]["HazardMapLayer"];
-export type HazardGridLayer = components["schemas"]["HazardGridLayer"];
-export type HazardGridWindow = components["schemas"]["HazardGridWindow"];
-export type Theme = "light" | "dark";
 export type Impact = components["schemas"]["Impact"];
 export type Score = components["schemas"]["Score"];
 export type TrajectoryPoint = components["schemas"]["TrajectoryPoint"];
@@ -116,27 +113,6 @@ export const getHazardCurve = (runId: string, rowNum: number, pair: Pair, signal
 
 export const getHazardMaps = (runId: string, pair: Pair, signal?: AbortSignal) =>
   request<HazardMapLayer[]>(`${runPath(runId)}/hazard-maps?${pairQuery(pair)}`, { signal });
-
-/** The non-flood hazard grids for an asset, and whether each has the pair. Reads no grid. */
-export const getHazardGrids = (runId: string, rowNum: number, pair: Pair, signal?: AbortSignal) =>
-  request<HazardGridLayer[]>(`${runPath(runId)}/assets/${rowNum}/hazard-grids?${pairQuery(pair)}`, {
-    signal,
-  });
-
-/** One grid's window around the asset, with its scale, the asset's cell and its image. */
-export const getHazardGridWindow = (
-  runId: string,
-  rowNum: number,
-  layerId: string,
-  pair: Pair,
-  theme: Theme,
-  signal?: AbortSignal,
-) =>
-  request<HazardGridWindow>(
-    `${runPath(runId)}/assets/${rowNum}/hazard-grids/${encodeURIComponent(layerId)}?` +
-      `${pairQuery(pair)}&theme=${theme}`,
-    { signal },
-  );
 
 /** MapLibre loads tiles off the page, so it needs a full URL. The {z}/{x}/{y} braces must stay. */
 export const absoluteTileUrl = (tileUrl: string) => `${window.location.origin}${tileUrl}`;

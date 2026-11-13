@@ -17,10 +17,6 @@ export function percentTick(value: number): string {
 
 export const count = (value: number) => value.toLocaleString();
 
-/** A measured value at three significant figures, which suits 0.03 and 1,210 alike. */
-export const formatValue = (value: number) =>
-  value.toLocaleString(undefined, { maximumSignificantDigits: 3 });
-
 export const assetLabel = (asset: { asset_id: string | null; row_num: number }) =>
   asset.asset_id ?? `Row ${asset.row_num}`;
 

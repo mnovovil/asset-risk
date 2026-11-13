@@ -14,33 +14,24 @@ const ASSET = "asset";
 const START_ZOOM = 14;
 const MAX_ZOOM = 17;
 const TILE_SIZE_PX = 512;
-const FIT_PADDING_PX = 16;
-
-/** What to draw over the basemap: physrisk's flood tiles, or one hazard grid's window. */
-export type MapOverlay =
-  | { kind: "tiles"; url: string; maxZoom: number }
-  /** bounds are west, south, east, north. East can pass 180 when the window crosses it. */
-  | { kind: "image"; url: string; bounds: number[] };
 
 interface HazardTileMapProps {
   lat: number;
   lon: number;
-  /** The API's tile or image URL, or null to show the basemap alone. */
-  overlay: MapOverlay | null;
+  /** The API's tile URL, or null to show the basemap alone. */
+  tileUrl: string | null;
+  maxZoom: number;
   label: string;
   /** "small" fits the asset panel; "large" fills the full-size page. */
   size?: "small" | "large";
 }
 
-/**
- * A map centred on one asset, with a physrisk hazard map drawn over the basemap. Flood tiles open
- * at street level. A grid's window is fitted whole, about 200 km across, since its cells are
- * kilometres wide.
- */
+/** A small map centred on one asset, with a physrisk hazard map drawn over the basemap. */
 export default function HazardTileMap({
   lat,
   lon,
-  overlay,
+  tileUrl,
+  maxZoom,
   label,
   size = "small",
 }: HazardTileMapProps) {
@@ -49,8 +40,6 @@ export default function HazardTileMap({
   const dark = usePrefersDark();
   const [unavailable, setUnavailable] = useState(false);
   const [ready, setReady] = useState(false);
-  // What the camera was last set for: a grid's bounds, or "street" for the asset at START_ZOOM.
-  const framed = useRef("street");
 
   useEffect(() => {
     if (!container.current) return;
@@ -69,7 +58,6 @@ export default function HazardTileMap({
       return;
     }
     mapRef.current = map;
-    framed.current = "street";
     let loaded = false;
     let fellBack = false;
 
@@ -114,52 +102,18 @@ export default function HazardTileMap({
     };
   }, [dark, lat, lon]);
 
-  const kind = overlay?.kind ?? null;
-  const url = overlay?.url ?? null;
-  const maxZoom = overlay?.kind === "tiles" ? overlay.maxZoom : null;
-  const bounds = overlay?.kind === "image" ? overlay.bounds.join(",") : null;
-
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
     if (map.getLayer(HAZARD)) map.removeLayer(HAZARD);
     if (map.getSource(HAZARD)) map.removeSource(HAZARD);
-    if (!kind || !url) return;
-    if (kind === "tiles") {
-      map.addSource(HAZARD, {
-        type: "raster",
-        tiles: [absoluteTileUrl(url)],
-        tileSize: TILE_SIZE_PX,
-        maxzoom: maxZoom ?? undefined,
-      });
-      if (framed.current !== "street") {
-        map.jumpTo({ center: [lon, lat], zoom: START_ZOOM });
-        framed.current = "street";
-      }
-    } else if (bounds) {
-      const [west, south, east, north] = bounds.split(",").map(Number);
-      map.addSource(HAZARD, {
-        type: "image",
-        url: absoluteTileUrl(url),
-        coordinates: [
-          [west, north],
-          [east, north],
-          [east, south],
-          [west, south],
-        ],
-      });
-      // Switching between grids on the same cells keeps the reader's own pan and zoom.
-      if (framed.current !== bounds) {
-        map.fitBounds(
-          [
-            [west, south],
-            [east, north],
-          ],
-          { padding: FIT_PADDING_PX, animate: false },
-        );
-        framed.current = bounds;
-      }
-    }
+    if (!tileUrl) return;
+    map.addSource(HAZARD, {
+      type: "raster",
+      tiles: [absoluteTileUrl(tileUrl)],
+      tileSize: TILE_SIZE_PX,
+      maxzoom: maxZoom,
+    });
     map.addLayer(
       {
         id: HAZARD,
@@ -170,7 +124,7 @@ export default function HazardTileMap({
       },
       ASSET,
     );
-  }, [ready, kind, url, maxZoom, bounds, lat, lon]);
+  }, [ready, tileUrl, maxZoom]);
 
   if (unavailable) {
     return (
