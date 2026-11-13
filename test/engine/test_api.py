@@ -38,18 +38,6 @@ def complete_run(run, points, settings):
             "exclusion_reason) VALUES (3, 'bad', 'nan'::DOUBLE, 1, 'invalid', false, 'invalid')"
         )
         con.execute(
-            "INSERT INTO asset_flood_zones (row_num, fema_status, fema_zone, fema_zone_key, "
-            "in_sfha, base_flood_elevation, base_flood_elevation_unit, base_flood_elevation_datum, "
-            "fema_dfirm_id, fema_matches, fema_conflict) VALUES "
-            "(1, 'not_us', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, false), "
-            "(2, 'mapped', 'AE', 'AE', true, 41.0, 'feet', 'NAVD88', '48201C', 2, true), "
-            "(3, 'not_located', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, false)"
-        )
-        con.execute(
-            "INSERT INTO flood_zone_source VALUES "
-            "('flood-hazard.parquet', 'OGC:CRS84', 5, '2026-11-13', current_timestamp)"
-        )
-        con.execute(
             "INSERT INTO assessment_pairs VALUES ('ssp585', 2050), ('ssp370', 2050), "
             "('historical', NULL)"
         )
@@ -559,60 +547,6 @@ def test_export_is_a_download_with_every_asset(client, finished):
     excluded = rows[-1]
     assert (excluded["asset_id"], excluded["exclusion_reason"]) == ("bad", "invalid")
     assert excluded["hazard"] == ""
-
-
-def test_assets_carry_their_fema_flood_zone(client, finished):
-    rows = client.get(f"/api/runs/{finished}/assets").json()
-    assert [r["fema_status"] for r in rows] == ["not_us", "mapped", "not_located"]
-    houston = rows[1]
-    assert (houston["fema_zone"], houston["fema_zone_key"], houston["in_sfha"]) == (
-        "AE",
-        "AE",
-        True,
-    )
-    assert (houston["base_flood_elevation"], houston["base_flood_elevation_unit"]) == (41.0, "feet")
-    assert houston["base_flood_elevation_datum"] == "NAVD88"
-    assert (houston["fema_matches"], houston["fema_conflict"]) == (2, True)
-    assert rows[0]["fema_zone"] is None
-
-
-def test_asset_detail_says_when_the_fema_data_is_from(client, finished):
-    assert client.get(f"/api/runs/{finished}/assets/2").json()["fema_map_as_of"] == "2026-11-13"
-
-
-def test_a_run_from_before_the_flood_zone_lookup_reads_as_unavailable(client, finished, settings):
-    with find_run(settings.data_dir, finished).connect() as con:
-        con.execute("DROP TABLE asset_flood_zones")
-        con.execute("DROP TABLE flood_zone_source")
-    rows = client.get(f"/api/runs/{finished}/assets").json()
-    assert {r["fema_status"] for r in rows} == {"unavailable"}
-    assert {(r["fema_matches"], r["fema_conflict"]) for r in rows} == {(0, False)}
-    detail = client.get(f"/api/runs/{finished}/assets/2").json()
-    assert (detail["fema_status"], detail["fema_map_as_of"]) == ("unavailable", None)
-    export = list(csv.DictReader(io.StringIO(client.get(f"/api/runs/{finished}/export.csv").text)))
-    assert {row["fema_status"] for row in export} == {"unavailable"}
-
-
-def test_export_has_the_fema_flood_zone(client, finished):
-    rows = list(csv.DictReader(io.StringIO(client.get(f"/api/runs/{finished}/export.csv").text)))
-    houston = [row for row in rows if row["asset_id"] == "b"]
-    assert {
-        (r["fema_status"], r["fema_zone"], r["in_sfha"], r["base_flood_elevation"]) for r in houston
-    } == {("mapped", "AE", "True", "41.0")}
-
-
-def test_flood_zone_definitions(client):
-    body = client.get("/api/flood-zone-definitions").json()
-    zones = {zone["key"]: zone for zone in body["zones"]}
-    assert {"X_SHADED", "X_UNSHADED", "D", "OPEN WATER", "AREA NOT INCLUDED"} <= set(zones)
-    assert zones["AE"]["insurance"] == "required"
-    assert zones["AE"]["sources"][0]["url"].startswith("https://www.fema.gov/")
-    assert {s["key"] for s in body["statuses"]} == {
-        "not_mapped",
-        "not_us",
-        "not_located",
-        "unavailable",
-    }
 
 
 def test_export_escapes_formulas_but_not_numbers(client, finished):

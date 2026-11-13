@@ -3,7 +3,6 @@
 -- Parameters: the km limit for trusting a nearest country, then the default building type.
 UPDATE assets AS a
 SET region = c.region,
-    country = c.country,
     region_source = c.region_source,
     region_distance_km = c.region_distance_km,
     physrisk_type = c.physrisk_type,
@@ -21,15 +20,12 @@ FROM (
                a.subtype,
                r.region_source,
                r.region_distance_km,
-               CASE WHEN t.trusted THEN r.region END AS region,
-               -- The country comes from the same shape, so it's trusted on the same terms.
-               CASE WHEN t.trusted THEN r.country END AS country
+               CASE
+                   WHEN a.match_type IN ('intersects', 'nearest') OR r.region_distance_km <= ?
+                       THEN r.region
+               END AS region
         FROM assets a
-        LEFT JOIN asset_regions r USING (row_num),
-        LATERAL (
-            SELECT a.match_type IN ('intersects', 'nearest') OR r.region_distance_km <= ?
-                AS trusted
-        ) t
+        LEFT JOIN asset_regions r USING (row_num)
     ),
     typed AS (
         SELECT g.*,
@@ -66,7 +62,6 @@ FROM (
     )
     SELECT row_num,
            region,
-           country,
            region_source,
            region_distance_km,
            exclusion_reason,

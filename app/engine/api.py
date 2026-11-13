@@ -22,7 +22,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from engine import hazard_maps, results, schemas, store
 from engine.assess import HISTORICAL, hazard_curve
-from engine.flood_zone_data import definitions
 from engine.geolocation import GeolocationError
 from engine.ingest import PortfolioError
 from engine.pipeline import execute as run_pipeline
@@ -102,12 +101,6 @@ def config(settings: SettingsDep) -> schemas.AppConfig:
         max_portfolio_rows=settings.max_portfolio_rows,
         max_upload_mb=settings.max_upload_mb,
     )
-
-
-@router.get("/flood-zone-definitions")
-def flood_zone_definitions() -> schemas.FloodZoneDefinitions:
-    """What each FEMA flood zone, insurance rule and lookup status means, with sources."""
-    return schemas.FloodZoneDefinitions(**definitions())
 
 
 @router.post("/runs", status_code=202)
