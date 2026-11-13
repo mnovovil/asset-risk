@@ -178,38 +178,6 @@ class HazardMapLayer(BaseModel):
     tile_url: str | None  # {z}, {x} and {y} are left for the map to fill in
 
 
-class HazardGridLayer(BaseModel):
-    """A non-flood hazard grid, without reading it. Its window comes from detail_url."""
-
-    id: str
-    hazard: str
-    name: str
-    dataset: str
-    attribution: str
-    units: str
-    index_label: str  # the threshold or return period shown, e.g. "1 in 100 years"
-    feeds_damage: bool  # whether physrisk's damage figures use this dataset
-    caveat: str | None
-    available: bool  # whether the dataset has this scenario and year
-    reason: str | None  # why not, never a nearby year instead
-    detail_url: str | None
-
-
-class HazardGridWindow(BaseModel):
-    """A layer's cells around an asset, on a scale spanning the baseline and the selected pair."""
-
-    id: str
-    available: bool
-    reason: str | None  # why there's nothing to draw here
-    bounds: list[float] | None  # west, south, east, north, on cell edges
-    min_value: float | None
-    max_value: float | None
-    asset_value: float | None  # the asset's own cell; None when that cell has no data
-    cell_km: list[float] | None  # a cell's east-west and north-south size at the asset
-    legend: list[str]  # CSS colours from min_value to max_value, as drawn in the image
-    image_url: str | None
-
-
 class Source(BaseModel):
     title: str
     url: str

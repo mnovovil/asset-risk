@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { forgetFloodZoneDefinitions } from "@/lib/floodZones";
 
-import { asset, hazardGridResponse, jsonResponse, resultsResponse, SUMMARY, TRAJECTORY } from "./helpers";
+import { asset, jsonResponse, resultsResponse, SUMMARY, TRAJECTORY } from "./helpers";
 
 vi.mock("@/components/dashboard/RiskMap", () => ({
   default: ({
@@ -24,15 +24,9 @@ vi.mock("@/components/dashboard/RiskMap", () => ({
 }));
 
 vi.mock("@/components/dashboard/HazardTileMap", () => ({
-  default: ({
-    overlay,
-    label
-  }: {
-    overlay: { kind: string; url: string } | null;
-    label: string;
-  }) => (
+  default: ({ tileUrl, label }: { tileUrl: string | null; label: string }) => (
     <p>
-      Hazard map {overlay?.url ?? "with no overlay"}: {label}
+      Hazard map {tileUrl ?? "with no overlay"}: {label}
     </p>
   ),
 }));
@@ -61,8 +55,6 @@ function stub(overrides: Record<string, unknown> = {}) {
   const requests: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
     requests.push(url);
-    const grid = hazardGridResponse(url);
-    if (grid) return grid;
     if (url.includes("/hazard-maps?")) return jsonResponse(hazardMaps(url));
     if (/\/assets\/\d+$/.test(url)) {
       return jsonResponse(overrides.detail);
@@ -471,42 +463,16 @@ describe("Dashboard", () => {
       expect(panel.getByText(/No flood in the data$/)).toBeInTheDocument();
     });
 
-    it("lists flood maps and hazard grids together, grouped by hazard", async () => {
+    it("lists hazards with no public map, but won't select them", async () => {
       const panel = within(await openPanel());
-      const select = await panel.findByLabelText("Layer");
-      const groups = [...select.querySelectorAll("optgroup")].map((group) => [
-        group.label,
-        [...group.querySelectorAll("option")].map((o) => o.textContent),
+      const select = await panel.findByLabelText("Hazard");
+      const options = within(select).getAllByRole("option") as HTMLOptionElement[];
+      expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
+        ["River flood", false],
+        ["Coastal flood", false],
+        ["Tropical cyclone wind (no public map)", true],
+        ["Chronic heat (no public map)", true],
       ]);
-      expect(groups).toEqual([
-        ["River flood", ["Flood depth · 1 in 1000 years"]],
-        ["Coastal flood", ["Flood depth · 1 in 1000 years"]],
-        [
-          "Tropical cyclone wind",
-          ["Tropical cyclone wind speed · 1 in 100 years · used in damage figures"],
-        ],
-        ["Chronic heat", ["Hot days · Above 35°C"]],
-        ["Land subsidence", ["Land subsidence · Present-day rate · No data for this scenario/year"]],
-      ]);
-    });
-
-    it("draws a hazard grid with its facts, and refetches it for the baseline", async () => {
-      const requests = stub({ detail });
-      await renderDashboard();
-      await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
-      const panel = within(await screen.findByRole("dialog"));
-      await userEvent.selectOptions(await panel.findByLabelText("Layer"), "wind_iris_max_speed");
-      expect(
-        await panel.findByText(/Hazard map .*wind_iris_max_speed\.png\?scenario=ssp585&year=2050/),
-      ).toBeInTheDocument();
-      expect(panel.getByText(/Each cell is about 8\.4 × 11 km/)).toBeInTheDocument();
-      expect(panel.getByText("Feeds the damage figures.")).toBeInTheDocument();
-
-      await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
-      expect(
-        await panel.findByText(/Hazard map .*wind_iris_max_speed\.png\?scenario=historical&theme/),
-      ).toBeInTheDocument();
-      expect(requests.some((r) => r.endsWith("/hazard-grids?scenario=historical"))).toBe(true);
     });
 
     it("switches the layer and the period", async () => {
@@ -514,7 +480,7 @@ describe("Dashboard", () => {
       await renderDashboard();
       await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
       const panel = within(await screen.findByRole("dialog"));
-      await userEvent.selectOptions(await panel.findByLabelText("Layer"), "CoastalInundation");
+      await userEvent.selectOptions(await panel.findByLabelText("Hazard"), "CoastalInundation");
       expect(panel.getByText(/Hazard map .*CoastalInundation.*ssp585/)).toBeInTheDocument();
 
       await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
@@ -524,7 +490,7 @@ describe("Dashboard", () => {
       expect(requests.some((r) => r.endsWith("/hazard-maps?scenario=historical"))).toBe(true);
     });
 
-    it("links to a larger map in a new tab, on the same layer and period", async () => {
+    it("links to a larger map in a new tab, on the same hazard and period", async () => {
       stub({ detail });
       await renderDashboard();
       await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
@@ -533,15 +499,15 @@ describe("Dashboard", () => {
       expect(link).toHaveAttribute("target", "_blank");
       expect(link.getAttribute("rel")).toContain("noopener");
       const base = `/runs/${RUN}/assets/1/hazard-map?scenario=ssp585&year=2050`;
-      expect(link).toHaveAttribute("href", `${base}&layer=RiverineInundation`);
+      expect(link).toHaveAttribute("href", `${base}&hazard=RiverineInundation`);
 
-      await userEvent.selectOptions(panel.getByLabelText("Layer"), "CoastalInundation");
-      expect(link).toHaveAttribute("href", `${base}&layer=CoastalInundation`);
+      await userEvent.selectOptions(panel.getByLabelText("Hazard"), "CoastalInundation");
+      expect(link).toHaveAttribute("href", `${base}&hazard=CoastalInundation`);
       await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
       await panel.findByText(/Hazard map .*\?scenario=historical/);
       expect(panel.getByRole("link", { name: /larger map/ })).toHaveAttribute(
         "href",
-        `${base}&layer=CoastalInundation&period=historical`,
+        `${base}&hazard=CoastalInundation&period=historical`,
       );
     });
 
@@ -554,7 +520,7 @@ describe("Dashboard", () => {
       const panel = within(await screen.findByRole("dialog"));
       expect(await panel.findByRole("link", { name: /larger map/ })).toHaveAttribute(
         "href",
-        `/runs/${RUN}/assets/1/hazard-map?scenario=historical&layer=RiverineInundation`,
+        `/runs/${RUN}/assets/1/hazard-map?scenario=historical&hazard=RiverineInundation`,
       );
     });
 

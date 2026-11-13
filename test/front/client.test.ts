@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, createRun, getHazardGrids, getHazardGridWindow, getRun } from "@/api/client";
+import { ApiError, createRun, getRun } from "@/api/client";
 
 import { jsonResponse } from "./helpers";
 
@@ -35,17 +35,6 @@ describe("the API client", () => {
     vi.stubGlobal("fetch", fetchMock);
     await getRun("../etc");
     expect(fetchMock).toHaveBeenCalledWith("/api/runs/..%2Fetc", expect.anything());
-  });
-
-  it("asks for an asset's hazard grids, and one grid's window with its theme", async () => {
-    const fetchMock = vi.fn(async (_url: string) => jsonResponse([]));
-    vi.stubGlobal("fetch", fetchMock);
-    await getHazardGrids("r", 4, { scenario: "historical", year: null });
-    await getHazardGridWindow("r", 4, "a/b", { scenario: "ssp585", year: 2050 }, "dark");
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      "/api/runs/r/assets/4/hazard-grids?scenario=historical",
-      "/api/runs/r/assets/4/hazard-grids/a%2Fb?scenario=ssp585&year=2050&theme=dark",
-    ]);
   });
 
   it("uploads the file as multipart form data", async () => {

@@ -3,8 +3,8 @@ import type { Pair } from "@/api/client";
 /** What the full-size hazard map opens on: the dashboard's pair, and the panel's choices. */
 export interface AssetMapView {
   pair: Pair;
-  /** The layer to show first: a flood hazard key or a hazard grid id. Unknown falls back. */
-  layer: string | null;
+  /** The hazard to show first. Unknown or missing falls back to the first map. */
+  hazard: string | null;
   /** Show the historical map instead of the pair's own. */
   historical: boolean;
 }
@@ -15,7 +15,7 @@ export const ASSET_MAP_ROUTE = "/runs/:runId/assets/:rowNum/hazard-map";
 export function assetMapPath(runId: string, rowNum: number, view: AssetMapView): string {
   const params = new URLSearchParams({ scenario: view.pair.scenario });
   if (view.pair.year !== null) params.set("year", String(view.pair.year));
-  if (view.layer) params.set("layer", view.layer);
+  if (view.hazard) params.set("hazard", view.hazard);
   if (view.historical) params.set("period", "historical");
   return `/runs/${encodeURIComponent(runId)}/assets/${rowNum}/hazard-map?${params}`;
 }
@@ -32,8 +32,7 @@ export function parseAssetMapView(params: URLSearchParams): AssetMapView | null 
   }
   return {
     pair: { scenario, year },
-    // Links from before hazard grids named a flood map as `hazard`.
-    layer: params.get("layer") ?? params.get("hazard"),
+    hazard: params.get("hazard"),
     historical: params.get("period") === "historical",
   };
 }

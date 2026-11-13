@@ -14,14 +14,8 @@ const HAZARDS: { key: string; label: string; color: string }[] = [
 ];
 const BY_KEY = new Map(HAZARDS.map((hazard) => [hazard.key, hazard]));
 const OTHER_COLOR = "var(--series-other)";
-/** Hazards that only appear as hazard grids, never in results: a label, and no colour. */
-const LABEL_ONLY: Record<string, string> = {
-  Precipitation: "Extreme rainfall",
-  WaterRisk: "Water risk",
-  Subsidence: "Land subsidence",
-};
 
-export const hazardLabel = (key: string) => BY_KEY.get(key)?.label ?? LABEL_ONLY[key] ?? key;
+export const hazardLabel = (key: string) => BY_KEY.get(key)?.label ?? key;
 export const hazardColor = (key: string) => BY_KEY.get(key)?.color ?? OTHER_COLOR;
 
 function rank(key: string): number {

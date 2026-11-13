@@ -99,7 +99,7 @@ export function AssetMapPage() {
               lat={asset.lat}
               lon={asset.lon}
               hazards={hazards}
-              initialLayer={view.layer}
+              initialHazard={view.hazard}
               initialHistorical={view.historical}
               variant="page"
             />

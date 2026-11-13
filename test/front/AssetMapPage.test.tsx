@@ -5,20 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ASSET_MAP_ROUTE, assetMapPath, parseAssetMapView } from "@/lib/assetMapRoute";
 import { AssetMapPage } from "@/pages/AssetMapPage";
 
-import { asset, hazardGridResponse, jsonResponse } from "./helpers";
+import { asset, jsonResponse } from "./helpers";
 
 vi.mock("@/components/dashboard/HazardTileMap", () => ({
-  default: ({
-    overlay,
-    label,
-    size,
-  }: {
-    overlay: { kind: string; url: string } | null;
-    label: string;
-    size: string;
-  }) => (
+  default: ({ tileUrl, label, size }: { tileUrl: string | null; label: string; size: string }) => (
     <p>
-      {size} hazard map {overlay?.url ?? "with no overlay"}: {label}
+      {size} hazard map {tileUrl ?? "with no overlay"}: {label}
     </p>
   ),
 }));
@@ -62,8 +54,6 @@ function stub(detail: unknown = DETAIL, status = 200) {
   const requests: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
     requests.push(url);
-    const grid = hazardGridResponse(url);
-    if (grid) return grid;
     if (url.includes("/hazard-maps?")) return jsonResponse(layers(url));
     if (url === `/api/runs/${RUN}/assets/4`) return jsonResponse(detail, status);
     throw new Error(`Unexpected request: ${url}`);
@@ -114,14 +104,6 @@ describe("AssetMapPage", () => {
     expect(requests).toContain(`/api/runs/${RUN}/hazard-maps?scenario=historical`);
   });
 
-  it("opens on a hazard grid from its address", async () => {
-    renderAt(path("scenario=ssp585&year=2050&layer=heat_jupiter_days_above_35c"));
-    expect(
-      await screen.findByText(/large hazard map .*heat_jupiter_days_above_35c\.png/),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Indicator only, not in the damage figures.")).toBeInTheDocument();
-  });
-
   it("falls back to the first map for an unknown hazard", async () => {
     renderAt(path("scenario=ssp585&year=2050&hazard=Nope"));
     expect(await screen.findByText(/hazard map .*RiverineInundation/)).toBeInTheDocument();
@@ -150,18 +132,10 @@ describe("AssetMapPage", () => {
 
 describe("assetMapPath", () => {
   it("round-trips through the query string", () => {
-    for (const layer of ["CoastalInundation", "wind_iris_max_speed"]) {
-      const view = { pair: { scenario: "ssp245", year: 2080 }, layer, historical: true };
-      const url = assetMapPath("a/b", 7, view);
-      expect(url.startsWith("/runs/a%2Fb/assets/7/hazard-map?")).toBe(true);
-      expect(url).toContain(`layer=${layer}`);
-      expect(parseAssetMapView(new URLSearchParams(url.split("?")[1]))).toEqual(view);
-    }
-  });
-
-  it("still reads a link from before hazard grids, which named the layer hazard", () => {
-    const view = parseAssetMapView(new URLSearchParams("scenario=historical&hazard=Coastal"));
-    expect(view?.layer).toBe("Coastal");
+    const view = { pair: { scenario: "ssp245", year: 2080 }, hazard: "Coastal", historical: true };
+    const url = assetMapPath("a/b", 7, view);
+    expect(url.startsWith("/runs/a%2Fb/assets/7/hazard-map?")).toBe(true);
+    expect(parseAssetMapView(new URLSearchParams(url.split("?")[1]))).toEqual(view);
   });
 
   it("rejects a year that isn't a number", () => {
