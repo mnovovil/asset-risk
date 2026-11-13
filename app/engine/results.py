@@ -15,13 +15,38 @@ _ASSET_COLUMNS = """
     type_source, assessable, exclusion_reason
 """
 
+# A missing row reads as 'unavailable' rather than hiding the asset.
+_FLOOD_COLUMNS = """
+    coalesce(f.fema_status, 'unavailable') AS fema_status, f.fema_zone, f.fema_zone_subtype,
+    f.fema_zone_key, f.in_sfha,
+    f.base_flood_elevation, f.base_flood_elevation_unit, f.base_flood_elevation_datum, f.fema_depth,
+    f.fema_depth_unit, f.fema_dfirm_id, coalesce(f.fema_matches, 0) AS fema_matches,
+    coalesce(f.fema_conflict, false) AS fema_conflict
+"""
+# What a run from before the FEMA lookup existed reads as.
+_NO_FLOOD_ZONES = """(
+    SELECT row_num, 'unavailable' AS fema_status, NULL::VARCHAR AS fema_zone,
+           NULL::VARCHAR AS fema_zone_subtype, NULL::VARCHAR AS fema_zone_key,
+           NULL::BOOLEAN AS in_sfha, NULL::DOUBLE AS base_flood_elevation,
+           NULL::VARCHAR AS base_flood_elevation_unit, NULL::VARCHAR AS base_flood_elevation_datum,
+           NULL::DOUBLE AS fema_depth, NULL::VARCHAR AS fema_depth_unit,
+           NULL::VARCHAR AS fema_dfirm_id, 0 AS fema_matches, false AS fema_conflict
+    FROM assets
+)"""
+
 _EXPORT = """
 SELECT a.asset_id, a.lat, a.lon, a.match_type, a.distance_m, a.building_id, a.name, a.class,
        a.subtype, a.height, a.num_floors, a.region, a.physrisk_type, a.physrisk_location,
        a.location_fallback, a.type_source, a.assessable, a.exclusion_reason,
+       coalesce(f.fema_status, 'unavailable') AS fema_status, f.fema_zone, f.fema_zone_subtype,
+       f.in_sfha, f.base_flood_elevation, f.base_flood_elevation_unit,
+       f.base_flood_elevation_datum, f.fema_depth, f.fema_depth_unit, f.fema_dfirm_id,
+       coalesce(f.fema_matches, 0) AS fema_matches,
+       coalesce(f.fema_conflict, false) AS fema_conflict,
        i.scenario, i.year, i.hazard, i.impact_type, i.aal, i.aal_std, s.score,
        s.label AS score_label
 FROM assets a
+LEFT JOIN {flood_zones} f USING (row_num)
 LEFT JOIN impacts i USING (row_num)
 LEFT JOIN scores s
     ON s.row_num = i.row_num AND s.hazard = i.hazard AND s.scenario = i.scenario
@@ -36,6 +61,30 @@ def _rows(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) 
     return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
 
 
+def _has_table(con: duckdb.DuckDBPyConnection, name: str) -> bool:
+    return (
+        con.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
+        ).fetchone()[0]
+        > 0
+    )
+
+
+def _flood_zones(con: duckdb.DuckDBPyConnection) -> str:
+    """The relation to read FEMA flood zones from: the table, or 'unavailable' for an old run."""
+    return "asset_flood_zones" if _has_table(con, "asset_flood_zones") else _NO_FLOOD_ZONES
+
+
+def _asset_rows(con: duckdb.DuckDBPyConnection, extra: str = "", where: str = "", params=None):
+    # Both pieces are constants from this module; values only ever go in params.
+    return _rows(
+        con,
+        f"SELECT {_ASSET_COLUMNS}, {_FLOOD_COLUMNS}{extra} FROM assets "
+        f"LEFT JOIN {_flood_zones(con)} f USING (row_num) {where} ORDER BY row_num",
+        params,
+    )
+
+
 def summary(run: Run) -> dict:
     with run.connect() as con:
         result = _rows(con, "SELECT * FROM v_portfolio_summary")[0]
@@ -48,17 +97,21 @@ def summary(run: Run) -> dict:
 def assets(run: Run) -> list[dict]:
     """Every row of the portfolio, without footprints, which can be very large."""
     with run.connect() as con:
-        return _rows(con, f"SELECT {_ASSET_COLUMNS} FROM assets ORDER BY row_num")
+        return _asset_rows(con)
 
 
 def asset(run: Run, row_num: int) -> dict | None:
     with run.connect() as con:
-        rows = _rows(
-            con, f"SELECT {_ASSET_COLUMNS}, geometry_wkt FROM assets WHERE row_num = ?", [row_num]
-        )
+        rows = _asset_rows(con, ", geometry_wkt", "WHERE row_num = ?", [row_num])
         if not rows:
             return None
         result = rows[0]
+        source = (
+            con.execute("SELECT max(as_of) FROM flood_zone_source").fetchone()
+            if _has_table(con, "flood_zone_source")
+            else (None,)
+        )
+        result["fema_map_as_of"] = source[0]
         result["impacts"] = _rows(
             con,
             "SELECT scenario, year, hazard, impact_type, aal, aal_std, hazard_paths "
@@ -138,10 +191,7 @@ def clusters(run: Run) -> list[dict]:
     Runs made before clustering existed have no asset_clusters table, and read as having none.
     """
     with run.connect() as con:
-        exists = con.execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'asset_clusters'"
-        ).fetchone()[0]
-        if not exists:
+        if not _has_table(con, "asset_clusters"):
             return []
         rows = con.execute(
             "SELECT c.cluster_id, a.row_num, a.lat, a.lon FROM asset_clusters c "
@@ -180,5 +230,5 @@ def _cluster(cluster_id: int, points: list[tuple[int, float, float]]) -> dict:
 def export_rows(run: Run) -> tuple[list[str], list[tuple]]:
     """One row per asset, scenario, year and hazard; an asset with no results appears once."""
     with run.connect() as con:
-        cursor = con.execute(_EXPORT)
+        cursor = con.execute(_EXPORT.format(flood_zones=_flood_zones(con)))
         return [d[0] for d in cursor.description], cursor.fetchall()
