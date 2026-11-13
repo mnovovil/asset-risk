@@ -30,12 +30,17 @@ script/              ad-hoc CLIs
 - **`.asset-risk.json`** (written by `infra/main.tf`, read by `app/engine/settings.py`): keys
   `scenarios`, `years`, `default_building_type`, `physrisk_batch_size`, `geolocate_workers`,
   `geolocate_batch_size`, `cluster_eps_km`, `cluster_min_samples`, `max_portfolio_rows`,
-  `max_upload_mb`, `data_dir`, `api_port`, `geolocate_config`. Change both sides together, including
-  the allowed values, which are checked in both places so a hand-edited file fails too. Relative
-  paths are relative to the repo root.
+  `max_upload_mb`, `data_dir`, `api_port`, `geolocate_config`, `flood_zones_db` (nullable). Change
+  both sides together, including the allowed values, which are checked in both places so a
+  hand-edited file fails too. Relative paths are relative to the repo root.
 - **`.geolocate.json`**: written to `vendor/geolocate/` by geolocate's own stack, which `infra/` calls
   as a module. `$GEOLOCATE_CONFIG` overrides the path in `.asset-risk.json`, which is only valid on
   the machine that ran `apply`.
+
+- **FEMA flood zone database** (`flood_zones_db`, built by `script/build_flood_zones.py` through
+  `app/engine/flood_zone_data.py`): tables `flood_zones` (R-tree on `geom`, `OGC:CRS84`),
+  `flood_zone_values` and `flood_zone_source`. Bump `FORMAT_VERSION` when their shape changes.
+  Every `FLD_ZONE` must be listed in `app/engine/data/fema_zones.json`. Docker mounts only the file.
 
 - **geolocate's output CSV** (written in `app/engine/geolocation.py`, loaded by
   `app/engine/sql/load_assets.sql`): the engine reads this documented interface, not geolocate's
@@ -120,4 +125,5 @@ script/              ad-hoc CLIs
 - Docker: `script/start.sh` (add `--detach` to run in the background)
 - Serve: `.venv/bin/python script/serve.py` · API docs at `/docs`
 - Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live` or `-m e2e`
+- FEMA flood zones: `.venv/bin/python script/build_flood_zones.py <S_FLD_HAZ_AR.parquet> --as-of YYYY-MM-DD`
 - Infra: `terraform -chdir=infra init && terraform -chdir=infra apply` (or `tofu`)
