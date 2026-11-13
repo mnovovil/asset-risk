@@ -3,5 +3,6 @@ physrisk-lib==1.10.6
 pytz>=2024.1  # DuckDB needs it to return TIMESTAMPTZ values
 fastapi>=0.162.0
 scikit-learn>=1.9  # DBSCAN for the map's clusters
+pillow==13.0.0  # draws the hazard grid PNGs; physrisk only brings it in transitively
 python-multipart>=0.0.33
 uvicorn[standard]>=0.54.0
