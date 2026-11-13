@@ -4,10 +4,14 @@
 # ///
 """Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
-After the upload and progress screens, it opens the New Orleans risk-concentration bubble on the
-map, clicks one of its assets to show its details, river flood depth curve and hazard maps, zooms
-the hazard map out to all of southern Louisiana, then goes through the rest of the dashboard,
+After the upload and progress screens, where it holds on the FEMA flood zone stage, it opens the
+New Orleans risk-concentration bubble on the map, clicks one of its assets to show its details, its
+FEMA flood zone and what that zone means, its river flood depth curve and hazard maps, zooms the
+hazard map out to all of southern Louisiana, then goes through the rest of the dashboard,
 including the present-day (baseline) view.
+
+It needs the FEMA flood zone database that .asset-risk.json names (flood_zones_db): see
+script/build_flood_zones.py. Without it every asset's flood zone would read "unavailable".
 
 It starts its own compose project, port and volume, so other runs can't appear in the GIF and a
 running stack isn't touched. It needs a browser (uvx playwright@1.64.1 install
@@ -18,6 +22,7 @@ that after changing the app.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import subprocess
@@ -50,6 +55,12 @@ CHROMIUM_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ig
 RUN_TIMEOUT_SECONDS = 1800
 PROGRESS_SPEEDUP = 30
 SAMPLE_EVERY_SECONDS = 1
+# Polled faster than frames are taken, so a short stage the page does show isn't missed.
+POLL_SECONDS = 0.2
+# The FEMA lookup is usually quicker than the page's 1.5 s progress check, so the page may never
+# show it as current. Hold the first frame where it is current or ticked off, long enough to read.
+FLOOD_ZONES_STAGE = "Flood zones"
+FLOOD_ZONES_HOLD_SECONDS = 3.5
 MAP_SETTLE_SECONDS = 4
 SCROLL_STEPS = 4
 SCROLL_STEP_SECONDS = 0.08
@@ -62,7 +73,7 @@ ZOOM_FRAME_SECONDS = 0.1
 # point is in the city centre, so it falls inside the cluster's bounds whatever DBSCAN's settings.
 FOCUS_NAME = "New Orleans"
 FOCUS_LAT, FOCUS_LON = 29.95, -90.07
-# The asset the GIF opens, by the French Quarter.
+# The asset the GIF opens, by the French Quarter. FEMA maps it in Zone X, behind the levees.
 FOCUS_ASSET = "US-312"
 HAZARD_MAPS = [
     ("RiverineInundation", "Hazard maps around it: river flood depth, 1 in 1000 years"),
@@ -152,12 +163,29 @@ class Recorder:
             self.shot(hold if step == SCROLL_STEPS else SCROLL_STEP_SECONDS)
 
 
-def compose(*args: str) -> None:
+def flood_zones_file() -> Path:
+    """The FEMA flood zone database from .asset-risk.json, which the GIF needs to show zones."""
+    settings = ROOT / ".asset-risk.json"
+    if not settings.is_file():
+        raise RuntimeError(f"no {settings.name}: run terraform -chdir=infra apply first")
+    configured = json.loads(settings.read_text()).get("flood_zones_db")
+    if not configured:
+        raise RuntimeError("flood_zones_db is null, so the GIF couldn't show FEMA flood zones")
+    path = Path(configured) if Path(configured).is_absolute() else ROOT / configured
+    if not path.is_file():
+        raise RuntimeError(f"no FEMA flood zone database at {path}: see build_flood_zones.py")
+    return path
+
+
+def compose(*args: str, flood_zones: Path | None = None) -> None:
     env = os.environ | {
         "API_PORT": PORT,
         "HOST_UID": str(os.getuid()),
         "HOST_GID": str(os.getgid()),
     }
+    if flood_zones is not None:
+        # As script/start.sh does: mount only the file, at the path the container reads.
+        env |= {"FLOOD_ZONES_FILE": str(flood_zones), "FLOOD_ZONES_DB": "/fema/flood-zones.duckdb"}
     compose_file = str(ROOT / "docker" / "compose.yml")
     subprocess.run(
         ["docker", "compose", "-p", PROJECT, "-f", compose_file, *args], env=env, check=True
@@ -193,10 +221,15 @@ def record_upload(rec: Recorder) -> None:
 def record_progress(rec: Recorder) -> list[str]:
     """Capture the real stages, returning the ones the page showed."""
     page = rec.page
-    rec.caption(
+    step_caption = (
         f"Step 2: find each building, classify it, calculate its risk (sped up {PROGRESS_SPEEDUP}×)"
     )
+    rec.caption(step_caption)
     current_stage = page.locator('.stage-label[aria-current="step"]')
+    flood_zones_reached = page.locator(
+        ".stage-current .stage-label, .stage-done .stage-label", has_text=FLOOD_ZONES_STAGE
+    )
+    held_flood_zones = False
     finished = page.get_by_role("heading", name="Where the risk is")
     seen: list[str] = []
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
@@ -205,14 +238,23 @@ def record_progress(rec: Recorder) -> list[str]:
         if time.monotonic() > deadline:
             raise RuntimeError(f"the run didn't finish in {RUN_TIMEOUT_SECONDS} s")
         fail_on_alert(page)
-        if current_stage.count() > 0:
-            stage = current_stage.inner_text()
-            if stage not in seen:
-                seen.append(stage)
+        stage = current_stage.inner_text() if current_stage.count() > 0 else None
+        new_stage = stage is not None and stage not in seen
+        if new_stage:
+            seen.append(stage)
         now = time.monotonic()
-        rec.shot((now - last) / PROGRESS_SPEEDUP)
-        last = now
-        page.wait_for_timeout(SAMPLE_EVERY_SECONDS * 1000)
+        if not held_flood_zones and flood_zones_reached.count() > 0:
+            held_flood_zones = True
+            rec.caption("Each US asset also gets its FEMA flood zone")
+            rec.shot((now - last) / PROGRESS_SPEEDUP + FLOOD_ZONES_HOLD_SECONDS)
+            rec.caption(step_caption)
+            last = now
+        elif new_stage or now - last >= SAMPLE_EVERY_SECONDS:
+            rec.shot((now - last) / PROGRESS_SPEEDUP)
+            last = now
+        page.wait_for_timeout(POLL_SECONDS * 1000)
+    if not held_flood_zones:
+        raise RuntimeError(f"the page never showed the {FLOOD_ZONES_STAGE} stage reached")
     return seen
 
 
@@ -258,8 +300,7 @@ def scan_map(page: Page) -> tuple[list[dict], list[dict]]:
 
 
 def api(page: Page, path: str, **params) -> list[dict]:
-    run_id = page.url.rstrip("/").rsplit("/", 1)[-1]
-    response = page.request.get(f"{BASE}/api/runs/{run_id}/{path}", params=params or None)
+    response = page.request.get(f"{BASE}/api/runs/{run_id(page)}/{path}", params=params or None)
     if not response.ok:
         raise RuntimeError(f"GET {path} returned {response.status}")
     return response.json()
@@ -377,6 +418,7 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     fail_on_alert(page)
     rec.caption("Its building, and how it was modelled")
     rec.shot(4)
+    record_flood_zone(rec, panel, rows[0])
     rec.caption("Its loss by hazard")
     scroll_panel_to(panel, "Results for")
     rec.shot(4)
@@ -385,6 +427,30 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     page.wait_for_timeout(500)
     rec.shot(5)
     return panel
+
+
+def record_flood_zone(rec: Recorder, panel: Locator, row_num: int) -> None:
+    """Show the asset's FEMA flood zone, then open the explainer of what that zone means."""
+    page = rec.page
+    asset = page.request.get(f"{BASE}/api/runs/{run_id(page)}/assets/{row_num}").json()
+    if asset.get("fema_status") != "mapped":
+        raise RuntimeError(f"{FOCUS_ASSET}'s FEMA flood zone is {asset.get('fema_status')}")
+    # The caption says so, so check it: FEMA's subtype for a shaded Zone X behind a levee.
+    if "LEVEE" not in (asset.get("fema_zone_subtype") or ""):
+        raise RuntimeError(f"{FOCUS_ASSET} isn't in a levee-protected FEMA zone any more")
+    rec.caption(f"Its FEMA flood zone: {FOCUS_ASSET} is behind New Orleans' levees")
+    scroll_panel_to(panel, "FEMA flood zone")
+    rec.shot(5)
+    explainer = panel.locator("details.twin > summary", has_text="mean?")
+    rec.caption("What the zone means, and whether flood insurance is required")
+    rec.click(explainer)
+    explainer.evaluate("e => e.scrollIntoView({block: 'start', behavior: 'instant'})")
+    rec.shot(5.5)
+    rec.click(explainer)  # closed again, so the panel's later sections sit where they did
+
+
+def run_id(page: Page) -> str:
+    return page.url.rstrip("/").rsplit("/", 1)[-1]
 
 
 def scroll_panel_to(panel: Locator, heading: str) -> None:
@@ -533,7 +599,14 @@ def main() -> int:
 
     try:
         # Inside the try, because a container that fails its health check is still left running.
-        compose("up", "--detach", "--wait", *(["--build"] if args.build else []))
+        flood_zones = flood_zones_file()
+        compose(
+            "up",
+            "--detach",
+            "--wait",
+            *(["--build"] if args.build else []),
+            flood_zones=flood_zones,
+        )
         with tempfile.TemporaryDirectory() as folder:
             record(Path(folder), args.output)
     except (RuntimeError, PlaywrightError) as e:
