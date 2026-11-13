@@ -1,0 +1,19 @@
+{
+  "about": "FEMA flood zones the app knows. key is what the engine stores: FLD_ZONE, except that Zone X is split by ZONE_SUBTY into X_SHADED, X_UNSHADED and X (shading not recorded). risk_rank orders zones when several polygons cover one point, 1 being the highest risk. script/build_flood_zones.py refuses a source with an FLD_ZONE not listed here.",
+  "zones": [
+    { "key": "VE", "fld_zone": "VE", "risk_rank": 1 },
+    { "key": "V", "fld_zone": "V", "risk_rank": 2 },
+    { "key": "AE", "fld_zone": "AE", "risk_rank": 3 },
+    { "key": "AH", "fld_zone": "AH", "risk_rank": 4 },
+    { "key": "AO", "fld_zone": "AO", "risk_rank": 5 },
+    { "key": "A", "fld_zone": "A", "risk_rank": 6 },
+    { "key": "AR", "fld_zone": "AR", "risk_rank": 7 },
+    { "key": "A99", "fld_zone": "A99", "risk_rank": 8 },
+    { "key": "OPEN WATER", "fld_zone": "OPEN WATER", "risk_rank": 9 },
+    { "key": "D", "fld_zone": "D", "risk_rank": 10 },
+    { "key": "X_SHADED", "fld_zone": "X", "risk_rank": 11 },
+    { "key": "X", "fld_zone": "X", "risk_rank": 12 },
+    { "key": "X_UNSHADED", "fld_zone": "X", "risk_rank": 13 },
+    { "key": "AREA NOT INCLUDED", "fld_zone": "AREA NOT INCLUDED", "risk_rank": 14 }
+  ]
+}

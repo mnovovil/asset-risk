@@ -79,6 +79,60 @@ def test_compose_mounts_settings_read_only():
     assert "../vendor/geolocate/.geolocate.json:/config/.geolocate.json:ro" in compose
 
 
+def test_compose_mounts_only_the_flood_zone_database_read_only():
+    compose = (DOCKER / "compose.yml").read_text()
+    assert "${FLOOD_ZONES_FILE:-/dev/null}:/fema/flood-zones.duckdb:ro" in compose
+    assert "FLOOD_ZONES_DB: ${FLOOD_ZONES_DB:-}" in compose
+
+
+def _fake_repo(tmp_path, settings: dict):
+    """A repo with what start.sh checks for, and a docker that records its environment."""
+    root = tmp_path / "repo"
+    (root / "script").mkdir(parents=True)
+    shutil.copy(ROOT / "script" / "start.sh", root / "script" / "start.sh")
+    (root / "vendor/geolocate/src").mkdir(parents=True)
+    (root / "vendor/geolocate/src/geolocate.py").touch()
+    (root / "vendor/geolocate/.geolocate.json").touch()
+    (root / ".asset-risk.json").write_text(json.dumps(settings, separators=(",", ":")))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        "#!/bin/sh\n"
+        '[ "$1" = compose ] && [ "$2" = version ] && exit 0\n'
+        f'echo "$FLOOD_ZONES_FILE|$FLOOD_ZONES_DB" > {tmp_path}/called\n'
+    )
+    fake_docker.chmod(0o755)
+    env = os.environ | {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    result = subprocess.run(
+        ["bash", "script/start.sh"], cwd=root, env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    return root, (tmp_path / "called").read_text().strip(), result.stderr
+
+
+def test_start_script_mounts_the_flood_zone_database(tmp_path):
+    database = tmp_path / "repo" / "data" / "fema" / "flood-zones.duckdb"
+    database.parent.mkdir(parents=True)
+    database.touch()
+    _, called, stderr = _fake_repo(tmp_path, {"flood_zones_db": "data/fema/flood-zones.duckdb"})
+    assert called == f"{database}|/fema/flood-zones.duckdb"
+    assert stderr == ""
+
+
+def test_start_script_mounts_nothing_without_a_flood_zone_database(tmp_path):
+    root, called, stderr = _fake_repo(tmp_path, {"flood_zones_db": "elsewhere/fz.duckdb"})
+    assert called == "/dev/null|/fema/flood-zones.duckdb"
+    assert f"no FEMA flood zone database at {root}/elsewhere/fz.duckdb" in stderr
+    assert not (root / "elsewhere").exists()  # nothing is created on the host
+
+
+def test_start_script_leaves_flood_zones_off_when_null(tmp_path):
+    _, called, stderr = _fake_repo(tmp_path, {"flood_zones_db": None})
+    assert called == "/dev/null|"
+    assert stderr == ""
+
+
 def test_start_script_explains_what_is_missing(tmp_path):
     root = tmp_path / "repo"
     (root / "script").mkdir(parents=True)

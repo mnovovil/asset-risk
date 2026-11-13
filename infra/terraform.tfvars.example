@@ -18,6 +18,9 @@
 # max_upload_mb      = 10
 
 # data_dir = "data"
+
+# FEMA flood zones: build the database with script/build_flood_zones.py. null turns the lookup off.
+# flood_zones_db = "data/fema/flood-zones.duckdb"
 # api_port = 8000
 
 # Credentials are optional — the Overture bucket is public. Prefer passing them as

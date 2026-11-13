@@ -32,6 +32,7 @@ VALID = {
     "data_dir": "data",
     "api_port": 8000,
     "geolocate_config": "/abs/vendor/geolocate/.geolocate.json",
+    "flood_zones_db": "data/fema/flood-zones.duckdb",
 }
 
 
@@ -40,6 +41,7 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("ASSET_RISK_CONFIG", raising=False)
     monkeypatch.delenv("GEOLOCATE_CONFIG", raising=False)
     monkeypatch.delenv("ASSET_RISK_DATA_DIR", raising=False)
+    monkeypatch.delenv("FLOOD_ZONES_DB", raising=False)
 
 
 def write(tmp_path, **overrides):
@@ -55,6 +57,19 @@ def test_loads_valid_settings(tmp_path):
     assert s.max_upload_mb == 10.0
     assert s.data_dir == ROOT / "data"
     assert s.geolocate_config == Path("/abs/vendor/geolocate/.geolocate.json")
+    assert s.flood_zones_db == ROOT / "data/fema/flood-zones.duckdb"
+
+
+def test_flood_zones_can_be_turned_off(tmp_path):
+    assert load_settings(write(tmp_path, flood_zones_db=None)).flood_zones_db is None
+
+
+def test_flood_zones_env_overrides_the_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLOOD_ZONES_DB", "/fema/flood-zones.duckdb")
+    assert load_settings(write(tmp_path)).flood_zones_db == Path("/fema/flood-zones.duckdb")
+    # start.sh sets it empty when the setting is null, which keeps the lookup off.
+    monkeypatch.setenv("FLOOD_ZONES_DB", "")
+    assert load_settings(write(tmp_path, flood_zones_db=None)).flood_zones_db is None
 
 
 def test_absolute_data_dir_is_kept(tmp_path):
@@ -138,6 +153,11 @@ def test_missing_key(tmp_path, key):
         ("data_dir", ""),
         ("data_dir", 3),
         ("geolocate_config", "  "),
+        ("flood_zones_db", ""),
+        ("flood_zones_db", "  "),
+        ("flood_zones_db", 3),
+        ("flood_zones_db", False),
+        ("flood_zones_db", ["data/fema/flood-zones.duckdb"]),
         ("api_port", 0),
         ("api_port", 65536),
     ],
@@ -173,6 +193,14 @@ def test_terraform_default_building_type_is_allowed():
     text = (INFRA / "variables.tf").read_text()
     default = re.search(r'variable "default_building_type".*?default\s*=\s*"(.+?)"', text, re.S)
     assert default.group(1) in BUILDING_TYPES
+
+
+def test_terraform_flood_zones_default_matches_the_build_script():
+    text = (INFRA / "variables.tf").read_text()
+    default = re.search(r'variable "flood_zones_db".*?default\s*=\s*"(.+?)"', text, re.S)
+    assert default.group(1) == "data/fema/flood-zones.duckdb"
+    script = (ROOT / "script" / "build_flood_zones.py").read_text()
+    assert 'ROOT / "data" / "fema" / "flood-zones.duckdb"' in script
 
 
 def test_cluster_limits_match_terraform():

@@ -22,11 +22,12 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `max_portfolio_rows` | `5000` | Largest portfolio accepted |
 | `max_upload_mb` | `10` | Largest upload accepted |
 | `data_dir` | `data` | Where `script/serve.py` keeps runs. Docker always uses its volume |
+| `flood_zones_db` | `data/fema/flood-zones.duckdb` | FEMA flood zone database [built by `script/build_flood_zones.py`](data-sources.md#fema-flood-zones). `null` turns the lookup off |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
-Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`
-and `ASSET_RISK_DATA_DIR`.
+Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`,
+`ASSET_RISK_DATA_DIR` and `FLOOD_ZONES_DB`.
 
 ## Portfolio CSV
 
