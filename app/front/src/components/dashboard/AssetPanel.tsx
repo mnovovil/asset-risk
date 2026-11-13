@@ -24,6 +24,7 @@ import { hazardLabel, sortHazards } from "@/lib/hazards";
 import { AssetHazardMap } from "./AssetHazardMap";
 import { ChartLegend } from "./ChartLegend";
 import { ChartTooltip } from "./ChartTooltip";
+import { FloodZone } from "./FloodZone";
 
 const HISTORICAL_COLOR = "var(--series-other)";
 const SCENARIO_COLOR = "var(--series-1)";
@@ -309,6 +310,7 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
                 ` (physrisk has no ${asset.region} model for this type, so this uses its global one)`}
             </dd>
           </dl>
+          <FloodZone asset={asset} />
           {asset.assessable && (
             <>
               <h3>

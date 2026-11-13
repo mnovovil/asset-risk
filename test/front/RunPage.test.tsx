@@ -82,6 +82,19 @@ describe("RunPage", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
+  it("lists the FEMA flood zone stage between classifying and assessing", async () => {
+    stubPolls(runStatus({ status: "running", stage: "flood_zones", done: 2, total: 5 }));
+    renderPage();
+    await settle();
+    expect(screen.getByText("Classifying").closest("li")).toHaveClass("stage-done");
+    expect(screen.getByText("Flood zones")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByText("Assessing").closest("li")).toHaveClass("stage-waiting");
+    expect(screen.getByRole("progressbar", { name: "Flood zones progress" })).toHaveAttribute(
+      "value",
+      "2",
+    );
+  });
+
   it("follows the run and stops polling when it completes", async () => {
     const polls = stubPolls(
       runStatus({ status: "running", stage: "geolocating" }),

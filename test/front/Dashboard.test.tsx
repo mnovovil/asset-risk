@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Dashboard } from "@/components/dashboard/Dashboard";
+import { forgetFloodZoneDefinitions } from "@/lib/floodZones";
 
 import { asset, jsonResponse, resultsResponse, SUMMARY, TRAJECTORY } from "./helpers";
 
@@ -70,7 +71,9 @@ function stub(overrides: Record<string, unknown> = {}) {
 
 async function renderDashboard() {
   render(<Dashboard runId={RUN} />);
-  return screen.findByRole("heading", { name: "Risk by asset and hazard" });
+  // The first test in the file pays for loading the dashboard and its charts, which took up to
+  // 1.8 s against Testing Library's default of 1 s and failed about one run in ten.
+  return screen.findByRole("heading", { name: "Risk by asset and hazard" }, { timeout: 5000 });
 }
 
 const meanLoss = () =>
@@ -81,6 +84,7 @@ const rowFor = (name: string) => screen.getByRole("button", { name }).closest("t
 
 describe("Dashboard", () => {
   beforeEach(() => {
+    forgetFloodZoneDefinitions();
     stub();
   });
 
@@ -510,6 +514,116 @@ describe("Dashboard", () => {
     it("moves focus into the panel", async () => {
       await openPanel();
       expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    });
+
+    describe("its FEMA flood zone", () => {
+      async function openWith(fema: object, { definitionsFail = false } = {}) {
+        stub({ detail: { ...detail, fema_map_as_of: "2026-11-13", ...fema } });
+        if (definitionsFail) {
+          const answer = globalThis.fetch;
+          vi.stubGlobal("fetch", async (url: string) =>
+            url === "/api/flood-zone-definitions"
+              ? jsonResponse({ detail: "Definitions are down" }, 500)
+              : answer(url),
+          );
+        }
+        await renderDashboard();
+        await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+        const panel = await screen.findByRole("dialog", { name: "Asset details" });
+        await within(panel).findByRole("heading", { name: "FEMA flood zone" });
+        return within(panel);
+      }
+
+      const mappedAE = {
+        fema_status: "mapped",
+        fema_zone: "AE",
+        fema_zone_key: "AE",
+        in_sfha: true,
+        base_flood_elevation: 8,
+        base_flood_elevation_unit: "feet",
+        base_flood_elevation_datum: "NGVD29",
+        fema_dfirm_id: "12086C",
+        fema_matches: 1,
+      };
+
+      it("shows the zone, what it means, and where that comes from", async () => {
+        const panel = await openWith(mappedAE);
+        const term = (name: string) => panel.getByText(name, { selector: "dt" }).nextElementSibling;
+        expect(await panel.findByText("Zone AE", { selector: "dd" })).toBeInTheDocument();
+        expect(term("Chance each year")).toHaveTextContent("1%");
+        expect(term("High-risk area (SFHA)")).toHaveTextContent("Yes");
+        expect(term("Flood insurance")).toHaveTextContent("Required");
+        expect(term("Base flood elevation")).toHaveTextContent("8 feet (NGVD29)");
+        expect(term("FEMA map")).toHaveTextContent("12086C, data as of 2026-11-13");
+        expect(panel.queryByText(/overlap here/)).not.toBeInTheDocument();
+
+        await userEvent.click(panel.getByText("What does Zone AE mean?"));
+        expect(
+          panel.getByText("High-risk floodplain with a base flood elevation.", { selector: "p" }),
+        ).toBeVisible();
+        expect(panel.getByText(/federally regulated lender/)).toBeVisible();
+        expect(panel.getByRole("link", { name: "FEMA glossary: Zone AE" })).toHaveAttribute(
+          "href",
+          "https://www.fema.gov/glossary/ae",
+        );
+        expect(panel.getByRole("link", { name: "42 U.S.C. 4012a" })).toBeVisible();
+
+        await userEvent.click(panel.getByText("All FEMA flood zones"));
+        const table = within(panel.getByRole("table", { name: "All FEMA flood zones" }));
+        expect(table.getByRole("rowheader", { name: "Zone X (shaded)" })).toBeInTheDocument();
+        expect(table.getByRole("rowheader", { name: "Zone D" })).toBeInTheDocument();
+        expect(panel.getByRole("link", { name: "FEMA's Flood Map Service Center" })).toBeVisible();
+      });
+
+      it("says when overlapping map areas disagree", async () => {
+        const panel = await openWith({ ...mappedAE, fema_zone: "VE", fema_zone_key: "VE", fema_matches: 2, fema_conflict: true });
+        expect(await panel.findByText(/2 FEMA map areas overlap here and disagree/)).toBeInTheDocument();
+        expect(panel.getByText("Zone VE", { selector: "dd" })).toBeInTheDocument();
+      });
+
+      it("keeps shaded and unshaded Zone X apart", async () => {
+        const shaded = await openWith({
+          fema_status: "mapped",
+          fema_zone: "X",
+          fema_zone_key: "X_SHADED",
+          fema_zone_subtype: "0.2 PCT ANNUAL CHANCE FLOOD HAZARD",
+          in_sfha: false,
+        });
+        expect(await shaded.findByText("Zone X (shaded)", { selector: "dd" })).toBeInTheDocument();
+        expect(shaded.getByText("0.2% annual chance flood hazard")).toBeInTheDocument();
+        expect(shaded.getByText("Not required", { selector: "dd" })).toBeInTheDocument();
+      });
+
+      it.each([
+        ["not_mapped", "Not on a FEMA flood map"],
+        ["not_us", "Outside the US"],
+        ["unavailable", "FEMA data not loaded"],
+      ])("explains a %s point, unlike any zone", async (status, label) => {
+        const panel = await openWith({ fema_status: status });
+        expect(await panel.findByText(label)).toBeInTheDocument();
+        expect(panel.queryByText("Zone X (unshaded)", { selector: "dd" })).not.toBeInTheDocument();
+        expect(panel.queryByText("Zone D", { selector: "dd" })).not.toBeInTheDocument();
+        expect(panel.queryByText("High-risk area (SFHA)", { selector: "dt" })).not.toBeInTheDocument();
+        // The explainer offers every zone instead of one.
+        await userEvent.click(panel.getByText("What do FEMA flood zones mean?"));
+        expect(panel.getByRole("rowheader", { name: "Zone AE" })).toBeVisible();
+      });
+
+      it("notes a missing elevation and an unusual SFHA flag", async () => {
+        const panel = await openWith({ ...mappedAE, base_flood_elevation: null, in_sfha: false });
+        expect(await panel.findByText("Not recorded", { selector: "dd" })).toBeInTheDocument();
+        expect(panel.getByText(/FEMA often draws base flood elevations as lines/)).toBeInTheDocument();
+        expect(panel.getByText(/outside the high-risk area, which is unusual for Zone AE/)).toBeInTheDocument();
+      });
+
+      it("still shows the zone when its explanations can't load", async () => {
+        const panel = await openWith(mappedAE, { definitionsFail: true });
+        expect(await panel.findByText("Definitions are down")).toBeInTheDocument();
+        // The zone key stands in for the label, and the facts from the asset still show.
+        expect(panel.getByText("AE", { selector: "dd" })).toBeInTheDocument();
+        expect(panel.getByText("8 feet (NGVD29)")).toBeInTheDocument();
+        expect(panel.queryByText(/What does/)).not.toBeInTheDocument();
+      });
     });
 
     it("explains why an asset was excluded and asks for no curve", async () => {
