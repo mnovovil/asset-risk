@@ -187,6 +187,20 @@ How the zone is found, and how to read it:
 **It's not an official determination.** Check an address that matters on
 [FEMA's Flood Map Service Center](https://msc.fema.gov/portal/search).
 
+## An asset over time
+
+The asset panel's **Over time** chart shows one asset's annual loss or score for one hazard, picked
+from a list, across every year and scenario of the run. Read it with these limits:
+
+- **Losses are compared hazard by hazard.** Each line is one scenario's loss for the chosen hazard,
+  so lines for different scenarios can be compared directly. The dashed flat line is today's
+  baseline, for reference.
+- **A missing result is a gap, not zero.** A scenario with nothing for the hazard has no line, and
+  the panel names it. Hazards differ by scenario, so this is common.
+- **Scores have no baseline**, because physrisk scores scenarios only. They are steps from Very low
+  to Very high, not measurements. "No model", "No data" and "Error" are listed under the chart, not
+  drawn, and a low score isn't proof of low risk.
+
 ## Hazard maps
 
 The asset panel can show a map around the asset, drawn from physrisk's own map data. It answers
@@ -195,12 +209,10 @@ map, hazard and period full-size in a new tab. Read it, at any size, with these 
 
 - **Only river and coastal flood.** physrisk's maps of wind, fire, hail, heat and drought aren't
   public, so these hazards are listed but can't be chosen.
-- **Only the 1-in-1000-year flood.** The maps hold no other return period. The table above the map
-  has the depths for the other return periods at the exact point.
+- **Only the 1-in-1000-year flood.** The maps hold no other return period.
 - **About 1 km pixels**, so the map shows the area, not the building. It stops adding detail past a
   regional zoom.
-- **Before flood protection.** Like the river flood curve, and unlike the loss figures, the map
-  ignores defences.
+- **Before flood protection.** Unlike the loss figures, the map ignores defences.
 - **"Historical" is physrisk's baseline**, which for these maps is its RCP4.5 2030 data, the same
   data the assessment uses. physrisk has flood maps for SSP2-4.5 and SSP5-8.5 from 2030 to 2080
   only, and none for SSP1-2.6 or SSP3-7.0.

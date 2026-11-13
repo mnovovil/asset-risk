@@ -56,9 +56,6 @@ function stub(overrides: Record<string, unknown> = {}) {
   vi.stubGlobal("fetch", async (url: string) => {
     requests.push(url);
     if (url.includes("/hazard-maps?")) return jsonResponse(hazardMaps(url));
-    if (url.includes("hazard-curve")) {
-      return jsonResponse({ return_periods: [100], intensities: [0.5] });
-    }
     if (/\/assets\/\d+$/.test(url)) {
       return jsonResponse(overrides.detail);
     }
@@ -396,14 +393,64 @@ describe("Dashboard", () => {
       expect(panel.getByText(/They don't affect the results/)).toBeInTheDocument();
       expect(panel.getByText(/Assumed: Overture has no usable type/)).toBeInTheDocument();
       expect(panel.getByText(/no Africa model for this type/)).toBeInTheDocument();
-      expect(panel.getByText("0.200%")).toBeInTheDocument();
-      expect(panel.queryByText("90.000%")).not.toBeInTheDocument();
-      expect(panel.getByText("No model")).toBeInTheDocument();
+      const results = within(
+        panel.getByRole("columnheader", { name: "Annual loss" }).closest("table") as HTMLElement,
+      );
+      expect(results.getByText("0.200%")).toBeInTheDocument();
+      expect(results.queryByText("90.000%")).not.toBeInTheDocument();
+      expect(results.getByText("No model")).toBeInTheDocument();
     });
 
-    it("loads the hazard curve with a table twin", async () => {
-      const panel = within(await openPanel());
-      expect(await panel.findAllByRole("cell", { name: "0.50 m" })).toHaveLength(2);
+    describe("its chart over time", () => {
+      const chartTable = (panel: ReturnType<typeof within>) =>
+        within(panel.getByText("Show as a table").closest("details") as HTMLElement);
+
+      it("offers each hazard's loss, then each hazard's score", async () => {
+        const panel = within(await openPanel());
+        const select = await panel.findByLabelText("Chart");
+        expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
+          "Annual loss — Tropical cyclone wind",
+          "Score — Tropical cyclone wind",
+          "Score — Chronic heat",
+        ]);
+      });
+
+      it("draws every scenario's loss with the baseline, and no hazard curve", async () => {
+        const requests = stub({ detail });
+        await renderDashboard();
+        await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
+        const panel = within(await screen.findByRole("dialog"));
+        expect(
+          await panel.findByRole("img", { name: /tropical cyclone wind annual loss by year/ }),
+        ).toBeInTheDocument();
+        const table = chartTable(panel);
+        expect(table.getByRole("columnheader", { name: "Today (baseline)" })).toBeInTheDocument();
+        expect(table.getByText("90.000%")).toBeInTheDocument();
+        expect(table.getByText("0.200%")).toBeInTheDocument();
+        expect(table.getByText("0.420%")).toBeInTheDocument();
+        expect(panel.getByText("No tropical cyclone wind loss results for SSP3-7.0.")).toBeInTheDocument();
+        expect(requests.some((r) => r.includes("hazard-curve"))).toBe(false);
+      });
+
+      it("switches to a score, with no baseline", async () => {
+        const panel = within(await openPanel());
+        await userEvent.selectOptions(await panel.findByLabelText("Chart"), "score:Wind");
+        expect(panel.getByRole("img", { name: /tropical cyclone wind score by year/ })).toBeInTheDocument();
+        const table = chartTable(panel);
+        expect(table.getByRole("cell", { name: "Low" })).toBeInTheDocument();
+        expect(table.queryByRole("columnheader", { name: "Today (baseline)" })).not.toBeInTheDocument();
+        expect(panel.getByText(/No tropical cyclone wind score results for SSP2-4.5 and SSP3-7.0/))
+          .toBeInTheDocument();
+        expect(panel.getByText(/A low score isn't proof of low risk/)).toBeInTheDocument();
+      });
+
+      it("lists a score with no model as a note, not a point", async () => {
+        const panel = within(await openPanel());
+        await userEvent.selectOptions(await panel.findByLabelText("Chart"), "score:ChronicHeat");
+        expect(panel.getByText(/Not scored: SSP5-8.5, 2050 \(No model\)/)).toBeInTheDocument();
+        expect(panel.queryByText("Show as a table")).not.toBeInTheDocument();
+        expect(panel.getByText("No scenario results for chronic heat.")).toBeInTheDocument();
+      });
     });
 
     it("shows hazard maps under the river flood table", async () => {
@@ -487,17 +534,19 @@ describe("Dashboard", () => {
       expect(panel.getByText(/Hazard map with no overlay/)).toBeInTheDocument();
     });
 
-    it("shows the baseline on its own, with no scores and one curve", async () => {
-      const requests = stub({ detail });
+    it("shows the baseline on its own, with no scores", async () => {
+      stub({ detail });
       await renderDashboard();
       await userEvent.selectOptions(screen.getByLabelText("Scenario"), "Today (baseline)");
       await screen.findByText(/physrisk scores scenarios only/);
       await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
       const panel = within(await screen.findByRole("dialog", { name: "Asset details" }));
       expect(await panel.findByRole("heading", { name: "Results for Today (baseline)" })).toBeInTheDocument();
-      expect(panel.getByText("0.420%")).toBeInTheDocument();
+      expect(panel.getAllByText("0.420%").length).toBeGreaterThan(0);
       expect(panel.queryByRole("columnheader", { name: "Score" })).not.toBeInTheDocument();
-      await waitFor(() => expect(requests.filter((r) => r.includes("hazard-curve"))).toHaveLength(1));
+      // The chart still shows every scenario, with nothing marked as selected.
+      expect(panel.getByRole("img", { name: /annual loss by year/ })).toBeInTheDocument();
+      expect(panel.queryByText(/dashed vertical line marks/)).not.toBeInTheDocument();
     });
 
     it("closes with the button and with Escape", async () => {
@@ -626,7 +675,7 @@ describe("Dashboard", () => {
       });
     });
 
-    it("explains why an asset was excluded and asks for no curve", async () => {
+    it("explains why an asset was excluded and shows no chart or map", async () => {
       const excluded = {
         ...asset(3, { assessable: false, exclusion_reason: "off_land", match_type: "none" }),
         geometry_wkt: null,
@@ -638,7 +687,7 @@ describe("Dashboard", () => {
       await userEvent.click(screen.getByRole("button", { name: "asset-3" }));
       const panel = within(await screen.findByRole("dialog"));
       expect(await panel.findByText(/not near any country/)).toBeInTheDocument();
-      expect(requests.some((r) => r.includes("hazard-curve"))).toBe(false);
+      expect(panel.queryByLabelText("Chart")).not.toBeInTheDocument();
       expect(requests.some((r) => r.includes("hazard-maps"))).toBe(false);
     });
   });
