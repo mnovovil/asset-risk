@@ -25,7 +25,23 @@ configured_port=$(sed -n 's/.*"api_port":[[:space:]]*\([0-9]*\).*/\1/p' .asset-r
 API_PORT=${API_PORT:-${configured_port:-8000}}
 HOST_UID=$(id -u)
 HOST_GID=$(id -g)
-export API_PORT HOST_UID HOST_GID
+
+# The FEMA flood zone database is optional. Only the file is mounted, never its folder.
+FLOOD_ZONES_FILE=/dev/null
+FLOOD_ZONES_DB=""
+if ! grep -q '"flood_zones_db":[[:space:]]*null' .asset-risk.json; then
+  flood_zones=$(sed -n 's/.*"flood_zones_db":[[:space:]]*"\([^"]*\)".*/\1/p' .asset-risk.json)
+  flood_zones=${flood_zones:-data/fema/flood-zones.duckdb}
+  case "$flood_zones" in /*) ;; *) flood_zones="$PWD/$flood_zones" ;; esac
+  FLOOD_ZONES_DB=/fema/flood-zones.duckdb
+  if [ -f "$flood_zones" ]; then
+    FLOOD_ZONES_FILE=$flood_zones
+  else
+    echo "note: no FEMA flood zone database at $flood_zones, so runs will show flood zones as" \
+      "unavailable. Build it with script/build_flood_zones.py" >&2
+  fi
+fi
+export API_PORT HOST_UID HOST_GID FLOOD_ZONES_FILE FLOOD_ZONES_DB
 
 echo "Starting at http://127.0.0.1:${API_PORT}"
 exec docker compose -f docker/compose.yml up --build "$@"

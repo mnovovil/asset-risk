@@ -44,5 +44,6 @@ resource "local_file" "asset_risk_config" {
     data_dir              = var.data_dir
     api_port              = var.api_port
     geolocate_config      = module.geolocate.config_path
+    flood_zones_db        = var.flood_zones_db
   })
 }

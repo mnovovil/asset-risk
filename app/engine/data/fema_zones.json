@@ -1,0 +1,237 @@
+{
+  "about": "FEMA flood zones the app knows, and the text the dashboard explains them with. key is what the engine stores: FLD_ZONE, except that Zone X is split by ZONE_SUBTY into X_SHADED, X_UNSHADED and X (shading not recorded). risk_rank orders zones when several polygons cover one point, 1 being the highest risk. script/build_flood_zones.py refuses a source with an FLD_ZONE not listed here. Text paraphrases the sources; keep quotes short.",
+  "sources": {
+    "flood_zones": { "title": "FEMA glossary: Flood zones", "url": "https://www.fema.gov/glossary/flood-zones" },
+    "homeowners": { "title": "FEMA: Know your risk, homeowners", "url": "https://www.fema.gov/flood-maps/know-your-risk/homeowners" },
+    "sfha": { "title": "FEMA glossary: Special Flood Hazard Area", "url": "https://www.fema.gov/glossary/special-flood-hazard-area-sfha" },
+    "bfe": { "title": "FEMA glossary: Base Flood Elevation", "url": "https://www.fema.gov/glossary/base-flood-elevation-bfe" },
+    "zone_ae": { "title": "FEMA glossary: Zone AE and A1-30", "url": "https://www.fema.gov/glossary/zone-ae-and-a1-30" },
+    "zone_ah": { "title": "FEMA glossary: Zone AH", "url": "https://www.fema.gov/glossary/zone-ah" },
+    "zone_ao": { "title": "FEMA glossary: Zone AO", "url": "https://www.fema.gov/glossary/zone-ao" },
+    "zone_ar": { "title": "FEMA glossary: Zone AR", "url": "https://www.fema.gov/glossary/zone-ar" },
+    "zone_a99": { "title": "FEMA glossary: Zone A99", "url": "https://www.fema.gov/glossary/zone-a99" },
+    "zone_v": { "title": "FEMA glossary: Zone V", "url": "https://www.fema.gov/glossary/zone-v" },
+    "zone_ve": { "title": "FEMA glossary: Zone VE and V1-30", "url": "https://www.fema.gov/glossary/zone-ve-and-v1-30" },
+    "zone_d": { "title": "FEMA glossary: Zone D", "url": "https://www.fema.gov/glossary/zone-d" },
+    "firm_database": {
+      "title": "FEMA: Guidance for the FIRM Database (Nov 2022)",
+      "url": "https://www.fema.gov/sites/default/files/documents/fema_flood-insurance-rate-map-database_112022.pdf"
+    },
+    "usc_4012a": {
+      "title": "42 U.S.C. 4012a: Flood insurance purchase requirements",
+      "url": "https://uscode.house.gov/view.xhtml?req=(title:42%20section:4012a%20edition:prelim)"
+    }
+  },
+  "insurance": [
+    {
+      "key": "required",
+      "label": "Required",
+      "text": "This is a Special Flood Hazard Area, where the mandatory purchase of flood insurance applies: a mortgage from a federally regulated or insured lender, or a federal agency, needs it.",
+      "sources": ["sfha", "usc_4012a"]
+    },
+    {
+      "key": "not_required",
+      "label": "Not required",
+      "text": "Outside the Special Flood Hazard Area, federal rules don't require flood insurance. It's still available, and floods happen here too.",
+      "sources": ["sfha", "flood_zones"]
+    },
+    {
+      "key": "not_applicable",
+      "label": "Doesn't apply",
+      "text": "This isn't a flood zone, so the requirement can't be read from it.",
+      "sources": []
+    }
+  ],
+  "zones": [
+    {
+      "key": "VE",
+      "fld_zone": "VE",
+      "risk_rank": 1,
+      "label": "Zone VE",
+      "risk": "high",
+      "annual_chance": "1% or more (26% over a 30-year mortgage)",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "Coastal high-hazard area: a 1% or greater chance of flooding each year, with the added danger of storm waves. A detailed study gives base flood elevations.",
+      "sources": ["zone_ve", "sfha"]
+    },
+    {
+      "key": "V",
+      "fld_zone": "V",
+      "risk_rank": 2,
+      "label": "Zone V",
+      "risk": "high",
+      "annual_chance": "1% or more (26% over a 30-year mortgage)",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "Coastal high-hazard area: a 1% or greater chance of flooding each year, with the added danger of storm waves. No base flood elevations are given.",
+      "sources": ["zone_v", "sfha"]
+    },
+    {
+      "key": "AE",
+      "fld_zone": "AE",
+      "risk_rank": 3,
+      "label": "Zone AE",
+      "risk": "high",
+      "annual_chance": "1%",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "High-risk floodplain with a 1% chance of flooding each year. A detailed study gives the base flood elevation: the level the 1% flood is expected to reach. It replaces the older numbered zones A1 to A30.",
+      "sources": ["zone_ae", "bfe", "sfha"]
+    },
+    {
+      "key": "AH",
+      "fld_zone": "AH",
+      "risk_rank": 4,
+      "label": "Zone AH",
+      "risk": "high",
+      "annual_chance": "1% (26% over a 30-year mortgage)",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "High risk of shallow flooding, usually water ponding, with a 1% chance each year. Base flood elevations are given.",
+      "sources": ["zone_ah", "sfha"]
+    },
+    {
+      "key": "AO",
+      "fld_zone": "AO",
+      "risk_rank": 5,
+      "label": "Zone AO",
+      "risk": "high",
+      "annual_chance": "1% or more (26% over a 30-year mortgage)",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "High risk of shallow flooding, usually sheet flow on sloping ground, averaging 1 to 3 feet deep, with a 1% or greater chance each year. A flood depth is given instead of an elevation.",
+      "sources": ["zone_ao", "sfha"]
+    },
+    {
+      "key": "A",
+      "fld_zone": "A",
+      "risk_rank": 6,
+      "label": "Zone A",
+      "risk": "high",
+      "annual_chance": "1% (26% over a 30-year mortgage)",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "High-risk floodplain with a 1% chance of flooding each year. It was mapped with an approximate study, so no flood depth or base flood elevation is given.",
+      "sources": ["homeowners", "sfha"]
+    },
+    {
+      "key": "AR",
+      "fld_zone": "AR",
+      "risk_rank": 7,
+      "label": "Zone AR",
+      "risk": "high",
+      "annual_chance": "Not stated by FEMA",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "Flood risk is temporarily higher while a flood-control system, such as a levee or dam, is built or restored. FEMA says the mandatory purchase requirement applies.",
+      "sources": ["zone_ar", "sfha"]
+    },
+    {
+      "key": "A99",
+      "fld_zone": "A99",
+      "risk_rank": 8,
+      "label": "Zone A99",
+      "risk": "high",
+      "annual_chance": "1%",
+      "sfha": true,
+      "insurance": "required",
+      "summary": "A 1% chance of flooding each year, in an area that a federal flood-control system under construction will protect. No depths or base flood elevations are given.",
+      "sources": ["zone_a99", "sfha"]
+    },
+    {
+      "key": "OPEN WATER",
+      "fld_zone": "OPEN WATER",
+      "risk_rank": 9,
+      "label": "Open water",
+      "risk": "not_applicable",
+      "annual_chance": "Not applicable",
+      "sfha": null,
+      "insurance": "not_applicable",
+      "summary": "The point is on a mapped body of water, such as a river, lake or the sea. A building here may stand on a pier, or the coordinates may be slightly off.",
+      "sources": ["firm_database"]
+    },
+    {
+      "key": "D",
+      "fld_zone": "D",
+      "risk_rank": 10,
+      "label": "Zone D",
+      "risk": "undetermined",
+      "annual_chance": "Undetermined",
+      "sfha": false,
+      "insurance": "not_required",
+      "summary": "Flooding is possible but the hazard hasn't been determined: FEMA has done no flood hazard analysis here. This is not the same as low risk.",
+      "sources": ["zone_d"]
+    },
+    {
+      "key": "X_SHADED",
+      "fld_zone": "X",
+      "risk_rank": 11,
+      "label": "Zone X (shaded)",
+      "risk": "moderate",
+      "annual_chance": "0.2% to 1%",
+      "sfha": false,
+      "insurance": "not_required",
+      "summary": "Moderate risk: between the reach of the 1% (100-year) and the 0.2% (500-year) floods, also called Zone B. The subtype says when it's something else FEMA shows the same way, such as reduced risk behind a levee, or 1% flooding less than a foot deep.",
+      "sources": ["flood_zones"]
+    },
+    {
+      "key": "X",
+      "fld_zone": "X",
+      "risk_rank": 12,
+      "label": "Zone X",
+      "risk": "moderate",
+      "annual_chance": "Under 1%",
+      "sfha": false,
+      "insurance": "not_required",
+      "summary": "Moderate or minimal risk, outside the 1% floodplain. The map doesn't record which: shaded Zone X is moderate, unshaded is minimal.",
+      "sources": ["flood_zones"]
+    },
+    {
+      "key": "X_UNSHADED",
+      "fld_zone": "X",
+      "risk_rank": 13,
+      "label": "Zone X (unshaded)",
+      "risk": "minimal",
+      "annual_chance": "Under 0.2%",
+      "sfha": false,
+      "insurance": "not_required",
+      "summary": "Minimal risk: higher than the 0.2% (500-year) flood, also called Zone C. Minimal isn't none.",
+      "sources": ["flood_zones"]
+    },
+    {
+      "key": "AREA NOT INCLUDED",
+      "fld_zone": "AREA NOT INCLUDED",
+      "risk_rank": 14,
+      "label": "Area not included",
+      "risk": "undetermined",
+      "annual_chance": "Unknown",
+      "sfha": null,
+      "insurance": "not_applicable",
+      "summary": "FEMA's flood map here shows no flood risk information: the area is mapped on a different map, or isn't mapped by FEMA at all. This is not the same as low risk.",
+      "sources": ["firm_database"]
+    }
+  ],
+  "statuses": [
+    {
+      "key": "not_mapped",
+      "label": "Not on a FEMA flood map",
+      "summary": "No FEMA flood zone in this data covers the point. The community may have no digital flood map. This is neither Zone X (minimal risk) nor Zone D (undetermined): there's simply no FEMA information."
+    },
+    {
+      "key": "not_us",
+      "label": "Outside the US",
+      "summary": "FEMA maps flood zones only in the United States and its territories."
+    },
+    {
+      "key": "not_located",
+      "label": "No valid location",
+      "summary": "The row's latitude or longitude is missing or invalid, so it couldn't be looked up."
+    },
+    {
+      "key": "unavailable",
+      "label": "FEMA data not loaded",
+      "summary": "This run had no FEMA flood zone data. Build it with script/build_flood_zones.py and run the portfolio again."
+    }
+  ]
+}

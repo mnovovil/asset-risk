@@ -127,6 +127,18 @@ variable "data_dir" {
   }
 }
 
+variable "flood_zones_db" {
+  description = "FEMA flood zone database built by script/build_flood_zones.py. A relative path is relative to the repo root. null turns the flood zone lookup off. A run without the file reports the zones as unavailable."
+  type        = string
+  default     = "data/fema/flood-zones.duckdb"
+  nullable    = true
+
+  validation {
+    condition     = var.flood_zones_db == null ? true : trimspace(var.flood_zones_db) != ""
+    error_message = "flood_zones_db must be null or a non-empty path."
+  }
+}
+
 variable "api_port" {
   description = "Port the app listens on."
   type        = number

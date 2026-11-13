@@ -16,7 +16,14 @@ services:
     volumes:
       - ../.asset-risk.json:/config/.asset-risk.json:ro
       - ../vendor/geolocate/.geolocate.json:/config/.geolocate.json:ro
+      # Only the FEMA flood zone database itself, never its folder, which could hold settings or
+      # Terraform state. With no database, start.sh mounts /dev/null and runs show the zones as
+      # unavailable.
+      - ${FLOOD_ZONES_FILE:-/dev/null}:/fema/flood-zones.duckdb:ro
       - data:/data
+    environment:
+      # Empty when flood_zones_db is null, which leaves the lookup off.
+      FLOOD_ZONES_DB: ${FLOOD_ZONES_DB:-}
     healthcheck:
       test:
         - CMD

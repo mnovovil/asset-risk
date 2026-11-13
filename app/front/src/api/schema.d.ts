@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/flood-zone-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Flood Zone Definitions
+         * @description What each FEMA flood zone, insurance rule and lookup status means, with sources.
+         */
+        get: operations["flood_zone_definitions_api_flood_zone_definitions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -331,6 +351,12 @@ export interface components {
             assessable: boolean | null;
             /** Asset Id */
             asset_id: string | null;
+            /** Base Flood Elevation */
+            base_flood_elevation: number | null;
+            /** Base Flood Elevation Datum */
+            base_flood_elevation_datum: string | null;
+            /** Base Flood Elevation Unit */
+            base_flood_elevation_unit: string | null;
             /** Building Id */
             building_id: string | null;
             /** Class */
@@ -339,8 +365,28 @@ export interface components {
             distance_m: number | null;
             /** Exclusion Reason */
             exclusion_reason: string | null;
+            /** Fema Conflict */
+            fema_conflict: boolean;
+            /** Fema Depth */
+            fema_depth: number | null;
+            /** Fema Depth Unit */
+            fema_depth_unit: string | null;
+            /** Fema Dfirm Id */
+            fema_dfirm_id: string | null;
+            /** Fema Matches */
+            fema_matches: number;
+            /** Fema Status */
+            fema_status: string;
+            /** Fema Zone */
+            fema_zone: string | null;
+            /** Fema Zone Key */
+            fema_zone_key: string | null;
+            /** Fema Zone Subtype */
+            fema_zone_subtype: string | null;
             /** Height */
             height: number | null;
+            /** In Sfha */
+            in_sfha: boolean | null;
             /** Lat */
             lat: number | null;
             /** Location Fallback */
@@ -374,6 +420,12 @@ export interface components {
             assessable: boolean | null;
             /** Asset Id */
             asset_id: string | null;
+            /** Base Flood Elevation */
+            base_flood_elevation: number | null;
+            /** Base Flood Elevation Datum */
+            base_flood_elevation_datum: string | null;
+            /** Base Flood Elevation Unit */
+            base_flood_elevation_unit: string | null;
             /** Building Id */
             building_id: string | null;
             /** Class */
@@ -382,12 +434,34 @@ export interface components {
             distance_m: number | null;
             /** Exclusion Reason */
             exclusion_reason: string | null;
+            /** Fema Conflict */
+            fema_conflict: boolean;
+            /** Fema Depth */
+            fema_depth: number | null;
+            /** Fema Depth Unit */
+            fema_depth_unit: string | null;
+            /** Fema Dfirm Id */
+            fema_dfirm_id: string | null;
+            /** Fema Map As Of */
+            fema_map_as_of: string | null;
+            /** Fema Matches */
+            fema_matches: number;
+            /** Fema Status */
+            fema_status: string;
+            /** Fema Zone */
+            fema_zone: string | null;
+            /** Fema Zone Key */
+            fema_zone_key: string | null;
+            /** Fema Zone Subtype */
+            fema_zone_subtype: string | null;
             /** Geometry Wkt */
             geometry_wkt: string | null;
             /** Height */
             height: number | null;
             /** Impacts */
             impacts: components["schemas"]["AssetImpact"][];
+            /** In Sfha */
+            in_sfha: boolean | null;
             /** Lat */
             lat: number | null;
             /** Location Fallback */
@@ -505,6 +579,47 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** FloodZoneDefinition */
+        FloodZoneDefinition: {
+            /** Annual Chance */
+            annual_chance: string;
+            /** Fld Zone */
+            fld_zone: string;
+            /** Insurance */
+            insurance: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Risk */
+            risk: string;
+            /** Risk Rank */
+            risk_rank: number;
+            /** Sfha */
+            sfha: boolean | null;
+            /** Sources */
+            sources: components["schemas"]["Source"][];
+            /** Summary */
+            summary: string;
+        };
+        /** FloodZoneDefinitions */
+        FloodZoneDefinitions: {
+            /** Insurance */
+            insurance: components["schemas"]["InsuranceRule"][];
+            /** Statuses */
+            statuses: components["schemas"]["FloodZoneStatus"][];
+            /** Zones */
+            zones: components["schemas"]["FloodZoneDefinition"][];
+        };
+        /** FloodZoneStatus */
+        FloodZoneStatus: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Summary */
+            summary: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -564,6 +679,17 @@ export interface components {
             /** Row Num */
             row_num: number;
         };
+        /** InsuranceRule */
+        InsuranceRule: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Sources */
+            sources: components["schemas"]["Source"][];
+            /** Text */
+            text: string;
+        };
         /** RunStatus */
         RunStatus: {
             /**
@@ -607,6 +733,13 @@ export interface components {
             row_num: number;
             /** Score */
             score: number;
+        };
+        /** Source */
+        Source: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
         };
         /** Summary */
         Summary: {
@@ -684,6 +817,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppConfig"];
+                };
+            };
+        };
+    };
+    flood_zone_definitions_api_flood_zone_definitions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FloodZoneDefinitions"];
                 };
             };
         };

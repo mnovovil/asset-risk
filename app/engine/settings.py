@@ -13,6 +13,7 @@ from pathlib import Path
 ENV_VAR = "ASSET_RISK_CONFIG"
 GEOLOCATE_ENV_VAR = "GEOLOCATE_CONFIG"
 DATA_DIR_ENV_VAR = "ASSET_RISK_DATA_DIR"
+FLOOD_ZONES_ENV_VAR = "FLOOD_ZONES_DB"
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PATH = ROOT / ".asset-risk.json"
 KEYS = (
@@ -29,6 +30,7 @@ KEYS = (
     "data_dir",
     "api_port",
     "geolocate_config",
+    "flood_zones_db",
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
@@ -59,6 +61,8 @@ class Settings:
     data_dir: Path
     api_port: int
     geolocate_config: Path
+    # The FEMA flood zone database from script/build_flood_zones.py. None turns the lookup off.
+    flood_zones_db: Path | None = None
 
 
 def settings_path(path: str | os.PathLike[str] | None = None) -> Path:
@@ -123,6 +127,14 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         if not isinstance(raw[key], str) or not raw[key].strip():
             raise bad(key, "a non-empty string")
 
+    flood_zones_db = raw["flood_zones_db"]
+    if flood_zones_db is not None and (
+        not isinstance(flood_zones_db, str) or not flood_zones_db.strip()
+    ):
+        raise bad("flood_zones_db", "null or a non-empty string")
+    # A container finds the database at its mount. An empty variable leaves the file's value.
+    flood_zones_db = os.environ.get(FLOOD_ZONES_ENV_VAR) or flood_zones_db
+
     if not _is_int(raw["api_port"]) or not 1 <= raw["api_port"] <= 65535:
         raise bad("api_port", "a whole number from 1 to 65535")
 
@@ -142,6 +154,7 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         api_port=raw["api_port"],
         # The path Terraform wrote is only valid on its own machine, so the container overrides it.
         geolocate_config=_from_root(os.environ.get(GEOLOCATE_ENV_VAR) or raw["geolocate_config"]),
+        flood_zones_db=_from_root(flood_zones_db) if flood_zones_db else None,
     )
 
 

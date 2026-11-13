@@ -22,11 +22,12 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `max_portfolio_rows` | `5000` | Largest portfolio accepted |
 | `max_upload_mb` | `10` | Largest upload accepted |
 | `data_dir` | `data` | Where `script/serve.py` keeps runs. Docker always uses its volume |
+| `flood_zones_db` | `data/fema/flood-zones.duckdb` | FEMA flood zone database [built by `script/build_flood_zones.py`](data-sources.md#fema-flood-zones). `null` turns the lookup off |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
-Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`
-and `ASSET_RISK_DATA_DIR`.
+Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`,
+`ASSET_RISK_DATA_DIR` and `FLOOD_ZONES_DB`.
 
 ## Portfolio CSV
 
@@ -77,13 +78,22 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to 6, for the same `scenario` and `year`. 404 where there's no map |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
-| `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard |
+| `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
+| `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
 | `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
 
 Map tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
 while another run is assessing. The app keeps the last 256 in memory. Only river and coastal flood
 have public map data. `app/engine/hazard_maps.py` lists them, and `pytest -m live` checks that list
 against physrisk after a version bump.
+
+Each asset carries its FEMA flood zone: `fema_status` (`mapped`, `not_mapped`, `not_us`,
+`not_located` or `unavailable`), `fema_zone` and `fema_zone_subtype` as FEMA writes them,
+`fema_zone_key` (a key in `/api/flood-zone-definitions`, which splits Zone X into `X_SHADED`,
+`X_UNSHADED` and `X`), `in_sfha`, `base_flood_elevation` with its unit and datum, `fema_depth` with its
+unit, `fema_dfirm_id`, `fema_matches` (FEMA areas covering the point) and `fema_conflict` (they
+disagree on the zone). An asset's detail adds `fema_map_as_of`. Runs from before the lookup existed
+read as `unavailable`.
 
 Results return 409 until a run is `completed`. Assets are addressed by `row_num`, because an invalid
 row can have no id. Runs that were queued or running when the app stopped are marked `interrupted`,
@@ -98,6 +108,8 @@ Each run has `runs/<uuid>/run.duckdb`, which you can query directly:
 | `runs` | Status and progress |
 | `assets` | One row per input row: geolocate's output plus classification |
 | `asset_clusters` | The DBSCAN cluster of each clustered asset. Noise has no row, and runs made before clustering have no table |
+| `asset_flood_zones` | Each asset's FEMA flood zone and lookup status. Runs made before the lookup have no table |
+| `flood_zone_source` | Which FEMA data the run used, and its date. Empty when there was none |
 | `assessment_pairs` | Each scenario and year requested |
 | `impacts`, `scores` | Results, keyed on `row_num`, `scenario` and `year`. The baseline has year NULL |
 | `assess_failures` | Failed batches |
@@ -134,6 +146,9 @@ approximate.
 | 100 | 69 s | 0.7 GB |
 | 1,000 | 10 min 14 s | 2.3 GB |
 
+The FEMA flood zone stage took 7.8 s for 5,000 points spread across the US, outside Docker, and
+well under a second for a few dozen.
+
 The 5,000-row limit hasn't been measured. Time and memory both grow with portfolio size, so check
 you have the memory before going far beyond 1,000 rows, or lower `max_portfolio_rows`. Most of the
 time is the physrisk stage, and each scenario and year pair adds to it. Runs happen one at a time, and
@@ -150,6 +165,7 @@ uv venv .venv && uv pip install -p .venv -r requirements-dev.txt && npm --prefix
 .venv/bin/pytest -m s3                  # live Overture
 .venv/bin/pytest -m live                # live physrisk data
 .venv/bin/pytest -m e2e                 # the whole path, through Docker
+.venv/bin/pytest -m fema                # known locations against FEMA's live flood map
 npm --prefix app/front test
 npm --prefix app/front run typecheck
 npm --prefix app/front run dev          # proxies /api to port 8000

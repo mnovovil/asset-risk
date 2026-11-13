@@ -7,6 +7,8 @@ export type Asset = components["schemas"]["Asset"];
 export type AssetDetail = components["schemas"]["AssetDetail"];
 export type AssetTotal = components["schemas"]["AssetTotal"];
 export type Cluster = components["schemas"]["Cluster"];
+export type FloodZoneDefinitions = components["schemas"]["FloodZoneDefinitions"];
+export type FloodZoneDefinition = components["schemas"]["FloodZoneDefinition"];
 export type Coverage = components["schemas"]["Coverage"];
 export type HazardCurve = components["schemas"]["HazardCurve"];
 export type HazardMapLayer = components["schemas"]["HazardMapLayer"];
@@ -56,6 +58,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const getConfig = (signal?: AbortSignal) => request<AppConfig>("/config", { signal });
+
+export const getFloodZoneDefinitions = (signal?: AbortSignal) =>
+  request<FloodZoneDefinitions>("/flood-zone-definitions", { signal });
 
 export const getRun = (runId: string, signal?: AbortSignal) =>
   request<RunStatus>(`/runs/${encodeURIComponent(runId)}`, { signal });

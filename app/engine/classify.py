@@ -74,7 +74,8 @@ def classify(run: Run, settings: Settings) -> dict[str, int]:
         )
         con.executemany("INSERT INTO valid_curves VALUES (?, ?)", sorted(curves))
         con.execute(
-            "CREATE OR REPLACE TEMP TABLE regions AS SELECT region, geom FROM ST_Read(?)",
+            "CREATE OR REPLACE TEMP TABLE regions AS "
+            "SELECT region, name AS country, geom FROM ST_Read(?)",
             [str(COUNTRIES)],
         )
         con.execute((SQL_DIR / "assign_regions.sql").read_text())
