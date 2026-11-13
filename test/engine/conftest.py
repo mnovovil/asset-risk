@@ -6,7 +6,6 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from engine.flood_zone_data import connect as connect_flood_zones
 from engine.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,93 +75,3 @@ def local_settings(settings, buildings_parquet, tmp_path):
         )
     )
     return replace(settings, geolocate_config=config)
-
-
-@pytest.fixture(scope="session")
-def flood_con():
-    """A DuckDB connection with spatial loaded, for writing and reading flood zone fixtures."""
-    try:
-        connection = connect_flood_zones()
-    except duckdb.IOException as e:  # spatial extension not installed and no network
-        pytest.skip(f"DuckDB extensions unavailable: {e}")
-    yield connection
-    connection.close()
-
-
-FLOOD_ZONE_DEFAULTS = {
-    "subtype": None,
-    "sfha": "T",
-    "bfe": -9999.0,
-    "depth": -9999.0,
-    "datum": None,
-    "unit": "Feet",
-    "dfirm": "48167C",
-}
-
-
-@pytest.fixture
-def write_flood_source(flood_con):
-    """Write a GeoParquet shaped like FEMA's S_FLD_HAZ_AR and return its path.
-
-    Each row is (FLD_AR_ID, FLD_ZONE, ZONE_SUBTY, WKT) or a dict with id, zone and wkt, and
-    optionally subtype, sfha, bfe, depth, datum, unit and dfirm. WKT is in lon/lat; crs is the CRS
-    to store the shapes in.
-    """
-
-    def write(path, rows, crs=None, column="geom", zone_column="FLD_ZONE"):
-        con = flood_con
-        records = [
-            FLOOD_ZONE_DEFAULTS
-            | (
-                dict(zip(("id", "zone", "subtype", "wkt"), row, strict=True))
-                if isinstance(row, tuple)
-                else row
-            )
-            for row in rows
-        ]
-        con.execute(
-            "CREATE OR REPLACE TEMP TABLE flood_rows (id VARCHAR, zone VARCHAR, subtype VARCHAR, "
-            "wkt VARCHAR, sfha VARCHAR, bfe DOUBLE, depth DOUBLE, datum VARCHAR, unit VARCHAR, "
-            "dfirm VARCHAR)"
-        )
-        con.executemany(
-            "INSERT INTO flood_rows VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                [
-                    r[k]
-                    for k in (
-                        "id",
-                        "zone",
-                        "subtype",
-                        "wkt",
-                        "sfha",
-                        "bfe",
-                        "depth",
-                        "datum",
-                        "unit",
-                        "dfirm",
-                    )
-                ]
-                for r in records
-            ],
-        )
-        geometry = "ST_GeomFromText(wkt)"
-        if crs is not None:
-            geometry = f"ST_SetCRS(ST_Transform({geometry}, 'OGC:CRS84', ?, always_xy := true), ?)"
-        quoted = '"' + column.replace('"', '""') + '"'
-        # Test-only SQL: the path comes from tmp_path, and COPY can't take it as a parameter.
-        con.execute(
-            f"""
-            COPY (
-                SELECT dfirm AS DFIRM_ID, '1.1.1.0' AS VERSION_ID, id AS FLD_AR_ID,
-                       zone AS {zone_column}, subtype AS ZONE_SUBTY, sfha AS SFHA_TF,
-                       bfe AS STATIC_BFE, datum AS V_DATUM, depth AS DEPTH, unit AS LEN_UNIT,
-                       -9999.0 AS VELOCITY, 'Feet / Second' AS VEL_UNIT, {geometry} AS {quoted}
-                FROM flood_rows
-            ) TO '{path}' (FORMAT parquet)
-            """,
-            [] if crs is None else [crs, crs],
-        )
-        return path
-
-    return write

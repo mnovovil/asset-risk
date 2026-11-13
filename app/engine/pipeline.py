@@ -12,7 +12,6 @@ import os
 from engine.assess import assess
 from engine.classify import classify
 from engine.cluster import cluster
-from engine.flood_zones import map_flood_zones
 from engine.geolocation import locate
 from engine.ingest import read_portfolio
 from engine.settings import Settings
@@ -45,9 +44,6 @@ def execute(run: Run, points: Points, settings: Settings) -> bool:
         set_status(run, "running", "classifying")
         classify(run, settings)
         cluster(run, settings)
-
-        set_status(run, "running", "flood_zones")
-        map_flood_zones(run, settings, lambda d, t: set_progress(run, d, t))
 
         set_status(run, "running", "assessing")
         assessment = assess(run, settings)

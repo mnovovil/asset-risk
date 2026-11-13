@@ -24,6 +24,10 @@ ROOT = Path(__file__).resolve().parents[2]
 AS_OF = date(2026, 11, 13)
 INSIDE = (-94.79, 29.29)  # inside both Galveston-like squares below
 ELSEWHERE = (-90.07, 29.95)  # inside the X square only
+COLUMNS = (
+    "DFIRM_ID, VERSION_ID, FLD_AR_ID, FLD_ZONE, ZONE_SUBTY, SFHA_TF, STATIC_BFE, V_DATUM, DEPTH, "
+    "LEN_UNIT, VELOCITY, VEL_UNIT"
+)
 # (FLD_AR_ID, FLD_ZONE, ZONE_SUBTY, WKT in lon/lat)
 ROWS = [
     (
@@ -50,19 +54,40 @@ ROWS = [
 ]
 
 
-@pytest.fixture
-def con(flood_con):
-    return flood_con
+@pytest.fixture(scope="module")
+def con():
+    try:
+        connection = connect()
+    except duckdb.IOException as e:  # spatial extension not installed and no network
+        pytest.skip(f"DuckDB extensions unavailable: {e}")
+    yield connection
+    connection.close()
 
 
-@pytest.fixture
-def write_flood_source(write_flood_source):
-    """The shared writer, with this module's rows by default."""
-
-    def write(path, rows=ROWS, **kwargs):
-        return write_flood_source(path, rows, **kwargs)
-
-    return write
+def write_source(con, path, rows=ROWS, crs=None, column="geom", zone_column="FLD_ZONE"):
+    """A GeoParquet shaped like FEMA's S_FLD_HAZ_AR. crs is the CRS to store the shapes in."""
+    con.execute(
+        "CREATE OR REPLACE TEMP TABLE rows (id VARCHAR, zone VARCHAR, subtype VARCHAR, wkt VARCHAR)"
+    )
+    con.executemany("INSERT INTO rows VALUES (?, ?, ?, ?)", rows)
+    geometry = "ST_GeomFromText(wkt)"
+    if crs is not None:
+        geometry = f"ST_SetCRS(ST_Transform({geometry}, 'OGC:CRS84', ?, always_xy := true), ?)"
+    quoted = '"' + column.replace('"', '""') + '"'
+    con.execute(
+        f"""
+        COPY (
+            SELECT '48167C' AS DFIRM_ID, '1.1.1.0' AS VERSION_ID, id AS FLD_AR_ID,
+                   zone AS {zone_column}, subtype AS ZONE_SUBTY, 'T' AS SFHA_TF,
+                   -9999.0 AS STATIC_BFE, CAST(NULL AS VARCHAR) AS V_DATUM, -9999.0 AS DEPTH,
+                   'Feet' AS LEN_UNIT, -9999.0 AS VELOCITY, 'Feet / Second' AS VEL_UNIT,
+                   {geometry} AS {quoted}
+            FROM rows
+        ) TO '{path}' (FORMAT parquet)
+        """,
+        [] if crs is None else [crs, crs],
+    )
+    return path
 
 
 def zones_at(path, lon, lat):
@@ -75,9 +100,9 @@ def zones_at(path, lon, lat):
     return [zone for (zone,) in rows]
 
 
-def test_builds_an_indexed_database(con, tmp_path, write_flood_source):
+def test_builds_an_indexed_database(con, tmp_path):
     out = tmp_path / "fema" / "flood-zones.duckdb"
-    report = build(write_flood_source(tmp_path / "source.parquet"), out, AS_OF)
+    report = build(write_source(con, tmp_path / "source.parquet"), out, AS_OF)
 
     assert (report.polygons, report.skipped_no_geometry, report.skipped_no_zone) == (3, 2, 1)
     assert (report.source_crs, report.reprojected) == (CRS, False)
@@ -99,8 +124,8 @@ def test_builds_an_indexed_database(con, tmp_path, write_flood_source):
     assert not list(out.parent.glob(".*partial*"))
 
 
-def test_records_what_it_was_built_from(con, tmp_path, write_flood_source):
-    source = write_flood_source(tmp_path / "source.parquet")
+def test_records_what_it_was_built_from(con, tmp_path):
+    source = write_source(con, tmp_path / "source.parquet")
     out = tmp_path / "flood-zones.duckdb"
     build(source, out, AS_OF)
     info = database_info(out)
@@ -114,25 +139,25 @@ def test_records_what_it_was_built_from(con, tmp_path, write_flood_source):
 
 
 @pytest.mark.parametrize("crs", ["EPSG:4269", "EPSG:3857"])
-def test_reprojects_to_lon_lat(con, tmp_path, crs, write_flood_source):
+def test_reprojects_to_lon_lat(con, tmp_path, crs):
     out = tmp_path / "flood-zones.duckdb"
-    report = build(write_flood_source(tmp_path / "source.parquet", crs=crs), out, AS_OF)
+    report = build(write_source(con, tmp_path / "source.parquet", crs=crs), out, AS_OF)
     assert (report.source_crs, report.reprojected) == (crs, True)
     assert zones_at(out, *INSIDE) == ["OPEN WATER", "VE"]
     assert zones_at(out, *ELSEWHERE) == ["X"]
     assert database_info(out)["source_crs"] == crs
 
 
-def test_wgs84_is_only_relabelled(con, tmp_path, write_flood_source):
+def test_wgs84_is_only_relabelled(con, tmp_path):
     out = tmp_path / "flood-zones.duckdb"
-    report = build(write_flood_source(tmp_path / "s.parquet", crs="EPSG:4326"), out, AS_OF)
+    report = build(write_source(con, tmp_path / "s.parquet", crs="EPSG:4326"), out, AS_OF)
     assert (report.source_crs, report.reprojected) == ("EPSG:4326", False)
     assert zones_at(out, *INSIDE) == ["OPEN WATER", "VE"]
 
 
-def test_any_geometry_column_name(con, tmp_path, write_flood_source):
+def test_any_geometry_column_name(con, tmp_path):
     out = tmp_path / "flood-zones.duckdb"
-    build(write_flood_source(tmp_path / "s.parquet", column='my "geometry"'), out, AS_OF)
+    build(write_source(con, tmp_path / "s.parquet", column='my "geometry"'), out, AS_OF)
     assert zones_at(out, *ELSEWHERE) == ["X"]
 
 
@@ -165,15 +190,15 @@ def test_refuses_plain_parquet(con, tmp_path):
         build(path, tmp_path / "out.duckdb", AS_OF)
 
 
-def test_refuses_missing_columns(con, tmp_path, write_flood_source):
-    path = write_flood_source(tmp_path / "s.parquet", zone_column="ZONE")
+def test_refuses_missing_columns(con, tmp_path):
+    path = write_source(con, tmp_path / "s.parquet", zone_column="ZONE")
     with pytest.raises(FloodZoneDataError, match="FLD_ZONE"):
         build(path, tmp_path / "out.duckdb", AS_OF)
 
 
-def test_refuses_a_zone_the_lookup_does_not_describe(con, tmp_path, write_flood_source):
+def test_refuses_a_zone_the_lookup_does_not_describe(con, tmp_path):
     rows = [*ROWS, ("7", "A7", None, "POLYGON((2 2, 3 2, 3 3, 2 3, 2 2))")]
-    source = write_flood_source(tmp_path / "s.parquet", rows)
+    source = write_source(con, tmp_path / "s.parquet", rows=rows)
     out = tmp_path / "flood-zones.duckdb"
     out.write_text("the previous database")
     with pytest.raises(FloodZoneDataError, match=r"\['A7'\].*fema_zones.json"):
@@ -183,10 +208,10 @@ def test_refuses_a_zone_the_lookup_does_not_describe(con, tmp_path, write_flood_
     assert sorted(p.name for p in tmp_path.iterdir()) == ["flood-zones.duckdb", "s.parquet"]
 
 
-def test_a_rebuild_replaces_the_database(con, tmp_path, write_flood_source):
+def test_a_rebuild_replaces_the_database(con, tmp_path):
     out = tmp_path / "flood-zones.duckdb"
-    build(write_flood_source(tmp_path / "a.parquet"), out, AS_OF)
-    build(write_flood_source(tmp_path / "b.parquet", ROWS[2:3]), out, date(2027, 1, 1))
+    build(write_source(con, tmp_path / "a.parquet"), out, AS_OF)
+    build(write_source(con, tmp_path / "b.parquet", rows=ROWS[2:3]), out, date(2027, 1, 1))
     info = database_info(out)
     assert (info["source_name"], info["polygons"], info["as_of"]) == (
         "b.parquet",
@@ -219,11 +244,9 @@ def test_database_info_explains_an_unusable_file(con, tmp_path):
         ("crs", "EPSG:4269", "expected OGC:CRS84"),
     ],
 )
-def test_database_info_refuses_another_shape(
-    con, tmp_path, column, value, message, write_flood_source
-):
+def test_database_info_refuses_another_shape(con, tmp_path, column, value, message):
     out = tmp_path / "flood-zones.duckdb"
-    build(write_flood_source(tmp_path / "s.parquet"), out, AS_OF)
+    build(write_source(con, tmp_path / "s.parquet"), out, AS_OF)
     with duckdb.connect(str(out)) as db:
         db.execute(f"UPDATE flood_zone_source SET {column} = ?", [value])
     with pytest.raises(FloodZoneDataError, match=message):
@@ -242,8 +265,8 @@ def test_the_lookup_table_is_consistent():
     assert known_zones() >= {"A", "AE", "AH", "AO", "AR", "A99", "V", "VE", "X", "D"}
 
 
-def test_script(con, tmp_path, write_flood_source):
-    source = write_flood_source(tmp_path / "s.parquet", crs="EPSG:4269")
+def test_script(con, tmp_path):
+    source = write_source(con, tmp_path / "s.parquet", crs="EPSG:4269")
     out = tmp_path / "out" / "flood-zones.duckdb"
     script = ROOT / "script" / "build_flood_zones.py"
 

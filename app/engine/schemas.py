@@ -4,7 +4,7 @@ and /sync-generated.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ class RunStatus(BaseModel):
     source_name: str | None
     total_rows: int
     status: str  # queued | running | completed | failed | interrupted
-    stage: str | None  # geolocating | classifying | flood_zones | assessing
+    stage: str | None  # geolocating | classifying | assessing
     done: int  # progress within the stage
     total: int
     error: str | None
@@ -62,21 +62,6 @@ class Asset(BaseModel):
     type_source: str | None  # class | subtype | assumed
     assessable: bool | None
     exclusion_reason: str | None
-    # FEMA flood zone at the point. fema_status says why there's none: not_mapped (in the US but
-    # on no FEMA map), not_us, not_located or unavailable (no FEMA data for this run).
-    fema_status: str  # mapped | not_mapped | not_us | not_located | unavailable
-    fema_zone: str | None  # FLD_ZONE as FEMA publishes it
-    fema_zone_subtype: str | None
-    fema_zone_key: str | None  # a key in /flood-zone-definitions; Zone X is split by shading
-    in_sfha: bool | None  # None when FEMA's data doesn't say
-    base_flood_elevation: float | None
-    base_flood_elevation_unit: str | None
-    base_flood_elevation_datum: str | None
-    fema_depth: float | None  # AO zones give a depth instead of an elevation
-    fema_depth_unit: str | None
-    fema_dfirm_id: str | None
-    fema_matches: int  # FEMA polygons covering the point; the highest-risk zone is shown
-    fema_conflict: bool  # those polygons disagree on the zone
 
 
 class Cluster(BaseModel):
@@ -110,7 +95,6 @@ class AssetScore(BaseModel):
 
 class AssetDetail(Asset):
     geometry_wkt: str | None
-    fema_map_as_of: date | None  # when the FEMA data was published or downloaded
     impacts: list[AssetImpact]
     scores: list[AssetScore]
 
@@ -176,43 +160,6 @@ class HazardMapLayer(BaseModel):
     max_zoom: int
     legend: list[str]  # CSS colours from min_value to max_value, as drawn on the map
     tile_url: str | None  # {z}, {x} and {y} are left for the map to fill in
-
-
-class Source(BaseModel):
-    title: str
-    url: str
-
-
-class FloodZoneDefinition(BaseModel):
-    key: str  # what fema_zone_key holds
-    fld_zone: str
-    risk_rank: int  # 1 is the highest risk; it decides between overlapping polygons
-    label: str
-    risk: str  # high | moderate | minimal | undetermined | not_applicable
-    annual_chance: str
-    sfha: bool | None  # whether FEMA counts the zone as a Special Flood Hazard Area
-    insurance: str  # a key in insurance: required | not_required | not_applicable
-    summary: str
-    sources: list[Source]
-
-
-class InsuranceRule(BaseModel):
-    key: str
-    label: str
-    text: str
-    sources: list[Source]
-
-
-class FloodZoneStatus(BaseModel):
-    key: str  # a fema_status other than mapped
-    label: str
-    summary: str
-
-
-class FloodZoneDefinitions(BaseModel):
-    zones: list[FloodZoneDefinition]
-    insurance: list[InsuranceRule]
-    statuses: list[FloodZoneStatus]
 
 
 class AppConfig(BaseModel):

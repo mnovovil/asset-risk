@@ -35,7 +35,6 @@ CREATE TABLE assets (
     region             VARCHAR,  -- continent from the country data; NULL when there is none nearby
     region_source      VARCHAR,  -- contains | nearest
     region_distance_km DOUBLE,   -- how far away the nearest country is; 0 when inside one
-    country            VARCHAR,  -- countries.geojson name, trusted on the same terms as region
     physrisk_type      VARCHAR,
     physrisk_location  VARCHAR,
     location_fallback  BOOLEAN,  -- physrisk_location is Global because region has no curve
@@ -90,34 +89,4 @@ CREATE TABLE assess_failures (
     scenario VARCHAR NOT NULL,
     year     INTEGER NOT NULL,
     error    VARCHAR
-);
-
--- The FEMA flood zone at each asset's point (flood_zones.py), one row per asset. Runs made before
--- this table existed don't have it, and read as 'unavailable'.
-CREATE TABLE asset_flood_zones (
-    row_num                    INTEGER PRIMARY KEY,
-    fema_status                VARCHAR NOT NULL
-        CHECK (fema_status IN ('mapped', 'not_mapped', 'not_us', 'not_located', 'unavailable')),
-    fema_zone                  VARCHAR,  -- FLD_ZONE as published
-    fema_zone_subtype          VARCHAR,  -- ZONE_SUBTY, trimmed and upper-cased
-    fema_zone_key              VARCHAR,  -- fema_zones.json key: Zone X is split by shading
-    in_sfha                    BOOLEAN,  -- SFHA_TF; NULL when it's U or missing
-    base_flood_elevation       DOUBLE,   -- STATIC_BFE; NULL for FEMA's -9999 and -8888
-    base_flood_elevation_unit  VARCHAR,
-    base_flood_elevation_datum VARCHAR,
-    fema_depth                 DOUBLE,   -- DEPTH, given in AO zones instead of an elevation
-    fema_depth_unit            VARCHAR,
-    fema_dfirm_id              VARCHAR,
-    fema_fld_ar_id             VARCHAR,
-    fema_matches               INTEGER NOT NULL DEFAULT 0,  -- polygons covering the point
-    fema_conflict              BOOLEAN NOT NULL DEFAULT false  -- they disagree on the zone
-);
-
--- Which FEMA data the run used, copied from the flood zone database. Empty when there was none.
-CREATE TABLE flood_zone_source (
-    source_name VARCHAR,
-    source_crs  VARCHAR,
-    polygons    BIGINT,
-    as_of       DATE,
-    built_at    TIMESTAMPTZ
 );
