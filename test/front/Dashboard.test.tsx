@@ -71,7 +71,9 @@ function stub(overrides: Record<string, unknown> = {}) {
 
 async function renderDashboard() {
   render(<Dashboard runId={RUN} />);
-  return screen.findByRole("heading", { name: "Risk by asset and hazard" });
+  // The first test in the file pays for loading the dashboard and its charts, which took up to
+  // 1.8 s against Testing Library's default of 1 s and failed about one run in ten.
+  return screen.findByRole("heading", { name: "Risk by asset and hazard" }, { timeout: 5000 });
 }
 
 const meanLoss = () =>
