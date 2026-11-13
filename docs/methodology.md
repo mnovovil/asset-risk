@@ -203,12 +203,14 @@ from a list, across every year and scenario of the run. Read it with these limit
 
 ## Hazard maps
 
-The asset panel can show a map around the asset, drawn from physrisk's own map data. It answers
-where the flood plain is, which a single point's numbers can't. **Open larger map** opens the same
-map, hazard and period full-size in a new tab. Read it, at any size, with these limits:
+The asset panel can show a map around the asset, drawn from physrisk's own data. It answers what
+the area around a point looks like, which a single point's numbers can't. **Open larger map** opens
+the same layer and period full-size in a new tab. One **Layer** list holds two kinds of map,
+grouped by hazard.
 
-- **Only river and coastal flood.** physrisk's maps of wind, fire, hail, heat and drought aren't
-  public, so these hazards are listed but can't be chosen.
+### Flood maps
+
+- **River and coastal flood depth**, drawn by physrisk as map tiles.
 - **Only the 1-in-1000-year flood.** The maps hold no other return period.
 - **About 1 km pixels**, so the map shows the area, not the building. It stops adding detail past a
   regional zoom.
@@ -217,6 +219,41 @@ map, hazard and period full-size in a new tab. Read it, at any size, with these 
   data the assessment uses. physrisk has flood maps for SSP2-4.5 and SSP5-8.5 from 2030 to 2080
   only, and none for SSP1-2.6 or SSP3-7.0.
 - **A clear area means no flood in the data**, not no flood risk.
+
+### Hazard grids
+
+The other hazards are read straight from the grids behind physrisk's datasets: wind, wildfire,
+hail, heat, drought, extreme rainfall, water risk and land subsidence, about 1° each way around the
+asset. `app/engine/data/hazard_grids.json` lists them, with why the rest of physrisk's data is left
+out (Europe-only datasets, categorical maps, duplicates).
+
+- **Most are indicators, not damage.** Only three feed the damage figures: Jupiter's wildfire
+  probability, Jupiter's large hail days and IRIS's tropical cyclone wind. Each grid says which it
+  is. The others describe the climate around the asset, and the app has no model turning them
+  into a loss.
+- **Native resolution, and the asset's own cell.** Each cell is drawn as the dataset stores it,
+  without smoothing, and its size is shown: about 21 × 28 km for most grids near New York, 8 × 11
+  km for IRIS, 7 × 9 km for Aqueduct, and under 1 km for subsidence. The value shown for the asset
+  is the cell it sits in, not an interpolation. A coarse cell over a city averages the whole area.
+- **No year or scenario is ever substituted.** A dataset without the selected pair says "No data
+  for this scenario/year" instead of showing a nearby one. At 2080 only Aqueduct, wet-bulb heat
+  stress and 12-month drought have data. Jupiter's grids have no historical baseline, IRIS has
+  projections for 2050 only, and the water temperature grid has RCP scenarios only, which the app
+  doesn't run, so only its baseline shows.
+- **One colour scale for both periods.** The scale runs from the lowest to the highest value in the
+  window over the historical baseline and the selected scenario together, so the Historical and
+  scenario maps compare directly. It is set per asset, so colours don't compare across assets: read
+  the legend's values.
+- **Jupiter's fire and hail have no baseline.** physrisk's historical damage figures stand in the
+  datasets' earliest year (SSP1-2.6, 2020). The map doesn't, and shows no data.
+- **Aqueduct changed method between its baseline and its projections.** Near New York, water stress
+  goes from about 0.03 to 1.2 by 2030, mostly from the method rather than the climate. Cells
+  Aqueduct marks 9999 show as no data.
+- **"No data at this point" is not zero.** A cell with no value, such as the subsidence grid over
+  New York's East River, is shown hollow, never in the scale's lowest colour.
+
+**A low value is not proof of low risk.** That holds for a low cell value, a cell with no data, or a
+coarse cell over a city, just as it does for a low score.
 
 **Use it to** screen many sites and find which deserve a closer look. **Don't use it for** decisions
 about a single site, or for currency estimates of loss.

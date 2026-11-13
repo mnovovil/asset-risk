@@ -250,3 +250,89 @@ export function resultsResponse(url: string): Response {
   if (endpoint in ENDPOINTS) return jsonResponse(ENDPOINTS[endpoint]);
   throw new Error(`Unexpected request: ${url}`);
 }
+
+const GRID_LAYERS = [
+  {
+    id: "wind_iris_max_speed",
+    hazard: "Wind",
+    name: "Tropical cyclone wind speed",
+    dataset: "IRIS",
+    attribution: "Sparks & Toumi (2024)",
+    units: "m/s",
+    index_label: "1 in 100 years",
+    feeds_damage: true,
+    caveat: "Tropical cyclones only.",
+    scenarios: ["historical", "ssp585"],
+  },
+  {
+    id: "heat_jupiter_days_above_35c",
+    hazard: "ChronicHeat",
+    name: "Hot days",
+    dataset: "Jupiter Intelligence",
+    attribution: "Jupiter Intelligence, via OS-Climate physrisk",
+    units: "days/year",
+    index_label: "Above 35°C",
+    feeds_damage: false,
+    caveat: null,
+    scenarios: ["ssp585"],
+  },
+  {
+    id: "subsidence_csm_rate",
+    hazard: "Subsidence",
+    name: "Land subsidence",
+    dataset: "Davydzenka et al. (2024)",
+    attribution: "CC BY 4.0",
+    units: "mm/year",
+    index_label: "Present-day rate",
+    feeds_damage: false,
+    caveat: "Historical only.",
+    scenarios: ["historical"],
+  },
+];
+
+/** What the API lists for an asset's hazard grids, for the pair in the URL's query. */
+export function hazardGrids(url: string) {
+  const [path, query] = url.split("?");
+  const scenario = new URLSearchParams(query).get("scenario") ?? "";
+  return GRID_LAYERS.map(({ scenarios, ...layer }) => {
+    const available = scenarios.includes(scenario);
+    const reason = available
+      ? null
+      : scenario === "historical"
+        ? "This dataset has no historical baseline"
+        : `This dataset has no ${scenario} scenario`;
+    return {
+      ...layer,
+      available,
+      reason,
+      detail_url: available ? `${path}/${layer.id}?${query}` : null,
+    };
+  });
+}
+
+/** One grid's window. Subsidence has no data in the asset's own cell. */
+export function hazardGridWindow(url: string) {
+  const [path, query] = url.split("?");
+  const id = path.split("/").pop() as string;
+  const params = new URLSearchParams(query);
+  const theme = params.get("theme");
+  return {
+    id,
+    available: true,
+    reason: null,
+    bounds: [-75, 39.7, -72.9, 41.8],
+    min_value: 19.2,
+    max_value: 37.9,
+    asset_value: id === "subsidence_csm_rate" ? null : 24.365,
+    cell_km: [8.43, 11.06],
+    legend: theme === "dark" ? ["#184f95", "#b7d3f6"] : ["#86b6ef", "#0d366b"],
+    image_url: `${path}.png?${query}`,
+  };
+}
+
+/** Answers both hazard grid requests, or null for any other URL. */
+export function hazardGridResponse(url: string): Response | null {
+  if (/\/hazard-grids\?/.test(url)) return jsonResponse(hazardGrids(url));
+  if (/\/hazard-grids\/[^/?]+\?/.test(url)) return jsonResponse(hazardGridWindow(url));
+  return null;
+}
