@@ -10,7 +10,10 @@ How a coordinate becomes a risk figure, and how far to trust it. Start with the
 2. **Type.** The building's Overture `class` or `subtype` picks one of physrisk's building types:
    Residential, Commercial or Industrial.
 3. **Region.** The point's continent picks the regional version of the damage curve.
-4. **Assessment.** physrisk looks up each hazard at the point, turns its intensity into damage with a
+4. **FEMA flood zone.** For points in the US and its territories, the
+   [FEMA flood zone](#fema-flood-zones) at the point is looked up separately. It doesn't feed into
+   physrisk's results.
+5. **Assessment.** physrisk looks up each hazard at the point, turns its intensity into damage with a
    vulnerability curve, and returns the results.
 
 ## What the figures mean
@@ -146,6 +149,43 @@ These come from physrisk's default data, and most were found while building
   different from low risk.
 - **Zero:** river flood at zero means the exact point is dry in the data, not that the area has no
   flood risk.
+
+## FEMA flood zones
+
+For a point in the US or one of its territories, the asset panel and the CSV export show the FEMA
+flood zone the point falls in, from FEMA's National Flood Hazard Layer. Expand "What does Zone … mean?"
+on the panel for the zone's meaning, its chance of flooding each year, whether flood insurance is
+required, and FEMA's sources.
+
+**A FEMA zone isn't a modelled loss.** It's the regulatory flood map that decides whether lenders must
+require flood insurance. It can disagree with physrisk's river and coastal flood: physrisk reads a
+1 km grid at the exact point, while FEMA draws boundaries around the 1% (100-year) flood. A point can
+be dry in physrisk's data and inside a FEMA high-risk area, or the reverse. Read the two side by
+side, not one as a check on the other.
+
+How the zone is found, and how to read it:
+
+- **Only the point.** The zone is looked up at the coordinates, not over the building's footprint.
+  FEMA's own determination is for the building, which may reach into a riskier zone.
+- **The highest-risk zone wins an overlap.** FEMA's data has maps from different studies over the
+  same ground, and neighbouring areas meet on a line. When several areas cover the point, the panel
+  shows the highest-risk one and warns that they disagree. The order puts coastal (V) zones first,
+  then the other 1% zones, then open water, D, shaded X, X and unshaded X, then areas not included.
+- **No zone is not low risk.** "Not on a FEMA flood map" means no FEMA area in the data covers the
+  point. That's different from Zone X (mapped, moderate or minimal risk) and from Zone D (mapped,
+  hazard not determined).
+- **Shaded and unshaded Zone X are kept apart.** Only FEMA's subtype tells them apart. Shaded is
+  moderate risk, unshaded is minimal, and minimal isn't none.
+- **A missing base flood elevation** often means FEMA drew it as lines along the river, which this
+  data doesn't include, not that there's none.
+- **"High-risk area (SFHA)"** is FEMA's own flag for the area. In a few areas it disagrees with what
+  the zone usually means, and the panel says so.
+- **A snapshot.** The data is as of the date shown with the zone. FEMA's live maps change as studies
+  are updated, and some locations already differ (see
+  [Data sources](data-sources.md#checking-against-femas-map)).
+
+**It's not an official determination.** Check an address that matters on
+[FEMA's Flood Map Service Center](https://msc.fema.gov/portal/search).
 
 ## Hazard maps
 
