@@ -179,6 +179,55 @@ const PAIRS: Record<string, { totals: unknown[]; impacts: unknown[]; scores: unk
   },
 };
 
+const fema = (title: string, path: string) => ({ title, url: `https://www.fema.gov/${path}` });
+
+const zone = (
+  key: string,
+  label: string,
+  annual_chance: string,
+  sfha: boolean | null,
+  insurance: string,
+  summary: string,
+) => ({
+  key,
+  fld_zone: key.startsWith("X") ? "X" : key,
+  risk_rank: 1,
+  label,
+  risk: "high",
+  annual_chance,
+  sfha,
+  insurance,
+  summary,
+  sources: [fema(`FEMA glossary: ${label}`, `glossary/${key.toLowerCase()}`)],
+});
+
+/** A slice of /api/flood-zone-definitions. */
+export const FLOOD_ZONE_DEFINITIONS = {
+  zones: [
+    zone("VE", "Zone VE", "1% or more", true, "required", "Coastal high-hazard area with storm waves."),
+    zone("AE", "Zone AE", "1%", true, "required", "High-risk floodplain with a base flood elevation."),
+    zone("D", "Zone D", "Undetermined", false, "not_required", "Possible but undetermined hazard."),
+    zone("X_SHADED", "Zone X (shaded)", "0.2% to 1%", false, "not_required", "Moderate risk."),
+    zone("X_UNSHADED", "Zone X (unshaded)", "Under 0.2%", false, "not_required", "Minimal risk."),
+  ],
+  insurance: [
+    {
+      key: "required",
+      label: "Required",
+      text: "A mortgage from a federally regulated lender needs it.",
+      sources: [{ title: "42 U.S.C. 4012a", url: "https://uscode.house.gov/4012a" }],
+    },
+    { key: "not_required", label: "Not required", text: "Federal rules don't require it.", sources: [] },
+    { key: "not_applicable", label: "Doesn't apply", text: "This isn't a flood zone.", sources: [] },
+  ],
+  statuses: [
+    { key: "not_mapped", label: "Not on a FEMA flood map", summary: "No FEMA flood zone covers the point." },
+    { key: "not_us", label: "Outside the US", summary: "FEMA maps only the US." },
+    { key: "not_located", label: "No valid location", summary: "The location is invalid." },
+    { key: "unavailable", label: "FEMA data not loaded", summary: "This run had no FEMA data." },
+  ],
+};
+
 const ENDPOINTS: Record<string, unknown> = {
   summary: SUMMARY,
   assets: ASSETS,
@@ -190,6 +239,7 @@ const ENDPOINTS: Record<string, unknown> = {
 /** Answer a results request from the fixtures above. */
 export function resultsResponse(url: string): Response {
   if (url === "/api/config") return jsonResponse(CONFIG);
+  if (url === "/api/flood-zone-definitions") return jsonResponse(FLOOD_ZONE_DEFINITIONS);
   const [path, query] = url.split("?");
   const endpoint = path.split("/").pop() as string;
   if (endpoint === "impacts" || endpoint === "totals" || endpoint === "scores") {

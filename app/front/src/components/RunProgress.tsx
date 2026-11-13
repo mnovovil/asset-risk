@@ -3,6 +3,7 @@ import type { RunStatus } from "@/api/client";
 const STAGES = [
   { key: "geolocating", label: "Geolocating", detail: "Matching points to buildings" },
   { key: "classifying", label: "Classifying", detail: "Working out each asset's type and region" },
+  { key: "flood_zones", label: "Flood zones", detail: "Looking up FEMA flood zones for US assets" },
   { key: "assessing", label: "Assessing", detail: "Calculating climate risk" },
 ];
 
