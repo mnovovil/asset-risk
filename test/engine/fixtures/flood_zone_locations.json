@@ -1,0 +1,92 @@
+{
+  "about": "Points with a known FEMA flood zone, checked on 2026-11-13 against FEMA's NFHL data (flood-hazard.parquet) and FEMA's live map service. The first six are street addresses; the others are points inside real polygons of zones no well-known address is known to sit in. script/flood_zone_fixture.py cuts the polygons around them into flood_zones_sample.parquet. live_differs says why FEMA's live map gives another answer.",
+  "checked": "2026-11-13",
+  "locations": [
+    {
+      "name": "Miami Beach City Hall, 1700 Convention Center Dr, Miami Beach FL",
+      "lon": -80.1340, "lat": 25.7953,
+      "expected": { "fema_zone_key": "AE", "in_sfha": true, "base_flood_elevation": 8.0, "base_flood_elevation_unit": "feet", "base_flood_elevation_datum": "NGVD29", "fema_dfirm_id": "12086C", "fema_conflict": false },
+      "live_zone": "AE"
+    },
+    {
+      "name": "New Orleans City Hall, 1300 Perdido St, New Orleans LA",
+      "lon": -90.0770, "lat": 29.9520,
+      "expected": { "fema_zone_key": "X_SHADED", "fema_zone_subtype": "AREA WITH REDUCED FLOOD RISK DUE TO LEVEE", "in_sfha": false, "base_flood_elevation": null, "fema_conflict": false },
+      "live_zone": "X"
+    },
+    {
+      "name": "Charleston City Hall, 80 Broad St, Charleston SC",
+      "lon": -79.9310, "lat": 32.7765,
+      "expected": { "fema_zone_key": "X_SHADED", "fema_zone_subtype": "0.2 PCT ANNUAL CHANCE FLOOD HAZARD", "in_sfha": false, "fema_conflict": false },
+      "live_zone": "X"
+    },
+    {
+      "name": "Colorado State Capitol, 200 E Colfax Ave, Denver CO",
+      "lon": -104.9848, "lat": 39.7393,
+      "expected": { "fema_zone_key": "X_UNSHADED", "in_sfha": false, "fema_conflict": false },
+      "live_zone": "X"
+    },
+    {
+      "name": "Hoboken City Hall, 94 Washington St, Hoboken NJ",
+      "lon": -74.0315, "lat": 40.7373,
+      "expected": { "fema_zone_key": "X_UNSHADED", "in_sfha": false, "fema_conflict": false },
+      "live_zone": "X"
+    },
+    {
+      "name": "Galveston Island Historic Pleasure Pier, 2501 Seawall Blvd, Galveston TX",
+      "lon": -94.7895, "lat": 29.2860,
+      "expected": { "fema_zone_key": "VE", "in_sfha": true, "base_flood_elevation": 19.0, "fema_dfirm_id": "485469", "fema_matches": 2, "fema_conflict": true },
+      "live_zone": "OPEN WATER",
+      "live_differs": "The data also has an older study's VE polygon here (DFIRM 485469), and the highest-risk zone wins. FEMA's live map shows only the county's OPEN WATER (48167C)."
+    },
+    {
+      "name": "Zone A in Pasco County FL",
+      "lon": -82.319451, "lat": 28.195243,
+      "expected": { "fema_zone_key": "A", "in_sfha": true, "base_flood_elevation": null },
+      "live_zone": "A"
+    },
+    {
+      "name": "Zone AO in Strafford County NH",
+      "lon": -70.733937, "lat": 43.019550,
+      "expected": { "fema_zone_key": "AO", "in_sfha": true },
+      "live_zone": "AO"
+    },
+    {
+      "name": "Zone AH in Platte County NE",
+      "lon": -96.665460, "lat": 41.661829,
+      "expected": { "fema_zone_key": "AH", "in_sfha": true, "base_flood_elevation": 1250.0, "fema_matches": 2, "fema_conflict": true },
+      "live_zone": "AH"
+    },
+    {
+      "name": "Zone A99 in San Diego County CA",
+      "lon": -117.371271, "lat": 33.219979,
+      "expected": { "fema_zone_key": "A99", "in_sfha": true },
+      "live_zone": "A99"
+    },
+    {
+      "name": "Zone V in Hawaii County HI",
+      "lon": -155.617988, "lat": 20.141161,
+      "expected": { "fema_zone_key": "V", "in_sfha": true, "fema_matches": 2, "fema_conflict": false },
+      "live_zone": "V"
+    },
+    {
+      "name": "Zone D in Kern County CA",
+      "lon": -119.092012, "lat": 34.859741,
+      "expected": { "fema_zone_key": "D", "in_sfha": false },
+      "live_zone": "D"
+    },
+    {
+      "name": "Open water in Kent County DE",
+      "lon": -75.472563, "lat": 39.774806,
+      "expected": { "fema_zone_key": "OPEN WATER", "in_sfha": false },
+      "live_zone": "OPEN WATER"
+    },
+    {
+      "name": "Area not included in Lake County MT",
+      "lon": -114.508357, "lat": 47.337107,
+      "expected": { "fema_zone_key": "AREA NOT INCLUDED", "in_sfha": false },
+      "live_zone": null,
+      "live_differs": "FEMA's live map returned no polygon here on 2026-11-13, though the downloaded data has one."
+    }
+  ]
+}
