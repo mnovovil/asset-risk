@@ -186,12 +186,15 @@ uv run script/record_demo.py --build
 ```
 
 It runs the [demo portfolio](assets/demo_portfolio.csv) for real in its own compose project and
-volume, opens the New Orleans cluster on the map, clicks `US-312`, and zooms its hazard map out to
-southern Louisiana. It stops if the run fails, the map doesn't load, no cluster contains New
-Orleans, no bubble on screen can be matched to that cluster, `US-312` can't be clicked on the map,
-or its hazard maps load no tile. Without `--build` it reuses the existing image. Check that it
-reports all three
-stages: Classifying is short, and the page only checks progress every 1.5 s, so it can be missed.
+volume, opens the New Orleans cluster on the map, clicks `US-312`, shows its FEMA flood zone and
+what the zone means, and zooms its hazard map out to southern Louisiana. It needs the FEMA flood
+zone database that `flood_zones_db` names, and mounts it the way `script/start.sh` does. It stops
+if that database is missing, the run fails, the page never shows the Flood zones stage reached, the map doesn't
+load, no cluster contains New Orleans, no bubble on screen can be matched to that cluster, `US-312`
+can't be clicked on the map, isn't mapped in a levee-protected Zone X as its caption says, or its
+hazard maps load no tile. Without `--build` it reuses the existing image. It reports the stages it saw
+as current: Classifying and Flood zones are short, and the page only checks progress every 1.5 s,
+so they can be missed. The GIF holds on Flood zones once it is current or ticked off.
 
 `script/overture_values.py` audits the building type map against a live release, and
 `script/build_regions.py` rebuilds the region data.
