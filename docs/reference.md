@@ -76,6 +76,9 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/assets/{row_num}/hazard-curve` | River flood depth by return period |
 | `GET /api/runs/{id}/hazard-maps` | The hazards physrisk can draw a map of for one `scenario` and `year`, each with its tile URL and legend, or the reason it has none |
 | `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to 6, for the same `scenario` and `year`. 404 where there's no map |
+| `GET /api/runs/{id}/assets/{row_num}/hazard-grids` | physrisk's non-flood hazard grids for one `scenario` and `year`, each with its wording, units, dataset and whether it feeds the damage figures, and either a `detail_url` or the reason it has no data. Reads nothing |
+| `GET /api/runs/{id}/assets/{row_num}/hazard-grids/{layer}` | One layer's window of about ±1° around the asset for the same `scenario` and `year`, with `theme=light` or `dark`. Returns the bounds, the value range, the asset's own cell value (null when that cell has no data), the cell size in km, the legend and `image_url`. Returns `available: false` with a reason when there's nothing to draw |
+| `GET /api/runs/{id}/assets/{row_num}/hazard-grids/{layer}.png` | That window as a PNG, one pixel per cell, north up. 404 when the layer has no data, 502 when the read fails |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
 | `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
@@ -86,6 +89,16 @@ Map tiles are drawn by physrisk on request, through the same lock as a run, so t
 while another run is assessing. The app keeps the last 256 in memory. Only river and coastal flood
 have public map data. `app/engine/hazard_maps.py` lists them, and `pytest -m live` checks that list
 against physrisk after a version bump.
+
+Hazard grids are read from the raw zarr arrays in physrisk's public bucket (anonymously), because
+physrisk's own map API serves only the flood maps. `app/engine/data/hazard_grids.json` lists the
+layers and why the rest of physrisk's inventory is left out. Scenarios and years come from the
+inventory, and a pair a dataset lacks says so instead of showing a nearby year. Each window's colour
+scale spans the historical baseline and the selected pair, so the two can be compared directly.
+Reads go through the same lock as a run. A cold window takes about 0.3 s (the 12-month drought
+layer about 1.2 s), so the list reads nothing and each layer is fetched when it's picked. The app
+keeps the last 128 windows and 128 images in memory, and assets in the same cell share a window.
+Excluded assets get a 409, as for the hazard curve.
 
 Each asset carries its FEMA flood zone: `fema_status` (`mapped`, `not_mapped`, `not_us`,
 `not_located` or `unavailable`), `fema_zone` and `fema_zone_subtype` as FEMA writes them,
