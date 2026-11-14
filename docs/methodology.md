@@ -204,14 +204,15 @@ from a list, across every year and scenario of the run. Read it with these limit
 ## Hazard maps
 
 The asset panel can show a map around the asset. It answers where the flood plain is, or where
-wildfire is likely, which a single point's numbers can't. **Open larger map** opens the same map,
+wildfire or tropical cyclones are likely, which a single point's numbers can't. **Open larger map** opens the same map,
 hazard and period full-size in a new tab. Each map's legend, no-data key and note come from the
 layer itself. Read it, at any size, with these limits:
 
-- **Only river flood, coastal flood and wildfire.** physrisk's maps of wind, hail, heat and drought
-  aren't public, so these hazards are listed but can't be chosen.
-- **A clear area means no data**, not no risk: no flood in the flood maps, and ocean or no data in
-  the wildfire map.
+- **Only river flood, coastal flood, wildfire and tropical cyclone wind.** physrisk's maps of hail,
+  heat and drought aren't public, so these hazards are listed but can't be chosen. The
+  `hazard_map_layers` setting can turn maps off.
+- **A clear area means no data**, not no risk: no flood in the flood maps, ocean or no data in the
+  wildfire map, and no tropical cyclone in the wind map.
 
 ### Flood
 
@@ -241,6 +242,23 @@ public group. The app reads the array anonymously from physrisk's public bucket 
   from 0, which is a real value in the data and drawn in the lightest colour.
 - **Source:** Jupiter Intelligence, via OS-Climate physrisk, which lists its licence as
   "Commercial".
+
+### Tropical cyclone wind
+
+The app draws this map itself from IRIS, the Imperial College Storm Model, which is the same data
+physrisk's wind losses use. It reads the array anonymously from physrisk's public bucket.
+
+- **The value is the 1-minute sustained wind speed that tropical cyclones reach about once in 100
+  years**, in m/s. physrisk works out damage from every return period, 10 to 1000 years, so the map
+  is one slice of what the losses use. It's on the same scale, though: physrisk doesn't adjust it.
+- **Tropical cyclones only.** IRIS has no other windstorms, so a clear area, such as most of Europe,
+  has no wind loss either. That's a gap in the data, not proof of no wind risk.
+- **About 10 km pixels** (0.1°), drawn as blocks, from 60° N to 60° S.
+- **Historical, and 2050 for SSP2-4.5 and SSP5-8.5.** physrisk estimates 2030 and 2080 from the
+  baseline and 2050, and the map doesn't, so those years show a reason instead of a map. There's no
+  SSP1-2.6 data. The app never shows a nearby year instead.
+- **A low or empty area is not proof of low risk.**
+- **Source:** IRIS (Sparks and Toumi), via OS-Climate physrisk, under CC BY 4.0.
 
 **Use it to** screen many sites and find which deserve a closer look. **Don't use it for** decisions
 about a single site, or for currency estimates of loss.

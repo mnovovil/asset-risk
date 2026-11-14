@@ -54,6 +54,37 @@ s3://os-climate-physical-risk/hazard-indicators/hazard.zarr/fire/jupiter/v1/fire
 - **Licence: physrisk lists it as "Commercial".** The panel shows the source and that licence under
   the map.
 
+The tropical cyclone wind map is IRIS, the Imperial College Storm Model: the resource
+`wind/iris/v1/max_speed_{scenario}_{year}` (`group_id` `iris_osc`) in physrisk's embedded inventory.
+It's the data physrisk's wind damage reads: its source paths prefer `iris_osc` for wind, and every
+wind result's `hazard_paths` names it. Jupiter's `wind/jupiter/v1/max_1min_{scenario}_{year}` is
+in the same bucket, but only physrisk's Jupiter exposure measure uses it, so it isn't mapped. The app
+reads IRIS anonymously too:
+
+```
+s3://os-climate-physical-risk/hazard-indicators/hazard.zarr/wind/iris/v1/max_speed_{scenario}_{year}
+```
+
+- **Measure:** the 1-minute sustained wind speed of tropical cyclones, in m/s (from the inventory: the
+  array has no units attribute), for return periods of 10 to 1000 years. The map shows the
+  1-in-100-year speed. physrisk works out damage from all 19 return periods, and applies no scaling
+  first, so the map and the losses are on the same scale.
+- zarr v2, float32, shape (19, 1200, 3600): return period, then a **0.1° (about 10 km) EPSG:4326
+  grid from 60° N to 60° S**, with no repeated column at the antimeridian. Chunks are (19, 250, 250),
+  so reading one return period still downloads all of an array, about 73 MB (3.4 s when measured).
+- About 65% of cells are NaN: where IRIS has no tropical cyclone, which includes most land outside
+  the tropics (London and Denver, for example), as well as open ocean. Beyond 60° is outside the
+  grid. Both are clear on the map.
+- **Historical (2010), and SSP1-1.9, SSP2-4.5 and SSP5-8.5 for 2050 only**, read from the inventory.
+  physrisk estimates other years by weighting the baseline and 2050, which a map can't show, so of
+  this app's years only 2050 has a wind map. There's no SSP1-2.6 data, and physrisk returns no wind
+  for it.
+- **Licence: Creative Commons Attribution 4.0 (CC BY 4.0).** Attribution, which the panel shows under
+  the map: Sparks, N. & Toumi, R. (2023). IRIS: The Imperial College Storm Model Dataset (v1).
+  Figshare. https://doi.org/10.6084/m9.figshare.c.6724251.v1
+- **A low or clear cell is not proof of low risk.** IRIS models tropical cyclones only, so other
+  windstorms are in neither the map nor the losses.
+
 ## FEMA flood zones
 
 FEMA's National Flood Hazard Layer flood hazard areas (`S_FLD_HAZ_AR`), as GeoParquet. The file
