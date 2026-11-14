@@ -166,11 +166,17 @@ class HazardCurve(BaseModel):
 
 
 class HazardMapLayer(BaseModel):
+    """A map layer, describing itself: the dashboard shows its text as it is."""
+
     hazard: str
     available: bool
     reason: str | None  # why there's no map for this scenario and year
-    return_period: int
-    units: str
+    measure: str  # what the colours show, e.g. "Flood depth"
+    return_period: int | None  # the event the map shows, or null when it isn't one event
+    units: str  # may be empty, for a probability
+    no_data_label: str  # what a clear area means
+    note: str  # how to read the map, and its limits
+    source: str  # the dataset and its licence
     min_value: float
     max_value: float
     max_zoom: int

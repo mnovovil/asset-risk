@@ -18,7 +18,7 @@ testpaths = ["test"]
 pythonpath = ["app"]
 addopts = "-m 'not s3 and not live and not e2e and not fema'"
 markers = [
-    "s3: hits the live Overture S3 bucket (opt-in: pytest -m s3)",
+    "s3: hits a live public S3 bucket, Overture's or physrisk's (opt-in: pytest -m s3)",
     "live: calls physrisk against its live hazard data (opt-in: pytest -m live)",
     "e2e: drives the full compose stack (opt-in: pytest -m e2e)",
     "fema: queries FEMA's live flood map service (opt-in: pytest -m fema)",

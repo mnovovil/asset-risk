@@ -1,5 +1,11 @@
 duckdb>=2.0
 physrisk-lib==1.10.6
+# The wildfire map reads physrisk's public zarr arrays itself (app/engine/fire_map.py). These are
+# also physrisk's dependencies, but the app imports them directly. zarr 3 changes the v2 API.
+zarr>=2.18,<3
+s3fs>=2024.6
+numpy>=1.26
+pillow>=10.0
 pytz>=2024.1  # DuckDB needs it to return TIMESTAMPTZ values
 fastapi>=0.162.0
 scikit-learn>=1.9  # DBSCAN for the map's clusters
