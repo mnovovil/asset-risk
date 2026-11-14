@@ -250,3 +250,56 @@ export function resultsResponse(url: string): Response {
   if (endpoint in ENDPOINTS) return jsonResponse(ENDPOINTS[endpoint]);
   throw new Error(`Unexpected request: ${url}`);
 }
+
+/**
+ * What GET /hazard-maps lists: river and coastal flood, and wildfire, each describing itself. The
+ * text is the fixture's own, so a test that finds it on screen knows it came from the layer.
+ * Flood has no map for ssp370, and wildfire none for historical or anything but ssp585.
+ */
+export function hazardMapLayers(runId: string, url: string) {
+  const query = url.split("?")[1];
+  const params = new URLSearchParams(query);
+  const scenario = params.get("scenario");
+  const tileUrl = (hazard: string) =>
+    `/api/runs/${runId}/hazard-maps/${hazard}/{z}/{x}/{y}.png?${query}`;
+  const floodReason = scenario === "ssp370" ? "physrisk has no flood map for this scenario" : null;
+  const flood = ["RiverineInundation", "CoastalInundation"].map((hazard) => ({
+    hazard,
+    available: floodReason === null,
+    reason: floodReason,
+    measure: "Flood depth",
+    return_period: 1000,
+    units: "m",
+    no_data_label: "No flood in the data",
+    note: "Flood fixture note: No flood in the data is not proof of no risk.",
+    source: "Flood fixture source",
+    min_value: 0,
+    max_value: 2,
+    max_zoom: 6,
+    legend: ["rgba(237, 176, 129, 0.78)", "rgba(75, 35, 98, 0.78)"],
+    tile_url: floodReason ? null : tileUrl(hazard),
+  }));
+  const fireReason =
+    scenario === "historical"
+      ? "Fire fixture: no historical baseline"
+      : scenario === "ssp585"
+        ? null
+        : "Fire fixture: ssp126 and ssp585 only";
+  const fire = {
+    hazard: "Fire",
+    available: fireReason === null,
+    reason: fireReason,
+    measure: "Fire fixture measure",
+    return_period: null,
+    units: "",
+    no_data_label: "Fire fixture no data",
+    note: "Fire fixture note",
+    source: "Fire fixture source: Commercial",
+    min_value: 0,
+    max_value: 0.7,
+    max_zoom: 6,
+    legend: ["rgba(238, 143, 99, 0.78)", "rgba(128, 50, 0, 0.78)"],
+    tile_url: fireReason ? null : tileUrl("Fire"),
+  };
+  return [...flood, fire];
+}

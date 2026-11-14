@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { forgetFloodZoneDefinitions } from "@/lib/floodZones";
 
-import { asset, jsonResponse, resultsResponse, SUMMARY, TRAJECTORY } from "./helpers";
+import {
+  asset,
+  hazardMapLayers,
+  jsonResponse,
+  resultsResponse,
+  SUMMARY,
+  TRAJECTORY,
+} from "./helpers";
 
 vi.mock("@/components/dashboard/RiskMap", () => ({
   default: ({
@@ -33,29 +40,11 @@ vi.mock("@/components/dashboard/HazardTileMap", () => ({
 
 const RUN = "run-1";
 
-/** What the API lists: the two public flood maps, with no map for ssp370. */
-function hazardMaps(url: string) {
-  const query = url.split("?")[1];
-  const missing = query.includes("ssp370");
-  return ["RiverineInundation", "CoastalInundation"].map((hazard) => ({
-    hazard,
-    available: !missing,
-    reason: missing ? "physrisk has no flood map for this scenario" : null,
-    return_period: 1000,
-    units: "m",
-    min_value: 0,
-    max_value: 2,
-    max_zoom: 6,
-    legend: ["rgba(237, 176, 129, 0.78)", "rgba(75, 35, 98, 0.78)"],
-    tile_url: missing ? null : `/api/runs/${RUN}/hazard-maps/${hazard}/{z}/{x}/{y}.png?${query}`,
-  }));
-}
-
 function stub(overrides: Record<string, unknown> = {}) {
   const requests: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
     requests.push(url);
-    if (url.includes("/hazard-maps?")) return jsonResponse(hazardMaps(url));
+    if (url.includes("/hazard-maps?")) return jsonResponse(hazardMapLayers(RUN, url));
     if (/\/assets\/\d+$/.test(url)) {
       return jsonResponse(overrides.detail);
     }
@@ -471,8 +460,45 @@ describe("Dashboard", () => {
         ["River flood", false],
         ["Coastal flood", false],
         ["Tropical cyclone wind (no public map)", true],
+        ["Wildfire", false],
         ["Chronic heat (no public map)", true],
       ]);
+    });
+
+    it("draws wildfire with the layer's own legend, no-data key, note and source", async () => {
+      const panel = within(await openPanel());
+      await userEvent.selectOptions(await panel.findByLabelText("Hazard"), "Fire");
+      const map = panel.getByText(/Hazard map .*\/Fire\/.*scenario=ssp585&year=2050/);
+      expect(map).toHaveTextContent("Wildfire: Fire fixture measure, SSP5-8.5, 2050.");
+      expect(map).not.toHaveTextContent("1 in");
+      expect(map).toHaveTextContent("Clear areas: Fire fixture no data.");
+      const legend = panel.getByRole("list", { name: "Legend: Fire fixture measure" });
+      expect(legend).toHaveTextContent(/^0.*0\.7 or more.*Fire fixture no data$/);
+      expect(legend).not.toHaveTextContent(/\bm\b/);
+      // No data is a hollow key, not the ramp's low end.
+      expect(within(legend).getByText("Fire fixture no data").querySelector(".dot-hollow"))
+        .not.toBeNull();
+      expect(panel.getByText("Fire fixture note")).toBeInTheDocument();
+      expect(panel.getByText("Fire fixture source: Commercial")).toBeInTheDocument();
+      expect(panel.queryByText(/Flood fixture/)).not.toBeInTheDocument();
+    });
+
+    it("shows wildfire's reason for Historical instead of an empty map", async () => {
+      const panel = within(await openPanel());
+      await userEvent.selectOptions(await panel.findByLabelText("Hazard"), "Fire");
+      await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
+      expect(await panel.findByRole("status")).toHaveTextContent(
+        "Fire fixture: no historical baseline.",
+      );
+      expect(panel.queryByText(/Hazard map /)).not.toBeInTheDocument();
+      expect(panel.queryByRole("list", { name: /Legend/ })).not.toBeInTheDocument();
+      expect(panel.getByLabelText("Hazard")).toHaveValue("Fire");
+
+      await userEvent.selectOptions(panel.getByLabelText("Hazard"), "RiverineInundation");
+      expect(
+        await panel.findByText(/Hazard map .*RiverineInundation.*\?scenario=historical:/),
+      ).toBeInTheDocument();
+      expect(panel.getByText(/Flood depth, 1 in 1000 years, Historical/)).toBeInTheDocument();
     });
 
     it("switches the layer and the period", async () => {
@@ -531,7 +557,8 @@ describe("Dashboard", () => {
       await userEvent.click(screen.getByRole("button", { name: "asset-1" }));
       const panel = within(await screen.findByRole("dialog"));
       expect(await panel.findByText("physrisk has no flood map for this scenario.")).toBeInTheDocument();
-      expect(panel.getByText(/Hazard map with no overlay/)).toBeInTheDocument();
+      // The reason replaces the map, rather than sitting over an empty one.
+      expect(panel.queryByText(/Hazard map /)).not.toBeInTheDocument();
     });
 
     it("shows the baseline on its own, with no scores", async () => {

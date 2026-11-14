@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ASSET_MAP_ROUTE, assetMapPath, parseAssetMapView } from "@/lib/assetMapRoute";
 import { AssetMapPage } from "@/pages/AssetMapPage";
 
-import { asset, jsonResponse } from "./helpers";
+import { asset, hazardMapLayers, jsonResponse } from "./helpers";
 
 vi.mock("@/components/dashboard/HazardTileMap", () => ({
   default: ({ tileUrl, label, size }: { tileUrl: string | null; label: string; size: string }) => (
@@ -16,22 +16,6 @@ vi.mock("@/components/dashboard/HazardTileMap", () => ({
 }));
 
 const RUN = "run-1";
-
-function layers(url: string) {
-  const query = url.split("?")[1];
-  return ["RiverineInundation", "CoastalInundation"].map((hazard) => ({
-    hazard,
-    available: true,
-    reason: null,
-    return_period: 1000,
-    units: "m",
-    min_value: 0,
-    max_value: 2,
-    max_zoom: 6,
-    legend: ["#fff", "#000"],
-    tile_url: `/api/runs/${RUN}/hazard-maps/${hazard}/{z}/{x}/{y}.png?${query}`,
-  }));
-}
 
 const DETAIL = {
   ...asset(4, { asset_id: "tower-4", type_source: "assumed" }),
@@ -54,7 +38,7 @@ function stub(detail: unknown = DETAIL, status = 200) {
   const requests: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
     requests.push(url);
-    if (url.includes("/hazard-maps?")) return jsonResponse(layers(url));
+    if (url.includes("/hazard-maps?")) return jsonResponse(hazardMapLayers(RUN, url));
     if (url === `/api/runs/${RUN}/assets/4`) return jsonResponse(detail, status);
     throw new Error(`Unexpected request: ${url}`);
   });
@@ -84,7 +68,7 @@ describe("AssetMapPage", () => {
     expect(
       await screen.findByText(/large hazard map .*RiverineInundation.*scenario=ssp585&year=2050/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/No flood in the data is\s+not proof of no risk/)).toBeInTheDocument();
+    expect(screen.getByText(/Flood fixture note: No flood in the data is not proof/)).toBeInTheDocument();
     expect(screen.getByText(/assumed, as Overture has no usable type/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Back to the portfolio/ })).toHaveAttribute(
       "href",
@@ -102,6 +86,13 @@ describe("AssetMapPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Historical" })).toBeChecked();
     expect(requests).toContain(`/api/runs/${RUN}/hazard-maps?scenario=historical`);
+  });
+
+  it("opens on wildfire from its address", async () => {
+    renderAt(path("scenario=ssp585&year=2050&hazard=Fire"));
+    expect(await screen.findByText(/large hazard map .*\/Fire\/.*ssp585/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Hazard")).toHaveValue("Fire");
+    expect(screen.getByText("Fire fixture note")).toBeInTheDocument();
   });
 
   it("falls back to the first map for an unknown hazard", async () => {

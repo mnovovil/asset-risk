@@ -9,8 +9,9 @@ import { usePrefersDark } from "@/hooks/useColorScheme";
 
 const HAZARD = "hazard";
 const ASSET = "asset";
-// Close enough to see the streets around the asset. physrisk's tiles stop at zoom 6, so MapLibre
-// stretches the one tile that covers the asset: panning and zooming here fetch nothing new.
+// Close enough to see the streets around the asset. Each layer's tiles stop at its max_zoom (6 for
+// flood and wildfire), so MapLibre stretches the one tile that covers the asset: panning and
+// zooming here fetch nothing new.
 const START_ZOOM = 14;
 const MAX_ZOOM = 17;
 const TILE_SIZE_PX = 512;
