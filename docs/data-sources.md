@@ -71,7 +71,8 @@ s3://os-climate-physical-risk/hazard-indicators/hazard.zarr/wind/iris/v1/max_spe
   first, so the map and the losses are on the same scale.
 - zarr v2, float32, shape (19, 1200, 3600): return period, then a **0.1° (about 10 km) EPSG:4326
   grid from 60° N to 60° S**, with no repeated column at the antimeridian. Chunks are (19, 250, 250),
-  so reading one return period still downloads all of an array, about 73 MB (3.4 s when measured).
+  so reading one return period still downloads all of an array, about 73 MB (3.4 to 7 s when
+  measured).
 - About 65% of cells are NaN: where IRIS has no tropical cyclone, which includes most land outside
   the tropics (London and Denver, for example), as well as open ocean. Beyond 60° is outside the
   grid. Both are clear on the map.

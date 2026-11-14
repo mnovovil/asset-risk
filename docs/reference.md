@@ -97,7 +97,7 @@ Intelligence's fire probability array, which it reads anonymously from physrisk'
 (`app/engine/fire_map.py`), without that lock. Wind tiles are drawn the same way from IRIS's array
 (`app/engine/wind_map.py`); both are configurations of `app/engine/grid_layer.py`. The first tile
 for a scenario and year downloads the whole array: about 4 MB for wildfire (1.4 to 2 s when
-measured) and 73 MB for wind (about 3.5 s). Each layer keeps its last `hazard_map_array_cache`
+measured) and 73 MB for wind (3.5 to 7 s). Each layer keeps its last `hazard_map_array_cache`
 arrays (4) and `hazard_map_tile_cache` tiles (256) in memory. `app/engine/hazard_maps.py` builds the
 layers from the settings. Unit tests check both layers against physrisk's embedded inventory, and
 that physrisk's wind losses still read IRIS, so a physrisk bump that changes either fails, and
