@@ -8,7 +8,7 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 [most buildings have no known type](docs/methodology.md#building-type), so read
 [the methodology](docs/methodology.md) before relying on a number.
 
-![Uploading the 500-asset demo portfolio and a brief glimpse of its progress stages, then the dashboard's figures, the map's risk-concentration bubbles, a click on the New Orleans bubble that zooms in to its assets, a click on one of its assets to show its details, its FEMA flood zone and what that zone means, its annual loss over time and its river flood map zoomed out to all of southern Louisiana, then its coastal flood, wildfire and tropical cyclone wind maps, the charts, the present-day view and the data quality notes](docs/assets/demo.gif)
+![Uploading the 500-asset demo portfolio and a brief glimpse of its progress stages, then the dashboard's figures, the map's risk-concentration bubbles, a click on the New Orleans bubble that zooms in to its assets, a click on one of its assets to show its details, its FEMA flood zone and what that zone means, its annual loss over time and its river flood map zoomed out to all of southern Louisiana, then its coastal flood, wildfire and tropical cyclone wind maps, the charts, the portfolio's change over time under two scenarios, the present-day view and the data quality notes](docs/assets/demo.gif)
 
 *A real run of the [demo portfolio](docs/assets/demo_portfolio.csv), 500 properties in the USA and
 Spain, with the upload and progress screens cut to under 2 seconds. New Orleans is opened because it
@@ -17,9 +17,10 @@ low risk. The asset shown, `US-312`, is by the French Quarter. The panel shows i
 a shaded Zone X behind the levees, and what that zone means for flood insurance. It then shows its
 annual loss over time by scenario, and physrisk's 1-in-1000-year river and coastal flood maps,
 zoomed out to all of southern Louisiana, then its wildfire and 1-in-100-year tropical cyclone wind
-maps on the same view. Its figures are screening estimates for illustration, and its flood zone is
-not an official determination. Map data © OpenStreetMap contributors, via OpenFreeMap and
-OpenMapTiles. Flood maps from WRI Aqueduct Floods, via physrisk. Wildfire map from Jupiter
+maps on the same view. Change over time compares SSP2-4.5 and SSP5-8.5 on the hazards both have:
+river flood, coastal flood and wind. Its figures are screening estimates for illustration, and its
+flood zone is not an official determination. Map data © OpenStreetMap contributors, via OpenFreeMap
+and OpenMapTiles. Flood maps from WRI Aqueduct Floods, via physrisk. Wildfire map from Jupiter
 Intelligence and wind map from IRIS, the Imperial College Storm Model, both via physrisk. Flood
 zones from FEMA's National Flood Hazard Layer.*
 
