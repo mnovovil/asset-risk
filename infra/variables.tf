@@ -1,7 +1,7 @@
 variable "scenarios" {
-  description = "Climate scenarios to assess. The historical baseline always comes back too. Data differs by scenario: ssp585 has all five hazards, ssp245 lacks fire and hail, ssp126 has only fire and hail, and ssp370 returned nothing."
+  description = "Climate scenarios to assess. The historical baseline always comes back too. Data differs by scenario: ssp585 has all five hazards, ssp245 lacks fire and hail, ssp126 has only fire and hail, and ssp370 returned nothing. ssp126 and ssp245 share no hazard, so with both the dashboard's change over time has nothing to compare."
   type        = list(string)
-  default     = ["ssp126", "ssp245", "ssp585"]
+  default     = ["ssp245", "ssp585"]
 
   validation {
     condition = (
