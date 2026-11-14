@@ -467,7 +467,7 @@ def test_hazard_maps_list_the_flood_layers(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
     layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
     hazards = [layer["hazard"] for layer in layers]
-    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire"]
+    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire", "Wind"]
     river = layers[0]
     assert river["available"] is True
     assert river["reason"] is None
@@ -507,10 +507,30 @@ def test_hazard_maps_list_wildfire_describing_itself(client, finished):
 
 def test_wildfire_has_no_historical_map_but_flood_does(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
-    river, _, fire = client.get(url, params={"scenario": "historical"}).json()
+    river, _, fire, _ = client.get(url, params={"scenario": "historical"}).json()
     assert river["available"] is True
     assert (fire["available"], fire["tile_url"]) == (False, None)
     assert fire["reason"] == "physrisk's wildfire data has no historical baseline"
+
+
+def test_hazard_maps_list_wind_describing_itself(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    wind = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()[3]
+    assert wind["hazard"] == "Wind"
+    assert wind["available"] is True
+    assert (wind["return_period"], wind["units"], wind["max_value"], wind["max_zoom"]) == (
+        100,
+        "m/s",
+        90.0,
+        7,
+    )
+    assert "not proof of low risk" in wind["note"]
+    assert "IRIS" in wind["source"] and "CC BY 4.0" in wind["source"]
+    assert wind["tile_url"] == (
+        f"/api/runs/{finished}/hazard-maps/Wind/{{z}}/{{x}}/{{y}}.png?scenario=ssp585&year=2050"
+    )
+    baseline = client.get(url, params={"scenario": "historical"}).json()[3]
+    assert baseline["available"] is True
 
 
 def test_hazard_maps_report_a_changed_inventory(client, finished, monkeypatch):
@@ -617,7 +637,7 @@ def test_hazard_map_tile(client, finished, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "path", ["Wind/5/23/13.png", "RiverineInundation/9/0/0.png", "RiverineInundation/1/2/0.png"]
+    "path", ["Hail/5/23/13.png", "RiverineInundation/9/0/0.png", "RiverineInundation/1/2/0.png"]
 )
 def test_hazard_map_tile_with_no_map_is_404(client, finished, path):
     response = client.get(

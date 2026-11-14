@@ -1,4 +1,4 @@
-"""Hazard map tiles around an asset: river and coastal flood from physrisk, wildfire from S3.
+"""Hazard map tiles around an asset: flood from physrisk, and wildfire and wind drawn from S3.
 
 Each layer describes itself (its measure, units, no-data label, note and source), so the dashboard
 shows whatever a layer says and holds no hazard wording of its own. Every layer serves 512 px PNG
@@ -6,7 +6,8 @@ tiles through the same URL and decides for itself which scenarios and years it c
 
 Flood comes from physrisk's get_image, which only draws the public WRI flood maps. physrisk refuses
 the other hazards' maps (wind, fire, hail, heat, drought) on permissions, and that isn't worked
-around. Facts that hold for physrisk-lib 1.10.6, checked by the live tests in
+around: where a hazard's array is public, grid_layer.py reads it and draws the tiles itself. Facts
+that hold for physrisk-lib 1.10.6, checked by the live tests in
 test/engine/test_hazard_maps.py:
 - each map holds only the 1-in-1000-year layer: other return periods come back transparent
 - tiles exist up to zoom 6 (physrisk reads pyramid level z + 1, and the deepest is 7)
@@ -16,6 +17,10 @@ test/engine/test_hazard_maps.py:
 Wildfire is read from Jupiter Intelligence's public fire probability array and drawn here instead:
 see fire_map.py. It has no historical baseline, covers ssp126 and ssp585 only, and is divided by
 500 before physrisk works out damage, so its map and the losses aren't on the same scale.
+
+Tropical cyclone wind is read from IRIS's public array, the one physrisk's wind losses use: see
+wind_map.py. It has a historical baseline and 2050 for ssp119, ssp245 and ssp585, and shows the
+1-in-100-year wind speed.
 """
 
 from __future__ import annotations
@@ -23,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from engine import fire_map
+from engine import fire_map, wind_map
 from engine.assess import HISTORICAL, HISTORICAL_YEAR, _physrisk_lock, default_requester
 from engine.fire_map import HazardMapConfigError
 from engine.lru import LruCache
@@ -178,6 +183,7 @@ LAYERS: dict[str, MapLayer] = {
             "m",
         ),
         fire_map.layer(),
+        wind_map.configure(),
     )
 }
 
