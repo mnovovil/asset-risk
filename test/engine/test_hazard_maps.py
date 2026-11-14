@@ -142,8 +142,8 @@ def test_legend_runs_light_to_dark_with_the_maps_transparency():
     assert lightness == sorted(lightness, reverse=True)
 
 
-def test_layers_list_flood_then_wildfire():
-    assert list(hazard_maps.LAYERS) == [RIVER, COAST, "Fire"]
+def test_layers_list_flood_then_wildfire_then_wind():
+    assert list(hazard_maps.LAYERS) == [RIVER, COAST, "Fire", "Wind"]
 
 
 @pytest.mark.parametrize("hazard", [RIVER, COAST])
@@ -169,7 +169,7 @@ def test_the_flood_source_quotes_physrisks_licence():
 
 
 def test_an_unknown_hazard_has_no_tile():
-    assert hazard_maps.tile("Wind", "ssp585", 2050, 0, 0, 0, FakeRequester()) is None
+    assert hazard_maps.tile("Hail", "ssp585", 2050, 0, 0, 0, FakeRequester()) is None
 
 
 def opaque_pixels(png: bytes) -> int:

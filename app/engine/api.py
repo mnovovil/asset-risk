@@ -357,6 +357,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings or load_settings()
+        hazard_maps.configure(app.state.settings)
         _mark_interrupted(app.state.settings.data_dir)
         app.state.queue = RunQueue(execute)
         app.state.queue.start()

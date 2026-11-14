@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,12 +32,30 @@ KEYS = (
     "api_port",
     "geolocate_config",
     "flood_zones_db",
+    "hazard_map_layers",
+    "hazard_map_bucket",
+    "fire_map_path",
+    "wind_map_path",
+    "fire_map_max_zoom",
+    "wind_map_max_zoom",
+    "hazard_map_alpha",
+    "hazard_map_legend_stops",
+    "hazard_map_array_cache",
+    "hazard_map_tile_cache",
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
 # The years the app assesses. Asking physrisk for 2025 returned scores but no impacts, without an
 # error. Present-day risk is the historical baseline, which always comes back.
 YEARS = (2030, 2050, 2080)
+# The hazard map layers, in the order the API lists them.
+HAZARD_MAP_LAYERS = ("RiverineInundation", "CoastalInundation", "Fire", "Wind")
+MAX_MAP_ZOOM = 10
+MAX_LEGEND_STOPS = 33
+# A layer's path names one array per scenario and year, so it needs both placeholders and nothing
+# else that str.format would read.
+_MAP_PATH = re.compile(r"[A-Za-z0-9_.\-/]*")
+_BUCKET = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*(/[A-Za-z0-9_.\-]+)*")
 MAX_CLUSTER_EPS_KM = 1000
 MIN_CLUSTER_SAMPLES = 2
 _APPLY_HINT = "run `terraform -chdir=infra apply` to generate it"
@@ -63,6 +82,17 @@ class Settings:
     geolocate_config: Path
     # The FEMA flood zone database from script/build_flood_zones.py. None turns the lookup off.
     flood_zones_db: Path | None = None
+    # The hazard map layers. The defaults are the code's, so a test can leave them out.
+    hazard_map_layers: tuple[str, ...] = HAZARD_MAP_LAYERS
+    hazard_map_bucket: str = "os-climate-physical-risk/hazard-indicators/hazard.zarr"
+    fire_map_path: str = "fire/jupiter/v1/fire_probability_{scenario}_{year}"
+    wind_map_path: str = "wind/iris/v1/max_speed_{scenario}_{year}"
+    fire_map_max_zoom: int = 6
+    wind_map_max_zoom: int = 7
+    hazard_map_alpha: int = 200
+    hazard_map_legend_stops: int = 9
+    hazard_map_array_cache: int = 4
+    hazard_map_tile_cache: int = 256
 
 
 def settings_path(path: str | os.PathLike[str] | None = None) -> Path:
@@ -138,6 +168,37 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
     if not _is_int(raw["api_port"]) or not 1 <= raw["api_port"] <= 65535:
         raise bad("api_port", "a whole number from 1 to 65535")
 
+    layers = raw["hazard_map_layers"]
+    if (
+        not isinstance(layers, list)
+        or len(set(map(str, layers))) != len(layers)
+        or not all(isinstance(v, str) and v in HAZARD_MAP_LAYERS for v in layers)
+    ):
+        raise bad("hazard_map_layers", f"a distinct list from {HAZARD_MAP_LAYERS}, or empty")
+
+    bucket = raw["hazard_map_bucket"]
+    if not isinstance(bucket, str) or not _BUCKET.fullmatch(bucket):
+        raise bad("hazard_map_bucket", "a bucket and folder, like my-bucket/hazard.zarr, no s3://")
+
+    for key in ("fire_map_path", "wind_map_path"):
+        if not _is_map_path(raw[key]):
+            raise bad(key, "a path with {scenario} and {year} once each")
+
+    for key in ("fire_map_max_zoom", "wind_map_max_zoom"):
+        if not _is_int(raw[key]) or not 0 <= raw[key] <= MAX_MAP_ZOOM:
+            raise bad(key, f"a whole number from 0 to {MAX_MAP_ZOOM}")
+
+    if not _is_int(raw["hazard_map_alpha"]) or not 1 <= raw["hazard_map_alpha"] <= 255:
+        raise bad("hazard_map_alpha", "a whole number from 1 to 255")
+
+    stops = raw["hazard_map_legend_stops"]
+    if not _is_int(stops) or not 2 <= stops <= MAX_LEGEND_STOPS:
+        raise bad("hazard_map_legend_stops", f"a whole number from 2 to {MAX_LEGEND_STOPS}")
+
+    for key in ("hazard_map_array_cache", "hazard_map_tile_cache"):
+        if not _is_int(raw[key]) or raw[key] < 1:
+            raise bad(key, "a whole number of at least 1")
+
     return Settings(
         scenarios=tuple(scenarios),
         years=tuple(years),
@@ -155,6 +216,29 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         # The path Terraform wrote is only valid on its own machine, so the container overrides it.
         geolocate_config=_from_root(os.environ.get(GEOLOCATE_ENV_VAR) or raw["geolocate_config"]),
         flood_zones_db=_from_root(flood_zones_db) if flood_zones_db else None,
+        hazard_map_layers=tuple(layers),
+        hazard_map_bucket=bucket,
+        fire_map_path=raw["fire_map_path"],
+        wind_map_path=raw["wind_map_path"],
+        fire_map_max_zoom=raw["fire_map_max_zoom"],
+        wind_map_max_zoom=raw["wind_map_max_zoom"],
+        hazard_map_alpha=raw["hazard_map_alpha"],
+        hazard_map_legend_stops=stops,
+        hazard_map_array_cache=raw["hazard_map_array_cache"],
+        hazard_map_tile_cache=raw["hazard_map_tile_cache"],
+    )
+
+
+def _is_map_path(value) -> bool:
+    if not isinstance(value, str):
+        return False
+    rest = value.replace("{scenario}", "", 1).replace("{year}", "", 1)
+    return (
+        value.count("{scenario}") == 1
+        and value.count("{year}") == 1
+        and not value.startswith("/")
+        and bool(rest)
+        and _MAP_PATH.fullmatch(rest) is not None
     )
 
 

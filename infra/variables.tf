@@ -170,3 +170,127 @@ variable "aws_session_token" {
   default     = ""
   sensitive   = true
 }
+
+# --- Hazard maps (the asset panel's map). What the data is (its colours, return period, layout and
+# physrisk's scaling) stays in app/engine; these are run settings. Defaults reproduce the code's.
+
+variable "hazard_map_layers" {
+  description = "Hazard map layers to offer, from RiverineInundation, CoastalInundation, Fire and Wind. An empty list turns the maps off."
+  type        = list(string)
+  default     = ["RiverineInundation", "CoastalInundation", "Fire", "Wind"]
+
+  validation {
+    condition = (
+      length(distinct(var.hazard_map_layers)) == length(var.hazard_map_layers)
+      && alltrue([for l in var.hazard_map_layers : contains(["RiverineInundation", "CoastalInundation", "Fire", "Wind"], l)])
+    )
+    error_message = "hazard_map_layers must be distinct values from RiverineInundation, CoastalInundation, Fire, Wind."
+  }
+}
+
+variable "hazard_map_bucket" {
+  description = "Bucket and folder holding physrisk's hazard zarr, read anonymously for the wildfire and wind maps. No s3:// prefix."
+  type        = string
+  default     = "os-climate-physical-risk/hazard-indicators/hazard.zarr"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9_.-]+)*$", var.hazard_map_bucket))
+    error_message = "hazard_map_bucket must be a bucket and folder, like my-bucket/hazard.zarr, with no s3:// prefix."
+  }
+}
+
+variable "fire_map_path" {
+  description = "Wildfire array path in the bucket, with {scenario} and {year}. It must be a Fire resource in physrisk's inventory, or the maps return 502."
+  type        = string
+  default     = "fire/jupiter/v1/fire_probability_{scenario}_{year}"
+
+  validation {
+    condition = (
+      length(regexall("\\{scenario\\}", var.fire_map_path)) == 1
+      && length(regexall("\\{year\\}", var.fire_map_path)) == 1
+      && can(regex("^[A-Za-z0-9_.-][A-Za-z0-9_./-]*$", replace(replace(var.fire_map_path, "{scenario}", "s"), "{year}", "y")))
+    )
+    error_message = "fire_map_path must contain {scenario} and {year} once each, and otherwise only letters, digits and _ . - /."
+  }
+}
+
+variable "wind_map_path" {
+  description = "Tropical cyclone wind array path in the bucket, with {scenario} and {year}. It must be a Wind resource in physrisk's inventory, or the maps return 502."
+  type        = string
+  default     = "wind/iris/v1/max_speed_{scenario}_{year}"
+
+  validation {
+    condition = (
+      length(regexall("\\{scenario\\}", var.wind_map_path)) == 1
+      && length(regexall("\\{year\\}", var.wind_map_path)) == 1
+      && can(regex("^[A-Za-z0-9_.-][A-Za-z0-9_./-]*$", replace(replace(var.wind_map_path, "{scenario}", "s"), "{year}", "y")))
+    )
+    error_message = "wind_map_path must contain {scenario} and {year} once each, and otherwise only letters, digits and _ . - /."
+  }
+}
+
+variable "fire_map_max_zoom" {
+  description = "Deepest zoom with wildfire tiles. A 0.25 degree cell is about 23 px at zoom 6, so deeper adds nothing."
+  type        = number
+  default     = 6
+
+  validation {
+    condition     = var.fire_map_max_zoom >= 0 && var.fire_map_max_zoom <= 10 && var.fire_map_max_zoom == floor(var.fire_map_max_zoom)
+    error_message = "fire_map_max_zoom must be a whole number from 0 to 10."
+  }
+}
+
+variable "wind_map_max_zoom" {
+  description = "Deepest zoom with wind tiles. A 0.1 degree cell is about 18 px at zoom 7, so deeper adds nothing."
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = var.wind_map_max_zoom >= 0 && var.wind_map_max_zoom <= 10 && var.wind_map_max_zoom == floor(var.wind_map_max_zoom)
+    error_message = "wind_map_max_zoom must be a whole number from 0 to 10."
+  }
+}
+
+variable "hazard_map_alpha" {
+  description = "Opacity of the wildfire and wind tiles, 1 to 255. physrisk draws the flood tiles at 200 itself."
+  type        = number
+  default     = 200
+
+  validation {
+    condition     = var.hazard_map_alpha >= 1 && var.hazard_map_alpha <= 255 && var.hazard_map_alpha == floor(var.hazard_map_alpha)
+    error_message = "hazard_map_alpha must be a whole number from 1 to 255."
+  }
+}
+
+variable "hazard_map_legend_stops" {
+  description = "Colours in the wildfire and wind legends' gradient."
+  type        = number
+  default     = 9
+
+  validation {
+    condition     = var.hazard_map_legend_stops >= 2 && var.hazard_map_legend_stops <= 33 && var.hazard_map_legend_stops == floor(var.hazard_map_legend_stops)
+    error_message = "hazard_map_legend_stops must be a whole number from 2 to 33."
+  }
+}
+
+variable "hazard_map_array_cache" {
+  description = "Arrays kept in memory per layer, one per scenario and year. A wildfire array is about 4 MB and a wind one about 17 MB."
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.hazard_map_array_cache >= 1 && var.hazard_map_array_cache == floor(var.hazard_map_array_cache)
+    error_message = "hazard_map_array_cache must be a whole number of at least 1."
+  }
+}
+
+variable "hazard_map_tile_cache" {
+  description = "Tiles kept in memory per layer."
+  type        = number
+  default     = 256
+
+  validation {
+    condition     = var.hazard_map_tile_cache >= 1 && var.hazard_map_tile_cache == floor(var.hazard_map_tile_cache)
+    error_message = "hazard_map_tile_cache must be a whole number of at least 1."
+  }
+}

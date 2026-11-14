@@ -23,6 +23,19 @@
 # flood_zones_db = "data/fema/flood-zones.duckdb"
 # api_port = 8000
 
+# Hazard maps in the asset panel. [] turns them off. Wildfire and wind are read anonymously from
+# physrisk's public bucket; each path must stay a resource in physrisk's inventory.
+# hazard_map_layers       = ["RiverineInundation", "CoastalInundation", "Fire", "Wind"]
+# hazard_map_bucket       = "os-climate-physical-risk/hazard-indicators/hazard.zarr"
+# fire_map_path           = "fire/jupiter/v1/fire_probability_{scenario}_{year}"
+# wind_map_path           = "wind/iris/v1/max_speed_{scenario}_{year}"
+# fire_map_max_zoom       = 6
+# wind_map_max_zoom       = 7
+# hazard_map_alpha        = 200
+# hazard_map_legend_stops = 9
+# hazard_map_array_cache  = 4   # per layer: wind arrays are about 17 MB each
+# hazard_map_tile_cache   = 256
+
 # Credentials are optional — the Overture bucket is public. Prefer passing them as
 # TF_VAR_aws_access_key_id / TF_VAR_aws_secret_access_key env vars over writing them here.
 # aws_access_key_id     = "AKIA..."

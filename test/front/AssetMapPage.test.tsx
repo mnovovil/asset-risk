@@ -95,6 +95,13 @@ describe("AssetMapPage", () => {
     expect(screen.getByText("Fire fixture note")).toBeInTheDocument();
   });
 
+  it("shows wind's reason for a year it has no map of", async () => {
+    renderAt(path("scenario=ssp585&year=2030&hazard=Wind"));
+    expect(await screen.findByRole("status")).toHaveTextContent("Wind fixture: 2050 only");
+    expect(screen.getByLabelText("Hazard")).toHaveValue("Wind");
+    expect(screen.queryByText(/hazard map .*\/Wind\//)).not.toBeInTheDocument();
+  });
+
   it("falls back to the first map for an unknown hazard", async () => {
     renderAt(path("scenario=ssp585&year=2050&hazard=Nope"));
     expect(await screen.findByText(/hazard map .*RiverineInundation/)).toBeInTheDocument();
