@@ -61,7 +61,9 @@ one asset in Cologne, in 2030 and 2040:
 
 Totals from different scenarios therefore can't be compared directly. So:
 
-- **Change over time** uses only the hazards every scenario has, and names them.
+- **Change over time** uses only the hazards every scenario has, and names them. SSP1-2.6 and
+  SSP2-4.5 share none, so a run with both has nothing to show there. The default, SSP2-4.5 and
+  SSP5-8.5, shares river flood, coastal flood and wind.
 - **Historical markers** use only the hazards in the selected scenario.
 - A scenario with no results is shown as having none, not as zero.
 
