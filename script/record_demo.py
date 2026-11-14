@@ -6,9 +6,10 @@
 
 After the upload and progress screens, where it holds on the FEMA flood zone stage, it opens the
 New Orleans risk-concentration bubble on the map, clicks one of its assets to show its details, its
-FEMA flood zone and what that zone means, its river flood depth curve and hazard maps, zooms the
-hazard map out to all of southern Louisiana, then goes through the rest of the dashboard,
-including the present-day (baseline) view.
+FEMA flood zone and what that zone means, its loss over time and hazard maps, zooms the
+hazard map out to all of southern Louisiana, switches it to coastal flood, wildfire and tropical
+cyclone wind, then goes through the rest of the dashboard, including the present-day (baseline)
+view.
 
 It needs the FEMA flood zone database that .asset-risk.json names (flood_zones_db): see
 script/build_flood_zones.py. Without it every asset's flood zone would read "unavailable".
@@ -79,6 +80,14 @@ HAZARD_MAPS = [
     ("RiverineInundation", "Hazard maps around it: river flood depth, 1 in 1000 years"),
     ("CoastalInundation", "The same view, a different hazard: coastal flood depth"),
 ]
+# Shown after the flood maps, at the same zoom: their cells are 10 to 28 km across, so they read
+# best at the regional view. A layer with no map for the dashboard's scenario and year is shown
+# for the historical period instead, if it has one there: wildfire doesn't.
+GRID_MAPS = [
+    ("Fire", "Wildfire: the highest monthly chance of a fire within 100 km"),
+    ("Wind", "Tropical cyclone wind: the speed reached about once in 100 years"),
+]
+HISTORICAL_PERIOD = "Historical"
 # Scrolling out over the panel's hazard map, from street level (zoom 14) to about zoom 5.6, where it
 # is about 6 degrees of longitude wide. Each step is about 0.56 zoom levels in headless Chromium.
 # Zooming keeps the asset under the pointer, so a pointer right of centre puts the asset there and
@@ -422,8 +431,8 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     rec.caption("Its loss by hazard")
     scroll_panel_to(panel, "Results for")
     rec.shot(4)
-    rec.caption("River flood depth at the asset, by how rare the flood is")
-    scroll_panel_to(panel, "River flood depth")
+    rec.caption("Its annual loss over time, by scenario, one hazard at a time")
+    scroll_panel_to(panel, "Over time")
     page.wait_for_timeout(500)
     rec.shot(5)
     return panel
@@ -475,6 +484,53 @@ def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -
         rec.shot(4.5)
         if index == 0:
             zoom_out_hazard_map(rec, panel)
+    record_grid_maps(rec, panel, hazard_tiles)
+
+
+def record_grid_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
+    """Show wildfire and wind on the same regional view, in the dashboard's period if mapped.
+
+    The tile map is recreated, and loses its zoom, if a hazard with no map is selected, so switch to
+    the historical period first, while a flood map that has it is still showing.
+    """
+    page = rec.page
+    scenario = dashboard_filter(page, "Scenario").input_value()
+    year = dashboard_filter(page, "Year").input_value()
+    params = {"scenario": scenario} | ({"year": year} if year else {})
+    layers = api(page, "hazard-maps", **params)
+    available = {layer["hazard"]: layer["available"] for layer in layers}
+    missing = [hazard for hazard, _ in GRID_MAPS if hazard not in available]
+    if missing:
+        raise RuntimeError(f"no {', '.join(missing)} hazard map layer: check hazard_map_layers")
+    in_pair = [m for m in GRID_MAPS if available[m[0]]]
+    historical = [m for m in GRID_MAPS if not available[m[0]]]
+    if historical:
+        # Wildfire has no historical map, so the fallback isn't always one.
+        past = {
+            layer["hazard"]: layer["available"]
+            for layer in api(page, "hazard-maps", scenario="historical")
+        }
+        unmapped = [hazard for hazard, _ in historical if not past.get(hazard)]
+        if unmapped:
+            raise RuntimeError(f"no {', '.join(unmapped)} map for {scenario} {year} or historical")
+    period = panel.locator("fieldset.segmented label")
+    for maps, label in ((in_pair, None), (historical, HISTORICAL_PERIOD)):
+        if not maps:
+            continue
+        if label is not None:
+            rec.click(period.filter(has_text=label))
+            settle_map(page)
+        name = label or period.filter(has_not_text=HISTORICAL_PERIOD).inner_text().strip()
+        for hazard, caption in maps:
+            before = len(hazard_tiles)
+            panel.get_by_label("Hazard").select_option(hazard)
+            rec.caption(f"{caption}, {name}")
+            settle_map(page)
+            if not any(f"/hazard-maps/{hazard}/" in url for url in hazard_tiles[before:]):
+                raise RuntimeError(f"no {hazard} map tile loaded")
+            if panel.locator(".asset-map").count() == 0:
+                raise RuntimeError(f"the {hazard} map isn't showing")
+            rec.shot(5)
 
 
 def settle_map(page: Page) -> None:
