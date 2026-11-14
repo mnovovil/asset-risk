@@ -25,13 +25,16 @@ wind_map.py. It has a historical baseline and 2050 for ssp119, ssp245 and ssp585
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from types import SimpleNamespace
 from typing import Protocol, cast
 
 from engine import fire_map, wind_map
 from engine.assess import HISTORICAL, HISTORICAL_YEAR, _physrisk_lock, default_requester
 from engine.fire_map import HazardMapConfigError
+from engine.grid_layer import GridSettings
 from engine.lru import LruCache
+from engine.settings import Settings
 
 __all__ = ["LAYERS", "HazardMapConfigError", "MapLayer", "tile"]
 
@@ -163,29 +166,59 @@ class FloodLayer:
         return image
 
 
-LAYERS: dict[str, MapLayer] = {
-    layer.hazard: layer
-    for layer in (
-        FloodLayer(
-            "RiverineInundation",
-            "inundation/wri/v2/inunriver_{scenario}_MIROC-ESM-CHEM_{year}",
-            "flare",
-            0.0,
-            2.0,
-            "m",
-        ),
-        FloodLayer(
-            "CoastalInundation",
-            "inundation/wri/v2/inuncoast_{scenario}_wtsub_{year}_0",
-            "flare",
-            0.0,
-            2.0,
-            "m",
-        ),
-        fire_map.layer(),
-        wind_map.configure(),
+FLOOD_LAYERS = (
+    FloodLayer(
+        "RiverineInundation",
+        "inundation/wri/v2/inunriver_{scenario}_MIROC-ESM-CHEM_{year}",
+        "flare",
+        0.0,
+        2.0,
+        "m",
+    ),
+    FloodLayer(
+        "CoastalInundation",
+        "inundation/wri/v2/inuncoast_{scenario}_wtsub_{year}_0",
+        "flare",
+        0.0,
+        2.0,
+        "m",
+    ),
+)
+
+LAYERS: dict[str, MapLayer] = {}
+# Settings' own defaults for its hazard map fields, which every one of them has.
+_MAP_FIELDS = ("hazard_map", "fire_map", "wind_map")
+_DEFAULTS = SimpleNamespace(
+    **{f.name: f.default for f in fields(Settings) if f.name.startswith(_MAP_FIELDS)}
+)
+
+
+def configure(settings: Settings | SimpleNamespace | None = None) -> dict[str, MapLayer]:
+    """Build the layers from the run settings (None: the code's defaults, every layer on).
+
+    LAYERS is updated in place, in the order flood, wildfire, wind, keeping only enabled layers.
+    """
+    global _cache
+    s = settings if settings is not None else _DEFAULTS
+    grid = GridSettings(
+        bucket=s.hazard_map_bucket,
+        alpha=s.hazard_map_alpha,
+        legend_stops=s.hazard_map_legend_stops,
+        array_cache=s.hazard_map_array_cache,
+        tile_cache=s.hazard_map_tile_cache,
     )
-}
+    _cache = LruCache(s.hazard_map_tile_cache)
+    built: list[MapLayer] = [
+        *FLOOD_LAYERS,
+        fire_map.configure(s.fire_map_path, s.fire_map_max_zoom, grid),
+        wind_map.configure(s.wind_map_path, s.wind_map_max_zoom, grid),
+    ]
+    LAYERS.clear()
+    LAYERS.update({layer.hazard: layer for layer in built if layer.hazard in s.hazard_map_layers})
+    return LAYERS
+
+
+configure()
 
 
 def tile(

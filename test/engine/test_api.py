@@ -533,6 +533,35 @@ def test_hazard_maps_list_wind_describing_itself(client, finished):
     assert baseline["available"] is True
 
 
+@pytest.fixture
+def map_settings(settings):
+    """Settings with only wildfire and wind maps, at other zooms and legend sizes."""
+    from dataclasses import replace
+
+    from engine import hazard_maps
+
+    yield replace(
+        settings,
+        hazard_map_layers=("Fire", "Wind"),
+        wind_map_max_zoom=5,
+        hazard_map_legend_stops=4,
+    )
+    hazard_maps.configure()
+
+
+def test_hazard_map_settings_reach_the_layers(map_settings):
+    with TestClient(api_app(map_settings, complete_run)) as client:
+        run_id = upload(client).json()["run_id"]
+        assert wait_until_finished(client, run_id)["status"] == "completed"
+        url = f"/api/runs/{run_id}/hazard-maps"
+        layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
+        assert [layer["hazard"] for layer in layers] == ["Fire", "Wind"]
+        assert layers[1]["max_zoom"] == 5
+        assert [len(layer["legend"]) for layer in layers] == [4, 4]
+        tile = f"{url}/RiverineInundation/5/23/13.png"
+        assert client.get(tile, params={"scenario": "historical"}).status_code == 404
+
+
 def test_hazard_maps_report_a_changed_inventory(client, finished, monkeypatch):
     from engine import fire_map
 
