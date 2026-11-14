@@ -29,6 +29,31 @@ covered every value.
 The mapping involves judgement: farm buildings use the Industrial curve, domestic outbuildings use
 Residential, and public buildings use Commercial.
 
+## Hazard maps
+
+The river and coastal flood maps are WRI Aqueduct Floods, drawn by physrisk. physrisk lists their
+licence as the WRI Open Data Commitment.
+
+The wildfire map is Jupiter Intelligence's fire probability, the resource
+`fire/jupiter/v1/fire_probability_{scenario}_{year}` in physrisk's embedded inventory. physrisk's
+wildfire damage figures use the same data. physrisk keeps it out of its public group (`group_id`
+`jupiter_osc`) and won't draw it, but the arrays are in the public `os-climate-physical-risk`
+bucket, so the app reads them anonymously:
+
+```
+s3://os-climate-physical-risk/hazard-indicators/hazard.zarr/fire/jupiter/v1/fire_probability_{scenario}_{year}
+```
+
+- zarr v2, float32, shape (1, 721, 1441), a 0.25° EPSG:4326 grid whose cell centres run from -180°
+  to 180° inclusive. Its first and last columns are both at the antimeridian but hold different
+  values, so the app reads each from its own side.
+- About 71% of cells are NaN: ocean, or no data. 0 is a real value.
+- SSP1-2.6 and SSP5-8.5 for 2020, 2030, 2040, 2050, 2075 and 2100, read from the inventory, with no
+  historical baseline. The `..._map` array next to it is already in Web Mercator, but it's coarser
+  (about 35 km) and resampled once, so the app uses the source array.
+- **Licence: physrisk lists it as "Commercial".** The panel shows the source and that licence under
+  the map.
+
 ## FEMA flood zones
 
 FEMA's National Flood Hazard Layer flood hazard areas (`S_FLD_HAZ_AR`), as GeoParquet. The file

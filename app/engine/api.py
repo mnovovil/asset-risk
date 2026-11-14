@@ -203,27 +203,44 @@ def get_hazard_curve(
 
 @router.get("/runs/{run_id}/hazard-maps")
 def get_hazard_maps(run: FinishedRunDep, pair: PairDep) -> list[schemas.HazardMapLayer]:
-    """The hazards physrisk can draw a map of. Other hazards have no public map data."""
+    """The hazards with a map, each saying whether it covers this scenario and year.
+
+    Other hazards have no public map data. 502 when a layer's source no longer matches what the
+    app expects, e.g. after a physrisk upgrade.
+    """
     scenario, year = pair
-    reason = hazard_maps.unavailable_reason(scenario, year)
     query = urlencode({"scenario": scenario} | ({} if year is None else {"year": year}))
-    return [
-        schemas.HazardMapLayer(
-            hazard=layer.hazard,
-            available=reason is None,
-            reason=reason,
-            return_period=hazard_maps.RETURN_PERIOD,
-            units=layer.units,
-            min_value=layer.min_value,
-            max_value=layer.max_value,
-            max_zoom=hazard_maps.MAX_ZOOM,
-            legend=hazard_maps.legend(layer),
-            tile_url=None
-            if reason
-            else f"/api/runs/{run.run_id}/hazard-maps/{layer.hazard}/{{z}}/{{x}}/{{y}}.png?{query}",
-        )
-        for layer in hazard_maps.LAYERS.values()
-    ]
+    try:
+        return [
+            _hazard_map_layer(run.run_id, layer, scenario, year, query)
+            for layer in hazard_maps.LAYERS.values()
+        ]
+    except hazard_maps.HazardMapConfigError as e:
+        raise HTTPException(502, f"The hazard maps are misconfigured: {e}") from e
+
+
+def _hazard_map_layer(
+    run_id: str, layer: hazard_maps.MapLayer, scenario: str, year: int | None, query: str
+) -> schemas.HazardMapLayer:
+    reason = layer.reason(scenario, year)
+    return schemas.HazardMapLayer(
+        hazard=layer.hazard,
+        available=reason is None,
+        reason=reason,
+        measure=layer.measure,
+        return_period=layer.return_period,
+        units=layer.units,
+        no_data_label=layer.no_data_label,
+        note=layer.note,
+        source=layer.source,
+        min_value=layer.min_value,
+        max_value=layer.max_value,
+        max_zoom=layer.max_zoom,
+        legend=layer.legend(),
+        tile_url=None
+        if reason
+        else f"/api/runs/{run_id}/hazard-maps/{layer.hazard}/{{z}}/{{x}}/{{y}}.png?{query}",
+    )
 
 
 @router.get(
@@ -234,13 +251,16 @@ def get_hazard_maps(run: FinishedRunDep, pair: PairDep) -> list[schemas.HazardMa
 def get_hazard_map_tile(
     run: FinishedRunDep, pair: PairDep, hazard: str, z: int, x: int, y: int
 ) -> Response:
-    """One 512 px map tile. 404 where physrisk has no map, which a map shows as transparent."""
+    """One 512 px map tile. 404 where there's no map, which a map shows as transparent.
+
+    502 when the data can't be read: physrisk fails, S3 is unreachable, or the data has changed.
+    """
     if hazard not in hazard_maps.LAYERS:
-        raise HTTPException(404, "physrisk has no public map of this hazard")
+        raise HTTPException(404, "There's no public map of this hazard")
     try:
         image = hazard_maps.tile(hazard, *pair, z, x, y)
     except Exception as e:
-        raise HTTPException(502, f"physrisk could not draw this map tile: {e}") from e
+        raise HTTPException(502, f"This map tile could not be drawn: {e}") from e
     if image is None:
         raise HTTPException(404, "No map tile here")
     return Response(image, media_type="image/png", headers={"Cache-Control": TILE_CACHE_CONTROL})

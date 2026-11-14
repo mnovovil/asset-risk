@@ -203,12 +203,18 @@ from a list, across every year and scenario of the run. Read it with these limit
 
 ## Hazard maps
 
-The asset panel can show a map around the asset, drawn from physrisk's own map data. It answers
-where the flood plain is, which a single point's numbers can't. **Open larger map** opens the same
-map, hazard and period full-size in a new tab. Read it, at any size, with these limits:
+The asset panel can show a map around the asset. It answers where the flood plain is, or where
+wildfire is likely, which a single point's numbers can't. **Open larger map** opens the same map,
+hazard and period full-size in a new tab. Each map's legend, no-data key and note come from the
+layer itself. Read it, at any size, with these limits:
 
-- **Only river and coastal flood.** physrisk's maps of wind, fire, hail, heat and drought aren't
-  public, so these hazards are listed but can't be chosen.
+- **Only river flood, coastal flood and wildfire.** physrisk's maps of wind, hail, heat and drought
+  aren't public, so these hazards are listed but can't be chosen.
+- **A clear area means no data**, not no risk: no flood in the flood maps, and ocean or no data in
+  the wildfire map.
+
+### Flood
+
 - **Only the 1-in-1000-year flood.** The maps hold no other return period.
 - **About 1 km pixels**, so the map shows the area, not the building. It stops adding detail past a
   regional zoom.
@@ -216,7 +222,25 @@ map, hazard and period full-size in a new tab. Read it, at any size, with these 
 - **"Historical" is physrisk's baseline**, which for these maps is its RCP4.5 2030 data, the same
   data the assessment uses. physrisk has flood maps for SSP2-4.5 and SSP5-8.5 from 2030 to 2080
   only, and none for SSP1-2.6 or SSP3-7.0.
-- **A clear area means no flood in the data**, not no flood risk.
+
+### Wildfire
+
+The app draws this map itself from Jupiter Intelligence's fire probability data, the same data
+physrisk's wildfire damage figures use. physrisk won't draw it, because the data isn't in its
+public group. The app reads the array anonymously from physrisk's public bucket instead.
+
+- **The value is the highest monthly chance in the year of a wildfire within 100 km**, not at the
+  building. 0.7 means a 70% chance.
+- **The map and the losses aren't on the same scale.** physrisk divides this value by 500 before it
+  works out damage, as a stand-in for a building-level chance, until higher-resolution data exists.
+- **About 28 km pixels** (0.25°), drawn as blocks, so the map shows the region, not the property.
+- **Only SSP1-2.6 and SSP5-8.5**, for 2020, 2030, 2040, 2050, 2075 and 2100. Of this app's years,
+  that's 2030 and 2050. There's **no historical baseline**, so Historical has no wildfire map. The
+  app never shows a nearby year or 2020 instead.
+- **A low or empty area is not proof of low risk.** Cells with no data are clear, and kept apart
+  from 0, which is a real value in the data and drawn in the lightest colour.
+- **Source:** Jupiter Intelligence, via OS-Climate physrisk, which lists its licence as
+  "Commercial".
 
 **Use it to** screen many sites and find which deserve a closer look. **Don't use it for** decisions
 about a single site, or for currency estimates of loss.

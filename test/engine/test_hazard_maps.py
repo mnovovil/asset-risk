@@ -111,7 +111,7 @@ def test_other_failures_raise_and_are_not_cached():
 
 
 def test_the_cache_drops_the_least_recently_used_tile():
-    cache = hazard_maps._Cache(2)
+    cache = hazard_maps.LruCache(2)
     cache.put("a", b"a")
     cache.put("b", b"b")
     assert cache.get("a") == (True, b"a")
@@ -135,11 +135,41 @@ def test_unavailable_reason(scenario, year, reason):
 
 
 def test_legend_runs_light_to_dark_with_the_maps_transparency():
-    colours = hazard_maps.legend(hazard_maps.LAYERS[RIVER])
+    colours = hazard_maps.LAYERS[RIVER].legend()
     assert len(colours) == 5
     assert all(c.startswith("rgba(") and c.endswith(", 0.78)") for c in colours)
     lightness = [sum(int(v) for v in c[5:].split(",")[:3]) for c in colours]
     assert lightness == sorted(lightness, reverse=True)
+
+
+def test_layers_list_flood_then_wildfire():
+    assert list(hazard_maps.LAYERS) == [RIVER, COAST, "Fire"]
+
+
+@pytest.mark.parametrize("hazard", [RIVER, COAST])
+def test_flood_layers_describe_themselves(hazard):
+    layer = hazard_maps.LAYERS[hazard]
+    assert (layer.measure, layer.units, layer.return_period) == ("Flood depth", "m", 1000)
+    assert layer.no_data_label == "No flood in the data"
+    assert "1-in-1000-year" in layer.note and "not proof of no risk" in layer.note
+    assert layer.reason("ssp370", 2050) == "physrisk has no flood map for this scenario"
+
+
+def test_the_flood_source_quotes_physrisks_licence():
+    from engine.fire_map import physrisk_inventory
+
+    licences = {
+        r["license"]
+        for r in physrisk_inventory()
+        for layer in hazard_maps.LAYERS.values()
+        if isinstance(layer, hazard_maps.FloodLayer) and r["path"] == layer.resource
+    }
+    assert len(licences) == 1
+    assert f'"{licences.pop()}"' in hazard_maps.FLOOD_SOURCE
+
+
+def test_an_unknown_hazard_has_no_tile():
+    assert hazard_maps.tile("Wind", "ssp585", 2050, 0, 0, 0, FakeRequester()) is None
 
 
 def opaque_pixels(png: bytes) -> int:
@@ -218,6 +248,8 @@ def test_live_catalogue_matches_physrisks_inventory():
 
     resources = default_requester().inventory.resources
     for layer in hazard_maps.LAYERS.values():
+        if not isinstance(layer, hazard_maps.FloodLayer):
+            continue
         resource = resources[layer.resource]
         assert resource.hazard_type == layer.hazard
         assert _read_permitted(["public"], resource)

@@ -11,7 +11,7 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `scenarios` | `ssp245`, `ssp585` | Scenarios to assess. Data [differs by scenario](methodology.md#comparing-scenarios) |
+| `scenarios` | `ssp126`, `ssp245`, `ssp585` | Scenarios to assess. Data [differs by scenario](methodology.md#comparing-scenarios) |
 | `years` | `2030`, `2050`, `2080` | Years to assess, from `2030`, `2050` and `2080` (2025 returns no losses). Each scenario and year pair adds run time. The [baseline](methodology.md#today-baseline) always comes back too |
 | `default_building_type` | `Buildings/Commercial` | Type for assets with no usable class or subtype |
 | `physrisk_batch_size` | `100` | Assets per physrisk request |
@@ -74,18 +74,23 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
 | `GET /api/runs/{id}/clusters` | DBSCAN clusters with their members, centre and bounds. Empty when none was found |
 | `GET /api/runs/{id}/assets/{row_num}/hazard-curve` | River flood depth by return period |
-| `GET /api/runs/{id}/hazard-maps` | The hazards physrisk can draw a map of for one `scenario` and `year`, each with its tile URL and legend, or the reason it has none |
-| `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to 6, for the same `scenario` and `year`. 404 where there's no map |
+| `GET /api/runs/{id}/hazard-maps` | The hazards with a map (river flood, coastal flood, wildfire) for one `scenario` and `year`. Each says what it shows (`measure`, `units`, `return_period`, null when it isn't one event), what a clear area means (`no_data_label`), how to read it (`note`), its `source` and licence, its legend and tile URL, or the reason it has none. 502 if a layer's source no longer matches |
+| `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to the layer's `max_zoom` (6 for every layer), for the same `scenario` and `year`. 404 where there's no map, 502 when physrisk or S3 fails |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
 | `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
 | `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
 | `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
 
-Map tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
-while another run is assessing. The app keeps the last 256 in memory. Only river and coastal flood
-have public map data. `app/engine/hazard_maps.py` lists them, and `pytest -m live` checks that list
-against physrisk after a version bump.
+Flood tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
+while another run is assessing. Only river and coastal flood have public map images, and `pytest -m
+live` checks that after a version bump. Wildfire tiles are drawn by the app from Jupiter
+Intelligence's fire probability array, which it reads anonymously from physrisk's public S3 bucket
+(`app/engine/fire_map.py`), without that lock. The first wildfire tile for a scenario and year
+downloads the whole array, about 4 MB (1.4 to 2 s when measured), and the app keeps the last 4
+arrays. Each layer keeps its last 256 tiles in memory. `app/engine/hazard_maps.py` lists the
+layers. Unit tests check the wildfire layer against physrisk's embedded inventory, so a physrisk
+bump that drops it fails, and `pytest -m s3` reads a real tile.
 
 Each asset carries its FEMA flood zone: `fema_status` (`mapped`, `not_mapped`, `not_us`,
 `not_located` or `unavailable`), `fema_zone` and `fema_zone_subtype` as FEMA writes them,
@@ -136,9 +141,10 @@ If geolocate doesn't have the new release yet, follow
 
 ## Performance
 
-Measured in Docker on a machine with 4 CPUs and 5.8 GB of memory, with the default 2 scenarios and 3
-years, using points around 25 large cities. Memory was sampled every few seconds, so its peak is
-approximate.
+Measured in Docker on a machine with 4 CPUs and 5.8 GB of memory, with 2 scenarios (the default
+before ssp126 was added) and 3 years, using points around 25 large cities. Memory was sampled every
+few seconds, so its peak is approximate. The default is now 3 scenarios, so expect the assessing
+stage to take about half as long again.
 
 | Rows | Time | Peak memory |
 |---|---|---|
