@@ -177,7 +177,7 @@ LAYERS: dict[str, MapLayer] = {
             2.0,
             "m",
         ),
-        fire_map.FireLayer(),
+        fire_map.layer(),
     )
 }
 
