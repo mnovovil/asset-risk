@@ -208,13 +208,12 @@ what the zone means, zooms its hazard map out to southern Louisiana, and switche
 flood, wildfire and tropical cyclone wind. A wildfire or wind map with no data for the dashboard's
 scenario and year is shown for the historical period instead. It needs the FEMA flood zone database
 that `flood_zones_db` names, and mounts it the way `script/start.sh` does. It stops if that database
-is missing, the run fails, the page never shows the Flood zones stage reached, the map doesn't load,
+is missing, the run fails, the upload and progress take 2 s or more, the map doesn't load,
 no cluster contains New Orleans, no bubble on screen can be matched to that cluster, `US-312` can't
 be clicked on the map, isn't mapped in a levee-protected Zone X as its caption says, a wildfire or
 wind layer isn't in `hazard_map_layers` or has no map for the period, or its hazard maps load no
-tile. Without `--build` it reuses the existing image. It reports the stages it saw as current:
-Classifying and Flood zones are short, and the page only checks progress every 1.5 s, so they can
-be missed. The GIF holds on Flood zones once it is current or ticked off.
+tile. Without `--build` it reuses the existing image. The upload and progress screens get one short
+frame per stage the page shows as current, and it reports those stages.
 
 `script/overture_values.py` audits the building type map against a live release, and
 `script/build_regions.py` rebuilds the region data.

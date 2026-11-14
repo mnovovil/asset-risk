@@ -4,7 +4,7 @@
 # ///
 """Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
-After the upload and progress screens, where it holds on the FEMA flood zone stage, it opens the
+After the upload and progress screens, which go by in under 2 s, it opens the
 New Orleans risk-concentration bubble on the map, clicks one of its assets to show its details, its
 FEMA flood zone and what that zone means, its loss over time and hazard maps, zooms the
 hazard map out to all of southern Louisiana, switches it to coastal flood, wildfire and tropical
@@ -54,14 +54,13 @@ CHROMIUM_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ig
 
 # 500 assets take several minutes, nearly all of it assessing: see .claude/learnings.md.
 RUN_TIMEOUT_SECONDS = 1800
-PROGRESS_SPEEDUP = 30
-SAMPLE_EVERY_SECONDS = 1
-# Polled faster than frames are taken, so a short stage the page does show isn't missed.
+# The upload and progress screens go by in under 2 s, so the GIF is about the results: one frame of
+# the loaded file, then one per stage the page shows as current, all under one caption.
+UPLOAD_SECONDS = 0.5
+STAGE_SECONDS = 0.3
+INTRO_MAX_SECONDS = 2
+# Polled often, so a short stage the page does show isn't missed.
 POLL_SECONDS = 0.2
-# The FEMA lookup is usually quicker than the page's 1.5 s progress check, so the page may never
-# show it as current. Hold the first frame where it is current or ticked off, long enough to read.
-FLOOD_ZONES_STAGE = "Flood zones"
-FLOOD_ZONES_HOLD_SECONDS = 3.5
 MAP_SETTLE_SECONDS = 4
 SCROLL_STEPS = 4
 SCROLL_STEP_SECONDS = 0.08
@@ -213,57 +212,42 @@ def fail_on_alert(page: Page) -> None:
         raise RuntimeError(f"the app showed an error: {alert.first.inner_text()}")
 
 
+INTRO_CAPTION = "Upload a CSV of id, lat, lon: each building is found, classified and assessed"
+
+
 def record_upload(rec: Recorder) -> None:
     rec.page.goto(BASE)
     rec.page.get_by_role("heading", name="Assess a portfolio").wait_for()
     rec.page.wait_for_load_state("networkidle")
-    rec.caption("Step 1: upload a CSV of id, lat, lon")
-    rec.shot(2.5)
+    rec.caption(INTRO_CAPTION)
     rec.page.locator('input[type="file"]').set_input_files(SAMPLE)
     start = rec.page.get_by_role("button", name="Assess this portfolio")
     start.wait_for()
     start.evaluate("e => e.scrollIntoView({block: 'center', behavior: 'instant'})")
-    rec.shot(3.5)
+    rec.shot(UPLOAD_SECONDS)
     rec.click(start)
 
 
 def record_progress(rec: Recorder) -> list[str]:
-    """Capture the real stages, returning the ones the page showed."""
+    """Take one short frame per stage the page shows as current, returning those stages."""
     page = rec.page
-    step_caption = (
-        f"Step 2: find each building, classify it, calculate its risk (sped up {PROGRESS_SPEEDUP}×)"
-    )
-    rec.caption(step_caption)
+    rec.caption(INTRO_CAPTION)
     current_stage = page.locator('.stage-label[aria-current="step"]')
-    flood_zones_reached = page.locator(
-        ".stage-current .stage-label, .stage-done .stage-label", has_text=FLOOD_ZONES_STAGE
-    )
-    held_flood_zones = False
     finished = page.get_by_role("heading", name="Where the risk is")
     seen: list[str] = []
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
-    last = time.monotonic()
     while not finished.is_visible():
         if time.monotonic() > deadline:
             raise RuntimeError(f"the run didn't finish in {RUN_TIMEOUT_SECONDS} s")
         fail_on_alert(page)
         stage = current_stage.inner_text() if current_stage.count() > 0 else None
-        new_stage = stage is not None and stage not in seen
-        if new_stage:
+        if stage is not None and stage not in seen:
             seen.append(stage)
-        now = time.monotonic()
-        if not held_flood_zones and flood_zones_reached.count() > 0:
-            held_flood_zones = True
-            rec.caption("Each US asset also gets its FEMA flood zone")
-            rec.shot((now - last) / PROGRESS_SPEEDUP + FLOOD_ZONES_HOLD_SECONDS)
-            rec.caption(step_caption)
-            last = now
-        elif new_stage or now - last >= SAMPLE_EVERY_SECONDS:
-            rec.shot((now - last) / PROGRESS_SPEEDUP)
-            last = now
+            rec.shot(STAGE_SECONDS)
         page.wait_for_timeout(POLL_SECONDS * 1000)
-    if not held_flood_zones:
-        raise RuntimeError(f"the page never showed the {FLOOD_ZONES_STAGE} stage reached")
+    intro = sum(f.seconds for f in rec.frames)
+    if intro >= INTRO_MAX_SECONDS:
+        raise RuntimeError(f"the upload and progress screens take {intro:.1f} s of the GIF")
     return seen
 
 
@@ -572,7 +556,7 @@ def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[st
     if "OpenStreetMap" not in page.locator(".maplibregl-ctrl-attrib").inner_text():
         raise RuntimeError("the map's attribution isn't showing")
 
-    rec.caption("Step 3: see the results, including how many building types were assumed")
+    rec.caption("The results, including how many building types were assumed")
     rec.shot(4.5)
     cluster = record_clusters(rec)
     panel = open_focus_asset(rec, cluster)
