@@ -301,5 +301,26 @@ export function hazardMapLayers(runId: string, url: string) {
     legend: ["rgba(238, 143, 99, 0.78)", "rgba(128, 50, 0, 0.78)"],
     tile_url: fireReason ? null : tileUrl("Fire"),
   };
-  return [...flood, fire];
+  const year = params.get("year");
+  const windReason =
+    scenario === "historical" || (scenario === "ssp585" && year === "2050")
+      ? null
+      : "Wind fixture: 2050 only";
+  const wind = {
+    hazard: "Wind",
+    available: windReason === null,
+    reason: windReason,
+    measure: "Wind fixture measure",
+    return_period: 100,
+    units: "m/s",
+    no_data_label: "Wind fixture no data",
+    note: "Wind fixture note",
+    source: "Wind fixture source: CC BY 4.0",
+    min_value: 0,
+    max_value: 90,
+    max_zoom: 7,
+    legend: ["rgba(90, 194, 147, 0.78)", "rgba(17, 91, 62, 0.78)"],
+    tile_url: windReason ? null : tileUrl("Wind"),
+  };
+  return [...flood, fire, wind];
 }

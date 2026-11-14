@@ -8,8 +8,9 @@
  * --surface colours in styles.css; its "single hue" check fails by design. Re-run it before changing
  * them. A missing result is told apart by being hollow, not by its colour.
  *
- * The hazard map's wildfire ramp isn't here: the engine draws those tiles, so it lives, validated the
- * same way, in app/engine/fire_map.py (RAMP), and reaches the legend through the API.
+ * The hazard map's wildfire and wind ramps aren't here: the engine draws those tiles, so they live,
+ * validated the same way, in app/engine/fire_map.py and wind_map.py (RAMP), and reach the legend
+ * through the API.
  */
 
 import { scoreKind } from "@/lib/dashboard";

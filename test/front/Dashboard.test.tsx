@@ -459,7 +459,7 @@ describe("Dashboard", () => {
       expect(options.map((o) => [o.textContent, o.disabled])).toEqual([
         ["River flood", false],
         ["Coastal flood", false],
-        ["Tropical cyclone wind (no public map)", true],
+        ["Tropical cyclone wind", false],
         ["Wildfire", false],
         ["Chronic heat (no public map)", true],
       ]);
@@ -481,6 +481,25 @@ describe("Dashboard", () => {
       expect(panel.getByText("Fire fixture note")).toBeInTheDocument();
       expect(panel.getByText("Fire fixture source: Commercial")).toBeInTheDocument();
       expect(panel.queryByText(/Flood fixture/)).not.toBeInTheDocument();
+    });
+
+    it("draws wind from the layer's own text, with no wind-specific wording", async () => {
+      const panel = within(await openPanel());
+      await userEvent.selectOptions(await panel.findByLabelText("Hazard"), "Wind");
+      const map = panel.getByText(/Hazard map .*\/Wind\/.*scenario=ssp585&year=2050/);
+      expect(map).toHaveTextContent(
+        "Tropical cyclone wind: Wind fixture measure, 1 in 100 years, SSP5-8.5, 2050.",
+      );
+      expect(map).toHaveTextContent("Clear areas: Wind fixture no data.");
+      const legend = panel.getByRole("list", { name: "Legend: Wind fixture measure" });
+      expect(legend).toHaveTextContent(/^0 m\/s.*90 m\/s or more.*Wind fixture no data$/);
+      expect(panel.getByText("Wind fixture note")).toBeInTheDocument();
+      expect(panel.getByText("Wind fixture source: CC BY 4.0")).toBeInTheDocument();
+
+      await userEvent.click(panel.getByRole("radio", { name: "Historical" }));
+      expect(
+        await panel.findByText(/Hazard map .*\/Wind\/.*\?scenario=historical:/),
+      ).toBeInTheDocument();
     });
 
     it("shows wildfire's reason for Historical instead of an empty map", async () => {
