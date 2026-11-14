@@ -1270,6 +1270,7 @@
         "type": "object"
       },
       "HazardMapLayer": {
+        "description": "A map layer, describing itself: the dashboard shows its text as it is.",
         "properties": {
           "available": {
             "title": "Available",
@@ -1294,9 +1295,21 @@
             "title": "Max Zoom",
             "type": "integer"
           },
+          "measure": {
+            "title": "Measure",
+            "type": "string"
+          },
           "min_value": {
             "title": "Min Value",
             "type": "number"
+          },
+          "no_data_label": {
+            "title": "No Data Label",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
           },
           "reason": {
             "anyOf": [
@@ -1310,8 +1323,19 @@
             "title": "Reason"
           },
           "return_period": {
-            "title": "Return Period",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Period"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
           },
           "tile_url": {
             "anyOf": [
@@ -1333,8 +1357,12 @@
           "hazard",
           "available",
           "reason",
+          "measure",
           "return_period",
           "units",
+          "no_data_label",
+          "note",
+          "source",
           "min_value",
           "max_value",
           "max_zoom",
@@ -2225,7 +2253,7 @@
     },
     "/api/runs/{run_id}/hazard-maps": {
       "get": {
-        "description": "The hazards physrisk can draw a map of. Other hazards have no public map data.",
+        "description": "The hazards with a map, each saying whether it covers this scenario and year.\n\nOther hazards have no public map data. 502 when a layer's source no longer matches what the\napp expects, e.g. after a physrisk upgrade.",
         "operationId": "get_hazard_maps_api_runs__run_id__hazard_maps_get",
         "parameters": [
           {
@@ -2294,7 +2322,7 @@
     },
     "/api/runs/{run_id}/hazard-maps/{hazard}/{z}/{x}/{y}.png": {
       "get": {
-        "description": "One 512 px map tile. 404 where physrisk has no map, which a map shows as transparent.",
+        "description": "One 512 px map tile. 404 where there's no map, which a map shows as transparent.\n\n502 when the data can't be read: physrisk fails, S3 is unreachable, or the data has changed.",
         "operationId": "get_hazard_map_tile_api_runs__run_id__hazard_maps__hazard___z___x___y__png_get",
         "parameters": [
           {
