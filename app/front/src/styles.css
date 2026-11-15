@@ -343,6 +343,10 @@ progress {
 }
 
 .card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: start;
   order: 1;
   padding: 16px 16px 0;
 }
@@ -374,6 +378,75 @@ progress {
   text-decoration: underline;
 }
 
+.card-header .card-meta {
+  grid-column: 1 / -1;
+}
+
+/* Above the stretched link, so it's its own target. */
+.card-delete {
+  position: relative;
+  z-index: 1;
+  margin: -4px -8px 0 0;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.card-delete:hover {
+  border-color: var(--line);
+  color: var(--error);
+}
+
+.card-delete:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.button-danger {
+  border-color: var(--error);
+  background: var(--error);
+  color: var(--card);
+}
+
+.confirm-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 20%);
+}
+
+.confirm-dialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
+.confirm-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+.confirm-dialog p {
+  margin: 0 0 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.portfolios-page h1:focus {
+  outline: none;
+}
+
 .card-meta {
   margin: 4px 0 0;
   color: var(--muted);
@@ -385,10 +458,6 @@ progress {
 }
 
 /* The map sits on top, though the heading comes first for screen readers. */
-.card-results {
-  display: contents;
-}
-
 .card-map {
   position: relative;
   order: 0;

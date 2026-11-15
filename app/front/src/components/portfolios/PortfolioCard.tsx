@@ -2,6 +2,7 @@ import { lazy, Suspense, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import type { RunStatus } from "@/api/client";
+import { DeletePortfolio } from "@/components/portfolios/DeletePortfolio";
 import { useInView } from "@/hooks/useInView";
 import { usePortfolioCard } from "@/hooks/usePortfolioCard";
 import { assumedShare, pairLabel, pointFor } from "@/lib/dashboard";
@@ -67,92 +68,90 @@ function Figure({ label, value, note }: { label: string; value: string; note?: s
 }
 
 /** The four figures the dashboard opens with, for the same scenario and year. */
-function Results({ run }: { run: RunStatus }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref);
+function Results({ run, inView }: { run: RunStatus; inView: boolean }) {
   const { data, error } = usePortfolioCard(run.run_id, inView);
   const name = run.source_name ?? "Untitled portfolio";
 
-  let body;
-  if (error) {
-    body = (
-      <p className="card-message" role="status">
-        {error}
-      </p>
-    );
-  } else if (!data) {
-    body = <p className="card-message muted">Loading results…</p>;
-  } else {
-    const { overview, pair, totals } = data;
-    const { summary } = overview;
-    const point = pair ? pointFor(overview.trajectory, pair) : undefined;
-    const hasLoss = point != null && point.assets > 0 && point.mean_total_aal != null;
-    const assumed = assumedShare(summary.assessable, summary.assumed_type);
-    const placed = overview.points.length;
-    const warn = assumed > ASSUMED_WARNING_SHARE;
-    const where = `Map of where ${name}'s ${plural(placed, "asset")} are`;
-    const alt = `${where}, coloured by total annual loss`;
-    body = (
+  if (error || !data) {
+    return (
       <>
         <div className="card-map">
-          {placed > 0 ? (
-            <Suspense fallback={loading}>
-              <RiskMapThumbnail
-                runId={run.run_id}
-                points={overview.points}
-                clusters={overview.clusters}
-                totals={totals}
-                alt={alt}
-              />
-            </Suspense>
-          ) : (
-            <p className="card-map-placeholder">No asset could be placed on a map.</p>
-          )}
+          {error ? <div className="card-map-placeholder" /> : loading}
         </div>
-        <dl className="card-figures">
-          <Figure
-            label="Mean annual loss, equal-weighted"
-            value={hasLoss ? percent(point.mean_total_aal) : "No results"}
-            note={
-              pair && point
-                ? `${pairLabel(pair)}, over ${plural(point.hazards, "hazard")}`
-                : "No future scenario was assessed"
-            }
-          />
-          <Figure
-            label="Assets assessed"
-            value={`${count(summary.assessable)} of ${count(summary.total_assets)}`}
-            note={
-              summary.failed_assets > 0
-                ? `${plural(summary.failed_assets, "asset")} missing some results`
-                : undefined
-            }
-          />
-          <Figure
-            label="Assets excluded"
-            value={count(summary.excluded)}
-            note="Invalid, off land or no damage model"
-          />
-          <div className={warn ? "card-figure card-figure-warning" : "card-figure"}>
-            <dt>Building type assumed</dt>
-            <dd>
-              <span className="card-figure-value">{Math.round(assumed * 100)}%</span>
-              <span className="card-figure-note">
-                {warn
-                  ? "Most types were assumed, so results can move materially"
-                  : `${plural(summary.assumed_type, "asset")} had no building type to use`}
-              </span>
-            </dd>
-          </div>
-        </dl>
+        {error ? (
+          <p className="card-message" role="status">
+            {error}
+          </p>
+        ) : (
+          <p className="card-message muted">Loading results…</p>
+        )}
       </>
     );
   }
 
+  const { overview, pair, totals } = data;
+  const { summary } = overview;
+  const point = pair ? pointFor(overview.trajectory, pair) : undefined;
+  const hasLoss = point != null && point.assets > 0 && point.mean_total_aal != null;
+  const assumed = assumedShare(summary.assessable, summary.assumed_type);
+  const placed = overview.points.length;
+  const warn = assumed > ASSUMED_WARNING_SHARE;
+  const where = `Map of where ${name}'s ${plural(placed, "asset")} are`;
+  const alt = `${where}, coloured by total annual loss`;
   return (
-    <div ref={ref} className="card-results">
-      {body}
-    </div>
+    <>
+      <div className="card-map">
+        {placed > 0 ? (
+          <Suspense fallback={loading}>
+            <RiskMapThumbnail
+              runId={run.run_id}
+              points={overview.points}
+              clusters={overview.clusters}
+              totals={totals}
+              alt={alt}
+            />
+          </Suspense>
+        ) : (
+          <p className="card-map-placeholder">No asset could be placed on a map.</p>
+        )}
+      </div>
+      <dl className="card-figures">
+        <Figure
+          label="Mean annual loss, equal-weighted"
+          value={hasLoss ? percent(point.mean_total_aal) : "No results"}
+          note={
+            pair && point
+              ? `${pairLabel(pair)}, over ${plural(point.hazards, "hazard")}`
+              : "No future scenario was assessed"
+          }
+        />
+        <Figure
+          label="Assets assessed"
+          value={`${count(summary.assessable)} of ${count(summary.total_assets)}`}
+          note={
+            summary.failed_assets > 0
+              ? `${plural(summary.failed_assets, "asset")} missing some results`
+              : undefined
+          }
+        />
+        <Figure
+          label="Assets excluded"
+          value={count(summary.excluded)}
+          note="Invalid, off land or no damage model"
+        />
+        <div className={warn ? "card-figure card-figure-warning" : "card-figure"}>
+          <dt>Building type assumed</dt>
+          <dd>
+            <span className="card-figure-value">{Math.round(assumed * 100)}%</span>
+            <span className="card-figure-note">
+              {warn
+                ? "Most types were assumed, so results can move materially"
+                : `${plural(summary.assumed_type, "asset")} had no building type to use`}
+            </span>
+          </dd>
+        </div>
+      </dl>
+    </>
   );
 }
 
@@ -172,17 +171,27 @@ function Pending({ run }: { run: RunStatus }) {
   );
 }
 
-export function PortfolioCard({ run }: { run: RunStatus }) {
+interface PortfolioCardProps {
+  run: RunStatus;
+  onDeleted: (run: RunStatus) => void;
+}
+
+export function PortfolioCard({ run, onDeleted }: PortfolioCardProps) {
   const completed = run.status === "completed";
+  const name = run.source_name ?? "Untitled portfolio";
+  // The card is observed, not its parts: an element with no box of its own is never "in view".
+  const ref = useRef<HTMLElement>(null);
+  const inView = useInView(ref);
   return (
-    <article className="portfolio-card">
+    <article ref={ref} className="portfolio-card">
       <header className="card-header">
         <h2 className="card-title">
           {/* One link, stretched over the whole card, so it's one stop for the keyboard. */}
           <Link to={`/runs/${encodeURIComponent(run.run_id)}`} className="card-link">
-            {run.source_name ?? "Untitled portfolio"}
+            {name}
           </Link>
         </h2>
+        <DeletePortfolio run={run} name={name} onDeleted={onDeleted} />
         <p className="card-meta">
           {plural(run.total_rows, "asset")} ·{" "}
           <time dateTime={run.created_at}>{created(run.created_at)}</time>
@@ -194,7 +203,7 @@ export function PortfolioCard({ run }: { run: RunStatus }) {
           )}
         </p>
       </header>
-      {completed ? <Results run={run} /> : <Pending run={run} />}
+      {completed ? <Results run={run} inView={inView} /> : <Pending run={run} />}
     </article>
   );
 }
