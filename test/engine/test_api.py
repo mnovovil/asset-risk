@@ -467,7 +467,7 @@ def test_hazard_maps_list_the_flood_layers(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
     layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
     hazards = [layer["hazard"] for layer in layers]
-    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail"]
+    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail", "Drought"]
     river = layers[0]
     assert river["available"] is True
     assert river["reason"] is None
@@ -507,7 +507,7 @@ def test_hazard_maps_list_wildfire_describing_itself(client, finished):
 
 def test_wildfire_has_no_historical_map_but_flood_does(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
-    river, _, fire, _, _ = client.get(url, params={"scenario": "historical"}).json()
+    river, _, fire, _, _, _ = client.get(url, params={"scenario": "historical"}).json()
     assert river["available"] is True
     assert (fire["available"], fire["tile_url"]) == (False, None)
     assert fire["reason"] == "physrisk's wildfire data has no historical baseline"
@@ -553,6 +553,29 @@ def test_hazard_maps_list_hail_describing_itself(client, finished):
     )
     baseline = client.get(url, params={"scenario": "historical"}).json()[4]
     assert baseline["reason"] == "physrisk's hail data has no historical baseline"
+
+
+def test_hazard_maps_list_drought_describing_itself(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    drought = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()[5]
+    assert drought["hazard"] == "Drought"
+    assert drought["available"] is True
+    assert (
+        drought["return_period"],
+        drought["units"],
+        drought["max_value"],
+        drought["max_zoom"],
+    ) == (None, "months/year", 12.0, 6)
+    assert "SPEI below −2" in drought["measure"]
+    assert drought["no_data_label"].startswith("Open water")
+    assert "no drought loss for these buildings" in drought["note"]
+    assert "not proof of low risk" in drought["note"]
+    assert "no licence" in drought["source"]
+    assert drought["tile_url"] == (
+        f"/api/runs/{finished}/hazard-maps/Drought/{{z}}/{{x}}/{{y}}.png?scenario=ssp585&year=2050"
+    )
+    baseline = client.get(url, params={"scenario": "historical"}).json()[5]
+    assert (baseline["available"], baseline["reason"]) == (True, None)
 
 
 @pytest.fixture

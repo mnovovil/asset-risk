@@ -175,21 +175,21 @@ variable "aws_session_token" {
 # physrisk's scaling) stays in app/engine; these are run settings. Defaults reproduce the code's.
 
 variable "hazard_map_layers" {
-  description = "Hazard map layers to offer, from RiverineInundation, CoastalInundation, Fire, Wind and Hail. An empty list turns the maps off."
+  description = "Hazard map layers to offer, from RiverineInundation, CoastalInundation, Fire, Wind, Hail and Drought. An empty list turns the maps off."
   type        = list(string)
-  default     = ["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail"]
+  default     = ["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail", "Drought"]
 
   validation {
     condition = (
       length(distinct(var.hazard_map_layers)) == length(var.hazard_map_layers)
-      && alltrue([for l in var.hazard_map_layers : contains(["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail"], l)])
+      && alltrue([for l in var.hazard_map_layers : contains(["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail", "Drought"], l)])
     )
-    error_message = "hazard_map_layers must be distinct values from RiverineInundation, CoastalInundation, Fire, Wind, Hail."
+    error_message = "hazard_map_layers must be distinct values from RiverineInundation, CoastalInundation, Fire, Wind, Hail, Drought."
   }
 }
 
 variable "hazard_map_bucket" {
-  description = "Bucket and folder holding physrisk's hazard zarr, read anonymously for the wildfire, wind and hail maps. No s3:// prefix."
+  description = "Bucket and folder holding physrisk's hazard zarr, read anonymously for the wildfire, wind, hail and drought maps. No s3:// prefix."
   type        = string
   default     = "os-climate-physical-risk/hazard-indicators/hazard.zarr"
 
@@ -244,6 +244,21 @@ variable "hail_map_path" {
   }
 }
 
+variable "drought_map_path" {
+  description = "Drought array path in the bucket, with {scenario} and {year}. It must be a Drought resource, with its {gcm} filled in, in physrisk's inventory, or the maps return 502."
+  type        = string
+  default     = "drought/osc/v2/months_spei12m_below_threshold_multi_model_0_{scenario}_{year}"
+
+  validation {
+    condition = (
+      length(regexall("\\{scenario\\}", var.drought_map_path)) == 1
+      && length(regexall("\\{year\\}", var.drought_map_path)) == 1
+      && can(regex("^[A-Za-z0-9_.-][A-Za-z0-9_./-]*$", replace(replace(var.drought_map_path, "{scenario}", "s"), "{year}", "y")))
+    )
+    error_message = "drought_map_path must contain {scenario} and {year} once each, and otherwise only letters, digits and _ . - /."
+  }
+}
+
 variable "fire_map_max_zoom" {
   description = "Deepest zoom with wildfire tiles. A 0.25 degree cell is about 23 px at zoom 6, so deeper adds nothing."
   type        = number
@@ -277,8 +292,19 @@ variable "hail_map_max_zoom" {
   }
 }
 
+variable "drought_map_max_zoom" {
+  description = "Deepest zoom with drought tiles. A 0.25 degree cell is about 23 px at zoom 6, so deeper adds nothing."
+  type        = number
+  default     = 6
+
+  validation {
+    condition     = var.drought_map_max_zoom >= 0 && var.drought_map_max_zoom <= 10 && var.drought_map_max_zoom == floor(var.drought_map_max_zoom)
+    error_message = "drought_map_max_zoom must be a whole number from 0 to 10."
+  }
+}
+
 variable "hazard_map_alpha" {
-  description = "Opacity of the wildfire, wind and hail tiles, 1 to 255. physrisk draws the flood tiles at 200 itself."
+  description = "Opacity of the wildfire, wind, hail and drought tiles, 1 to 255. physrisk draws the flood tiles at 200 itself."
   type        = number
   default     = 200
 
@@ -289,7 +315,7 @@ variable "hazard_map_alpha" {
 }
 
 variable "hazard_map_legend_stops" {
-  description = "Colours in the wildfire, wind and hail legends' gradient."
+  description = "Colours in the wildfire, wind, hail and drought legends' gradient."
   type        = number
   default     = 9
 
@@ -300,7 +326,7 @@ variable "hazard_map_legend_stops" {
 }
 
 variable "hazard_map_array_cache" {
-  description = "Arrays kept in memory per layer, one per scenario and year. A wildfire or hail array is about 4 MB and a wind one about 17 MB."
+  description = "Arrays kept in memory per layer, one per scenario and year. A wildfire, hail or drought array is about 4 MB and a wind one about 17 MB."
   type        = number
   default     = 4
 
