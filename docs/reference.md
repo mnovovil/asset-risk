@@ -11,7 +11,7 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `scenarios` | `ssp245`, `ssp585` | Scenarios to assess. Data [differs by scenario](methodology.md#comparing-scenarios) |
+| `scenarios` | `ssp245`, `ssp585` | Scenarios to assess. Data [differs by scenario](methodology.md#comparing-scenarios): adding `ssp126` leaves no hazard shared by every scenario, so **Change over time** goes empty |
 | `years` | `2030`, `2050`, `2080` | Years to assess, from `2030`, `2050` and `2080` (2025 returns no losses). Each scenario and year pair adds run time. The [baseline](methodology.md#today-baseline) always comes back too |
 | `default_building_type` | `Buildings/Commercial` | Type for assets with no usable class or subtype |
 | `physrisk_batch_size` | `100` | Assets per physrisk request |
@@ -23,6 +23,14 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `max_upload_mb` | `10` | Largest upload accepted |
 | `data_dir` | `data` | Where `script/serve.py` keeps runs. Docker always uses its volume |
 | `flood_zones_db` | `data/fema/flood-zones.duckdb` | FEMA flood zone database [built by `script/build_flood_zones.py`](data-sources.md#fema-flood-zones). `null` turns the lookup off |
+| `hazard_map_layers` | `RiverineInundation`, `CoastalInundation`, `Fire`, `Wind` | Hazard maps offered in the asset panel. `[]` turns them off |
+| `hazard_map_bucket` | `os-climate-physical-risk/hazard-indicators/hazard.zarr` | Bucket and folder the wildfire and wind arrays are read from, anonymously. No `s3://` |
+| `fire_map_path`, `wind_map_path` | `fire/jupiter/v1/fire_probability_{scenario}_{year}`, `wind/iris/v1/max_speed_{scenario}_{year}` | Array paths, with `{scenario}` and `{year}` once each. Each must stay a resource of its hazard in physrisk's inventory, or the maps return 502 |
+| `fire_map_max_zoom`, `wind_map_max_zoom` | `6`, `7` | Deepest zoom with tiles, 0 to 10. Deeper adds nothing at these cell sizes |
+| `hazard_map_alpha` | `200` | Opacity of the wildfire and wind tiles, 1 to 255. physrisk draws flood's |
+| `hazard_map_legend_stops` | `9` | Colours in the wildfire and wind legends, 2 to 33 |
+| `hazard_map_array_cache` | `4` | Arrays kept per layer: about 4 MB each for wildfire, 17 MB for wind |
+| `hazard_map_tile_cache` | `256` | Tiles kept per layer |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
@@ -74,18 +82,26 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
 | `GET /api/runs/{id}/clusters` | DBSCAN clusters with their members, centre and bounds. Empty when none was found |
 | `GET /api/runs/{id}/assets/{row_num}/hazard-curve` | River flood depth by return period |
-| `GET /api/runs/{id}/hazard-maps` | The hazards physrisk can draw a map of for one `scenario` and `year`, each with its tile URL and legend, or the reason it has none |
-| `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to 6, for the same `scenario` and `year`. 404 where there's no map |
+| `GET /api/runs/{id}/hazard-maps` | The hazards with a map (river flood, coastal flood, wildfire, tropical cyclone wind, as enabled by `hazard_map_layers`) for one `scenario` and `year`. Each says what it shows (`measure`, `units`, `return_period`, null when it isn't one event), what a clear area means (`no_data_label`), how to read it (`note`), its `source` and licence, its legend and tile URL, or the reason it has none. 502 if a layer's source no longer matches |
+| `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to the layer's `max_zoom` (6 for every layer), for the same `scenario` and `year`. 404 where there's no map, 502 when physrisk or S3 fails |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
 | `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
 | `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
 | `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
 
-Map tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
-while another run is assessing. The app keeps the last 256 in memory. Only river and coastal flood
-have public map data. `app/engine/hazard_maps.py` lists them, and `pytest -m live` checks that list
-against physrisk after a version bump.
+Flood tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
+while another run is assessing. Only river and coastal flood have public map images, and `pytest -m
+live` checks that after a version bump. Wildfire tiles are drawn by the app from Jupiter
+Intelligence's fire probability array, which it reads anonymously from physrisk's public S3 bucket
+(`app/engine/fire_map.py`), without that lock. Wind tiles are drawn the same way from IRIS's array
+(`app/engine/wind_map.py`); both are configurations of `app/engine/grid_layer.py`. The first tile
+for a scenario and year downloads the whole array: about 4 MB for wildfire (1.4 to 2 s when
+measured) and 73 MB for wind (3.5 to 7 s). Each layer keeps its last `hazard_map_array_cache`
+arrays (4) and `hazard_map_tile_cache` tiles (256) in memory. `app/engine/hazard_maps.py` builds the
+layers from the settings. Unit tests check both layers against physrisk's embedded inventory, and
+that physrisk's wind losses still read IRIS, so a physrisk bump that changes either fails, and
+`pytest -m s3` reads real tiles.
 
 Each asset carries its FEMA flood zone: `fema_status` (`mapped`, `not_mapped`, `not_us`,
 `not_located` or `unavailable`), `fema_zone` and `fema_zone_subtype` as FEMA writes them,
@@ -136,9 +152,10 @@ If geolocate doesn't have the new release yet, follow
 
 ## Performance
 
-Measured in Docker on a machine with 4 CPUs and 5.8 GB of memory, with the default 2 scenarios and 3
-years, using points around 25 large cities. Memory was sampled every few seconds, so its peak is
-approximate.
+Measured in Docker on a machine with 4 CPUs and 5.8 GB of memory, with 2 scenarios (the default
+before ssp126 was added) and 3 years, using points around 25 large cities. Memory was sampled every
+few seconds, so its peak is approximate. The default is now 3 scenarios, so expect the assessing
+stage to take about half as long again.
 
 | Rows | Time | Peak memory |
 |---|---|---|
@@ -187,14 +204,16 @@ uv run script/record_demo.py --build
 
 It runs the [demo portfolio](assets/demo_portfolio.csv) for real in its own compose project and
 volume, opens the New Orleans cluster on the map, clicks `US-312`, shows its FEMA flood zone and
-what the zone means, and zooms its hazard map out to southern Louisiana. It needs the FEMA flood
-zone database that `flood_zones_db` names, and mounts it the way `script/start.sh` does. It stops
-if that database is missing, the run fails, the page never shows the Flood zones stage reached, the map doesn't
-load, no cluster contains New Orleans, no bubble on screen can be matched to that cluster, `US-312`
-can't be clicked on the map, isn't mapped in a levee-protected Zone X as its caption says, or its
-hazard maps load no tile. Without `--build` it reuses the existing image. It reports the stages it saw
-as current: Classifying and Flood zones are short, and the page only checks progress every 1.5 s,
-so they can be missed. The GIF holds on Flood zones once it is current or ticked off.
+what the zone means, zooms its hazard map out to southern Louisiana, and switches it to coastal
+flood, wildfire and tropical cyclone wind. A wildfire or wind map with no data for the dashboard's
+scenario and year is shown for the historical period instead. It needs the FEMA flood zone database
+that `flood_zones_db` names, and mounts it the way `script/start.sh` does. It stops if that database
+is missing, the run fails, the upload and progress take 2 s or more, the map doesn't load,
+no cluster contains New Orleans, no bubble on screen can be matched to that cluster, `US-312` can't
+be clicked on the map, isn't mapped in a levee-protected Zone X as its caption says, a wildfire or
+wind layer isn't in `hazard_map_layers` or has no map for the period, or its hazard maps load no
+tile. Without `--build` it reuses the existing image. The upload and progress screens get one short
+frame per stage the page shows as current, and it reports those stages.
 
 `script/overture_values.py` audits the building type map against a live release, and
 `script/build_regions.py` rebuilds the region data.

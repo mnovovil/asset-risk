@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assetChartOptions,
+  assetSeries,
   barData,
   buildRows,
   BASELINE,
@@ -300,5 +302,103 @@ describe("text helpers", () => {
   it("join lists", () => {
     expect(joinList(["a"])).toBe("a");
     expect(joinList(["a", "b", "c"])).toBe("a, b and c");
+  });
+});
+
+describe("an asset's charts over time", () => {
+  const impact = (scenario: string, year: number | null, hazard: string, aal: number | null, type = "damage") => ({
+    scenario,
+    year,
+    hazard,
+    impact_type: type,
+    aal,
+    aal_std: null,
+    hazard_paths: [],
+  });
+  const score = (scenario: string, year: number, hazard: string, value: number) => ({
+    scenario,
+    year,
+    hazard,
+    score: value,
+    label: null,
+  });
+  const asset = {
+    impacts: [
+      impact("historical", null, "Wind", 0.001),
+      impact("ssp585", 2050, "Wind", 0.004),
+      impact("ssp585", 2030, "Wind", 0.002),
+      impact("ssp245", 2050, "Wind", null),
+      impact("ssp245", 2030, "Wind", 0.0015),
+      impact("ssp585", 2050, "RiverineInundation", 0.01),
+      impact("ssp585", 2050, "RiverineInundation", 0.005, "disruption"),
+    ],
+    scores: [
+      score("ssp585", 2050, "Wind", 3),
+      score("ssp585", 2030, "Wind", 9),
+      score("ssp245", 2050, "Wind", -2),
+      score("ssp245", 2030, "Wind", -1),
+      score("ssp585", 2050, "Fire", 0),
+    ],
+  };
+  const RUN_SCENARIOS = ["ssp245", "ssp370", "ssp585"];
+
+  it("offers losses then scores, each in hazard order", () => {
+    expect(assetChartOptions(asset).map((o) => o.label)).toEqual([
+      "Annual loss — River flood",
+      "Annual loss — Tropical cyclone wind",
+      "Score — Tropical cyclone wind",
+      "Score — Wildfire",
+    ]);
+    expect(assetChartOptions(asset)[0]).toMatchObject({ key: "loss:RiverineInundation", metric: "loss" });
+  });
+
+  it("draws the baseline flat, apart from the scenario lines, with years in order", () => {
+    const series = assetSeries(asset, "loss", "Wind", RUN_SCENARIOS);
+    expect(series.baseline).toBe(0.001);
+    expect(series.scenarios).toEqual(["ssp245", "ssp585"]);
+    expect(series.data).toEqual([
+      { year: 2030, historical: 0.001, ssp245: 0.0015, ssp585: 0.002 },
+      { year: 2050, historical: 0.001, ssp245: null, ssp585: 0.004 },
+    ]);
+  });
+
+  it("keeps a missing loss null, never zero", () => {
+    const series = assetSeries(asset, "loss", "Wind", RUN_SCENARIOS);
+    expect(series.data[1].ssp245).toBeNull();
+  });
+
+  it("adds up impact types", () => {
+    const series = assetSeries(asset, "loss", "RiverineInundation", RUN_SCENARIOS);
+    expect(series.data).toEqual([{ year: 2050, historical: null, ssp585: 0.015 }]);
+  });
+
+  it("names the scenarios with nothing for the hazard", () => {
+    expect(assetSeries(asset, "loss", "Wind", RUN_SCENARIOS).missingScenarios).toEqual(["ssp370"]);
+    expect(assetSeries(asset, "loss", "RiverineInundation", RUN_SCENARIOS).missingScenarios).toEqual([
+      "ssp245",
+      "ssp370",
+    ]);
+  });
+
+  it("gives scores no baseline, and turns negative scores into notes", () => {
+    const series = assetSeries(asset, "score", "Wind", RUN_SCENARIOS);
+    expect(series.baseline).toBeNull();
+    expect(series.scenarios).toEqual(["ssp585"]);
+    // A score past the top step is drawn at the top, as on the map.
+    expect(series.data).toEqual([
+      { year: 2030, historical: null, ssp585: 4 },
+      { year: 2050, historical: null, ssp585: 3 },
+    ]);
+    expect(series.notes).toEqual([
+      { scenario: "ssp245", year: 2030, kind: "no_model" },
+      { scenario: "ssp245", year: 2050, kind: "no_data" },
+    ]);
+    // ssp245 is explained by its notes, so only ssp370 is missing.
+    expect(series.missingScenarios).toEqual(["ssp370"]);
+  });
+
+  it("draws a score of zero, which is Very low, not missing", () => {
+    const series = assetSeries(asset, "score", "Fire", RUN_SCENARIOS);
+    expect(series.data).toEqual([{ year: 2050, historical: null, ssp585: 0 }]);
   });
 });

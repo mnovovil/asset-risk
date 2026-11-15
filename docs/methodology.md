@@ -61,7 +61,9 @@ one asset in Cologne, in 2030 and 2040:
 
 Totals from different scenarios therefore can't be compared directly. So:
 
-- **Change over time** uses only the hazards every scenario has, and names them.
+- **Change over time** uses only the hazards every scenario has, and names them. SSP1-2.6 and
+  SSP2-4.5 share none, so a run with both has nothing to show there. The default, SSP2-4.5 and
+  SSP5-8.5, shares river flood, coastal flood and wind.
 - **Historical markers** use only the hazards in the selected scenario.
 - A scenario with no results is shown as having none, not as zero.
 
@@ -187,24 +189,78 @@ How the zone is found, and how to read it:
 **It's not an official determination.** Check an address that matters on
 [FEMA's Flood Map Service Center](https://msc.fema.gov/portal/search).
 
+## An asset over time
+
+The asset panel's **Over time** chart shows one asset's annual loss or score for one hazard, picked
+from a list, across every year and scenario of the run. Read it with these limits:
+
+- **Losses are compared hazard by hazard.** Each line is one scenario's loss for the chosen hazard,
+  so lines for different scenarios can be compared directly. The dashed flat line is today's
+  baseline, for reference.
+- **A missing result is a gap, not zero.** A scenario with nothing for the hazard has no line, and
+  the panel names it. Hazards differ by scenario, so this is common.
+- **Scores have no baseline**, because physrisk scores scenarios only. They are steps from Very low
+  to Very high, not measurements. "No model", "No data" and "Error" are listed under the chart, not
+  drawn, and a low score isn't proof of low risk.
+
 ## Hazard maps
 
-The asset panel can show a map around the asset, drawn from physrisk's own map data. It answers
-where the flood plain is, which a single point's numbers can't. **Open larger map** opens the same
-map, hazard and period full-size in a new tab. Read it, at any size, with these limits:
+The asset panel can show a map around the asset. It answers where the flood plain is, or where
+wildfire or tropical cyclones are likely, which a single point's numbers can't. **Open larger map** opens the same map,
+hazard and period full-size in a new tab. Each map's legend, no-data key and note come from the
+layer itself. Read it, at any size, with these limits:
 
-- **Only river and coastal flood.** physrisk's maps of wind, fire, hail, heat and drought aren't
-  public, so these hazards are listed but can't be chosen.
-- **Only the 1-in-1000-year flood.** The maps hold no other return period. The table above the map
-  has the depths for the other return periods at the exact point.
+- **Only river flood, coastal flood, wildfire and tropical cyclone wind.** physrisk's maps of hail,
+  heat and drought aren't public, so these hazards are listed but can't be chosen. The
+  `hazard_map_layers` setting can turn maps off.
+- **A clear area means no data**, not no risk: no flood in the flood maps, ocean or no data in the
+  wildfire map, and no tropical cyclone in the wind map.
+
+### Flood
+
+- **Only the 1-in-1000-year flood.** The maps hold no other return period.
 - **About 1 km pixels**, so the map shows the area, not the building. It stops adding detail past a
   regional zoom.
-- **Before flood protection.** Like the river flood curve, and unlike the loss figures, the map
-  ignores defences.
+- **Before flood protection.** Unlike the loss figures, the map ignores defences.
 - **"Historical" is physrisk's baseline**, which for these maps is its RCP4.5 2030 data, the same
   data the assessment uses. physrisk has flood maps for SSP2-4.5 and SSP5-8.5 from 2030 to 2080
   only, and none for SSP1-2.6 or SSP3-7.0.
-- **A clear area means no flood in the data**, not no flood risk.
+
+### Wildfire
+
+The app draws this map itself from Jupiter Intelligence's fire probability data, the same data
+physrisk's wildfire damage figures use. physrisk won't draw it, because the data isn't in its
+public group. The app reads the array anonymously from physrisk's public bucket instead.
+
+- **The value is the highest monthly chance in the year of a wildfire within 100 km**, not at the
+  building. 0.7 means a 70% chance.
+- **The map and the losses aren't on the same scale.** physrisk divides this value by 500 before it
+  works out damage, as a stand-in for a building-level chance, until higher-resolution data exists.
+- **About 28 km pixels** (0.25°), drawn as blocks, so the map shows the region, not the property.
+- **Only SSP1-2.6 and SSP5-8.5**, for 2020, 2030, 2040, 2050, 2075 and 2100. Of this app's years,
+  that's 2030 and 2050. There's **no historical baseline**, so Historical has no wildfire map. The
+  app never shows a nearby year or 2020 instead.
+- **A low or empty area is not proof of low risk.** Cells with no data are clear, and kept apart
+  from 0, which is a real value in the data and drawn in the lightest colour.
+- **Source:** Jupiter Intelligence, via OS-Climate physrisk, which lists its licence as
+  "Commercial".
+
+### Tropical cyclone wind
+
+The app draws this map itself from IRIS, the Imperial College Storm Model, which is the same data
+physrisk's wind losses use. It reads the array anonymously from physrisk's public bucket.
+
+- **The value is the 1-minute sustained wind speed that tropical cyclones reach about once in 100
+  years**, in m/s. physrisk works out damage from every return period, 10 to 1000 years, so the map
+  is one slice of what the losses use. It's on the same scale, though: physrisk doesn't adjust it.
+- **Tropical cyclones only.** IRIS has no other windstorms, so a clear area, such as most of Europe,
+  has no wind loss either. That's a gap in the data, not proof of no wind risk.
+- **About 10 km pixels** (0.1°), drawn as blocks, from 60° N to 60° S.
+- **Historical, and 2050 for SSP2-4.5 and SSP5-8.5.** physrisk estimates 2030 and 2080 from the
+  baseline and 2050, and the map doesn't, so those years show a reason instead of a map. There's no
+  SSP1-2.6 data. The app never shows a nearby year instead.
+- **A low or empty area is not proof of low risk.**
+- **Source:** IRIS (Sparks and Toumi), via OS-Climate physrisk, under CC BY 4.0.
 
 **Use it to** screen many sites and find which deserve a closer look. **Don't use it for** decisions
 about a single site, or for currency estimates of loss.

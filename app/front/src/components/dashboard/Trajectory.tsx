@@ -12,20 +12,10 @@ import type { TrajectoryPoint } from "@/api/client";
 import { trajectorySeries } from "@/lib/dashboard";
 import { joinList, percent, percentTick, scenarioLabel } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
+import { BASELINE_COLOR, scenarioColor } from "@/lib/scenarios";
 
 import { ChartLegend } from "./ChartLegend";
 import { ChartTooltip } from "./ChartTooltip";
-
-const BASELINE_COLOR = "var(--series-other)";
-// Fixed per scenario, whichever ones are configured. The two default scenarios get the first two
-// slots, which are the easiest pair to tell apart.
-const SCENARIO_COLORS: Record<string, string> = {
-  ssp245: "var(--series-1)",
-  ssp585: "var(--series-2)",
-  ssp126: "var(--series-3)",
-  ssp370: "var(--series-4)",
-};
-const scenarioColor = (scenario: string) => SCENARIO_COLORS[scenario] ?? BASELINE_COLOR;
 
 interface TrajectoryProps {
   trajectory: TrajectoryPoint[];

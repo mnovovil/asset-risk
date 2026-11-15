@@ -1,8 +1,16 @@
 /** Turn API responses into what the dashboard shows. No rendering here, so it's easy to test. */
 
-import type { AssetTotal, Coverage, Impact, Pair, Score, TrajectoryPoint } from "@/api/client";
+import type {
+  AssetDetail,
+  AssetTotal,
+  Coverage,
+  Impact,
+  Pair,
+  Score,
+  TrajectoryPoint,
+} from "@/api/client";
 import { assetLabel, scenarioLabel } from "@/lib/format";
-import { sortHazards } from "@/lib/hazards";
+import { hazardLabel, sortHazards } from "@/lib/hazards";
 
 export type ScoreKind = "scored" | "no_model" | "no_data" | "error";
 
@@ -184,6 +192,122 @@ export function trajectorySeries(trajectory: TrajectoryPoint[]): {
     return datum;
   });
   return { scenarios, data };
+}
+
+export type AssetMetric = "loss" | "score";
+
+export interface AssetChartOption {
+  key: string;
+  metric: AssetMetric;
+  hazard: string;
+  label: string;
+}
+
+const METRIC_LABELS: Record<AssetMetric, string> = { loss: "Annual loss", score: "Score" };
+
+/** The charts one asset can show: annual loss per hazard, then score per hazard. */
+export function assetChartOptions(asset: Pick<AssetDetail, "impacts" | "scores">): AssetChartOption[] {
+  const option = (metric: AssetMetric) => (hazard: string) => ({
+    key: `${metric}:${hazard}`,
+    metric,
+    hazard,
+    label: `${METRIC_LABELS[metric]} — ${hazardLabel(hazard)}`,
+  });
+  return [
+    ...sortHazards(asset.impacts.map((i) => i.hazard)).map(option("loss")),
+    ...sortHazards(asset.scores.map((s) => s.hazard)).map(option("score")),
+  ];
+}
+
+/** A scenario and year whose score is not a value: no model, no data or an error. */
+export interface ScoreNote {
+  scenario: string;
+  year: number;
+  kind: Exclude<ScoreKind, "scored">;
+}
+
+export interface AssetSeries {
+  /** Scenarios with at least one value to draw, in the run's order. */
+  scenarios: string[];
+  data: TrajectoryDatum[];
+  /** The baseline's annual loss, drawn flat for reference. Always null for scores. */
+  baseline: number | null;
+  /** Run scenarios with nothing at all for this hazard: no line, and no note below. */
+  missingScenarios: string[];
+  notes: ScoreNote[];
+}
+
+const HIGHEST_SCORE = 4;
+
+/**
+ * One asset's annual loss or score for one hazard, by year and scenario. A missing or null result
+ * stays null, so the chart leaves a gap rather than drawing a zero. physrisk scores scenarios only,
+ * so a score has no baseline, and its negative scores become notes, never points.
+ */
+export function assetSeries(
+  asset: Pick<AssetDetail, "impacts" | "scores">,
+  metric: AssetMetric,
+  hazard: string,
+  runScenarios: string[],
+): AssetSeries {
+  const values = new Map<string, number | null>();
+  const keyOf = (scenario: string, year: number | null) => `${scenario}|${year}`;
+  const notes: ScoreNote[] = [];
+  let baseline: number | null = null;
+  const seen = new Set<string>();
+
+  if (metric === "loss") {
+    for (const impact of asset.impacts) {
+      if (impact.hazard !== hazard) continue;
+      // Several impact types add up; only when every one is missing is the result missing.
+      const key = keyOf(impact.scenario, impact.year);
+      const sum = values.get(key) ?? null;
+      values.set(key, impact.aal === null ? sum : (sum ?? 0) + impact.aal);
+      if (impact.year === null) baseline = values.get(key) ?? null;
+      else seen.add(impact.scenario);
+    }
+  } else {
+    for (const score of asset.scores) {
+      if (score.hazard !== hazard || score.year === null) continue;
+      seen.add(score.scenario);
+      const kind = scoreKind(score.score);
+      if (kind === "scored") {
+        values.set(keyOf(score.scenario, score.year), Math.min(score.score, HIGHEST_SCORE));
+      } else {
+        notes.push({ scenario: score.scenario, year: score.year, kind });
+      }
+    }
+  }
+
+  const order = [...new Set([...runScenarios, ...seen])];
+  const points = [...values.entries()]
+    .map(([key, value]) => {
+      const [scenario, year] = key.split("|");
+      return { scenario, year: year === "null" ? null : Number(year), value };
+    })
+    .filter((p): p is { scenario: string; year: number; value: number | null } => p.year !== null);
+  const years = [...new Set(points.map((p) => p.year))].sort((a, b) => a - b);
+  const scenarios = order.filter((scenario) =>
+    points.some((p) => p.scenario === scenario && p.value !== null),
+  );
+  const data = years.map((year) => {
+    const datum: TrajectoryDatum = { year, historical: baseline };
+    for (const scenario of scenarios) {
+      datum[scenario] = values.get(keyOf(scenario, year)) ?? null;
+    }
+    return datum;
+  });
+  const rank = (scenario: string) => order.indexOf(scenario);
+  notes.sort((a, b) => rank(a.scenario) - rank(b.scenario) || a.year - b.year);
+  return {
+    scenarios,
+    data,
+    baseline,
+    missingScenarios: runScenarios.filter(
+      (scenario) => !scenarios.includes(scenario) && !notes.some((n) => n.scenario === scenario),
+    ),
+    notes,
+  };
 }
 
 export const TOP_ASSETS = 15;

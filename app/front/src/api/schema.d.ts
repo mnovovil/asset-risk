@@ -212,7 +212,10 @@ export interface paths {
         };
         /**
          * Get Hazard Maps
-         * @description The hazards physrisk can draw a map of. Other hazards have no public map data.
+         * @description The hazards with a map, each saying whether it covers this scenario and year.
+         *
+         *     Other hazards have no public map data. 502 when a layer's source no longer matches what the
+         *     app expects, e.g. after a physrisk upgrade.
          */
         get: operations["get_hazard_maps_api_runs__run_id__hazard_maps_get"];
         put?: never;
@@ -232,7 +235,9 @@ export interface paths {
         };
         /**
          * Get Hazard Map Tile
-         * @description One 512 px map tile. 404 where physrisk has no map, which a map shows as transparent.
+         * @description One 512 px map tile. 404 where there's no map, which a map shows as transparent.
+         *
+         *     502 when the data can't be read: physrisk fails, S3 is unreachable, or the data has changed.
          */
         get: operations["get_hazard_map_tile_api_runs__run_id__hazard_maps__hazard___z___x___y__png_get"];
         put?: never;
@@ -632,7 +637,10 @@ export interface components {
             /** Return Periods */
             return_periods: number[];
         };
-        /** HazardMapLayer */
+        /**
+         * HazardMapLayer
+         * @description A map layer, describing itself: the dashboard shows its text as it is.
+         */
         HazardMapLayer: {
             /** Available */
             available: boolean;
@@ -644,12 +652,20 @@ export interface components {
             max_value: number;
             /** Max Zoom */
             max_zoom: number;
+            /** Measure */
+            measure: string;
             /** Min Value */
             min_value: number;
+            /** No Data Label */
+            no_data_label: string;
+            /** Note */
+            note: string;
             /** Reason */
             reason: string | null;
             /** Return Period */
-            return_period: number;
+            return_period: number | null;
+            /** Source */
+            source: string;
             /** Tile Url */
             tile_url: string | null;
             /** Units */

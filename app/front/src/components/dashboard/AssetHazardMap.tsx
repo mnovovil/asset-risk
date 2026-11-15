@@ -10,6 +10,8 @@ const HazardTileMap = lazy(() => import("./HazardTileMap"));
 
 const HISTORICAL: Pair = { scenario: "historical", year: null };
 
+const withUnits = (value: number, units: string) => (units ? `${value} ${units}` : `${value}`);
+
 interface AssetHazardMapProps {
   runId: string;
   rowNum: number;
@@ -65,9 +67,10 @@ export function AssetHazardMap({
   if (!current) return <p className="muted">physrisk has no public hazard maps.</p>;
   const pairName = `${scenarioLabel(pair.scenario)}, ${pair.year}`;
   const shownName = shown === HISTORICAL ? "Historical" : pairName;
+  const event = current.return_period === null ? "" : `, 1 in ${current.return_period} years`;
   const label =
-    `Map around this asset of ${hazardLabel(current.hazard)} depth, 1 in ` +
-    `${current.return_period} years, ${shownName}. Clear areas have no flood in the data.`;
+    `Map around this asset of ${hazardLabel(current.hazard)}: ${current.measure}${event}, ` +
+    `${shownName}. Clear areas: ${current.no_data_label}.`;
 
   const largerMap = assetMapPath(runId, rowNum, {
     pair,
@@ -117,35 +120,39 @@ export function AssetHazardMap({
           </fieldset>
         )}
       </div>
-      {current.reason && <p className="notice notice-warning">{current.reason}.</p>}
-      <Suspense fallback={<p className="muted">Loading the map…</p>}>
-        <HazardTileMap
-          lat={lat}
-          lon={lon}
-          tileUrl={current.tile_url}
-          maxZoom={current.max_zoom}
-          label={label}
-          size={variant === "page" ? "large" : "small"}
-        />
-      </Suspense>
-      <ul className="map-legend">
-        <li>
-          {current.min_value} {current.units}
-          <span
-            className="gradient-key"
-            style={{ background: `linear-gradient(to right, ${current.legend.join(", ")})` }}
-          />
-          {current.max_value} {current.units} or more
-        </li>
-        <li>
-          <span className="dot dot-hollow" /> No flood in the data
-        </li>
-      </ul>
-      <p className="panel-note">
-        Flood depth for a 1-in-{current.return_period}-year event, the only one physrisk publishes
-        as a map, at about 1 km resolution and before any flood protection. No flood in the data is
-        not proof of no risk. Other hazards have no public map data.
-      </p>
+      {current.available ? (
+        <>
+          <Suspense fallback={<p className="muted">Loading the map…</p>}>
+            <HazardTileMap
+              lat={lat}
+              lon={lon}
+              tileUrl={current.tile_url}
+              maxZoom={current.max_zoom}
+              label={label}
+              size={variant === "page" ? "large" : "small"}
+            />
+          </Suspense>
+          <ul className="map-legend" aria-label={`Legend: ${current.measure}`}>
+            <li>
+              {withUnits(current.min_value, current.units)}
+              <span
+                className="gradient-key"
+                style={{ background: `linear-gradient(to right, ${current.legend.join(", ")})` }}
+              />
+              {withUnits(current.max_value, current.units)} or more
+            </li>
+            <li>
+              <span className="dot dot-hollow" /> {current.no_data_label}
+            </li>
+          </ul>
+        </>
+      ) : (
+        <p className="notice notice-warning" role="status">
+          {current.reason ?? "No map for this period"}.
+        </p>
+      )}
+      <p className="panel-note">{current.note}</p>
+      <p className="panel-note">{current.source}</p>
       {variant === "panel" && (
         <p>
           <a

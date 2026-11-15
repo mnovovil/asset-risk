@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 
 import { getConfig, type Pair } from "@/api/client";
 import { useRunData, usePairData } from "@/hooks/useDashboard";
-import { buildRows, defaultPair, isBaseline, missingHazards, pointFor } from "@/lib/dashboard";
+import { buildRows, defaultPair, isBaseline, missingHazards, pointFor, scenariosOf } from "@/lib/dashboard";
 import { sortHazards } from "@/lib/hazards";
 
 import { AssetPanel } from "./AssetPanel";
@@ -119,7 +119,13 @@ export function Dashboard({ runId }: { runId: string }) {
         />
       </div>
       {selected !== null && (
-        <AssetPanel runId={runId} rowNum={selected} pair={pair} onClose={closePanel} />
+        <AssetPanel
+          runId={runId}
+          rowNum={selected}
+          pair={pair}
+          scenarios={scenariosOf(run.trajectory)}
+          onClose={closePanel}
+        />
       )}
     </>
   );

@@ -45,5 +45,16 @@ resource "local_file" "asset_risk_config" {
     api_port              = var.api_port
     geolocate_config      = module.geolocate.config_path
     flood_zones_db        = var.flood_zones_db
+
+    hazard_map_layers       = var.hazard_map_layers
+    hazard_map_bucket       = var.hazard_map_bucket
+    fire_map_path           = var.fire_map_path
+    wind_map_path           = var.wind_map_path
+    fire_map_max_zoom       = var.fire_map_max_zoom
+    wind_map_max_zoom       = var.wind_map_max_zoom
+    hazard_map_alpha        = var.hazard_map_alpha
+    hazard_map_legend_stops = var.hazard_map_legend_stops
+    hazard_map_array_cache  = var.hazard_map_array_cache
+    hazard_map_tile_cache   = var.hazard_map_tile_cache
   })
 }

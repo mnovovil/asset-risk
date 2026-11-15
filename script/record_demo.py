@@ -4,11 +4,12 @@
 # ///
 """Record docs/assets/demo.gif from a real run of the demo portfolio: uv run script/record_demo.py
 
-After the upload and progress screens, where it holds on the FEMA flood zone stage, it opens the
+After the upload and progress screens, which go by in under 2 s, it opens the
 New Orleans risk-concentration bubble on the map, clicks one of its assets to show its details, its
-FEMA flood zone and what that zone means, its river flood depth curve and hazard maps, zooms the
-hazard map out to all of southern Louisiana, then goes through the rest of the dashboard,
-including the present-day (baseline) view.
+FEMA flood zone and what that zone means, its loss over time and hazard maps, zooms the
+hazard map out to all of southern Louisiana, switches it to coastal flood, wildfire and tropical
+cyclone wind, then goes through the rest of the dashboard, including the present-day (baseline)
+view.
 
 It needs the FEMA flood zone database that .asset-risk.json names (flood_zones_db): see
 script/build_flood_zones.py. Without it every asset's flood zone would read "unavailable".
@@ -53,14 +54,13 @@ CHROMIUM_ARGS = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ig
 
 # 500 assets take several minutes, nearly all of it assessing: see .claude/learnings.md.
 RUN_TIMEOUT_SECONDS = 1800
-PROGRESS_SPEEDUP = 30
-SAMPLE_EVERY_SECONDS = 1
-# Polled faster than frames are taken, so a short stage the page does show isn't missed.
+# The upload and progress screens go by in under 2 s, so the GIF is about the results: one frame of
+# the loaded file, then one per stage the page shows as current, all under one caption.
+UPLOAD_SECONDS = 0.5
+STAGE_SECONDS = 0.3
+INTRO_MAX_SECONDS = 2
+# Polled often, so a short stage the page does show isn't missed.
 POLL_SECONDS = 0.2
-# The FEMA lookup is usually quicker than the page's 1.5 s progress check, so the page may never
-# show it as current. Hold the first frame where it is current or ticked off, long enough to read.
-FLOOD_ZONES_STAGE = "Flood zones"
-FLOOD_ZONES_HOLD_SECONDS = 3.5
 MAP_SETTLE_SECONDS = 4
 SCROLL_STEPS = 4
 SCROLL_STEP_SECONDS = 0.08
@@ -79,6 +79,14 @@ HAZARD_MAPS = [
     ("RiverineInundation", "Hazard maps around it: river flood depth, 1 in 1000 years"),
     ("CoastalInundation", "The same view, a different hazard: coastal flood depth"),
 ]
+# Shown after the flood maps, at the same zoom: their cells are 10 to 28 km across, so they read
+# best at the regional view. A layer with no map for the dashboard's scenario and year is shown
+# for the historical period instead, if it has one there: wildfire doesn't.
+GRID_MAPS = [
+    ("Fire", "Wildfire: the highest monthly chance of a fire within 100 km"),
+    ("Wind", "Tropical cyclone wind: the speed reached about once in 100 years"),
+]
+HISTORICAL_PERIOD = "Historical"
 # Scrolling out over the panel's hazard map, from street level (zoom 14) to about zoom 5.6, where it
 # is about 6 degrees of longitude wide. Each step is about 0.56 zoom levels in headless Chromium.
 # Zooming keeps the asset under the pointer, so a pointer right of centre puts the asset there and
@@ -204,57 +212,42 @@ def fail_on_alert(page: Page) -> None:
         raise RuntimeError(f"the app showed an error: {alert.first.inner_text()}")
 
 
+INTRO_CAPTION = "Upload a CSV of id, lat, lon: each building is found, classified and assessed"
+
+
 def record_upload(rec: Recorder) -> None:
     rec.page.goto(BASE)
     rec.page.get_by_role("heading", name="Assess a portfolio").wait_for()
     rec.page.wait_for_load_state("networkidle")
-    rec.caption("Step 1: upload a CSV of id, lat, lon")
-    rec.shot(2.5)
+    rec.caption(INTRO_CAPTION)
     rec.page.locator('input[type="file"]').set_input_files(SAMPLE)
     start = rec.page.get_by_role("button", name="Assess this portfolio")
     start.wait_for()
     start.evaluate("e => e.scrollIntoView({block: 'center', behavior: 'instant'})")
-    rec.shot(3.5)
+    rec.shot(UPLOAD_SECONDS)
     rec.click(start)
 
 
 def record_progress(rec: Recorder) -> list[str]:
-    """Capture the real stages, returning the ones the page showed."""
+    """Take one short frame per stage the page shows as current, returning those stages."""
     page = rec.page
-    step_caption = (
-        f"Step 2: find each building, classify it, calculate its risk (sped up {PROGRESS_SPEEDUP}×)"
-    )
-    rec.caption(step_caption)
+    rec.caption(INTRO_CAPTION)
     current_stage = page.locator('.stage-label[aria-current="step"]')
-    flood_zones_reached = page.locator(
-        ".stage-current .stage-label, .stage-done .stage-label", has_text=FLOOD_ZONES_STAGE
-    )
-    held_flood_zones = False
     finished = page.get_by_role("heading", name="Where the risk is")
     seen: list[str] = []
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
-    last = time.monotonic()
     while not finished.is_visible():
         if time.monotonic() > deadline:
             raise RuntimeError(f"the run didn't finish in {RUN_TIMEOUT_SECONDS} s")
         fail_on_alert(page)
         stage = current_stage.inner_text() if current_stage.count() > 0 else None
-        new_stage = stage is not None and stage not in seen
-        if new_stage:
+        if stage is not None and stage not in seen:
             seen.append(stage)
-        now = time.monotonic()
-        if not held_flood_zones and flood_zones_reached.count() > 0:
-            held_flood_zones = True
-            rec.caption("Each US asset also gets its FEMA flood zone")
-            rec.shot((now - last) / PROGRESS_SPEEDUP + FLOOD_ZONES_HOLD_SECONDS)
-            rec.caption(step_caption)
-            last = now
-        elif new_stage or now - last >= SAMPLE_EVERY_SECONDS:
-            rec.shot((now - last) / PROGRESS_SPEEDUP)
-            last = now
+            rec.shot(STAGE_SECONDS)
         page.wait_for_timeout(POLL_SECONDS * 1000)
-    if not held_flood_zones:
-        raise RuntimeError(f"the page never showed the {FLOOD_ZONES_STAGE} stage reached")
+    intro = sum(f.seconds for f in rec.frames)
+    if intro >= INTRO_MAX_SECONDS:
+        raise RuntimeError(f"the upload and progress screens take {intro:.1f} s of the GIF")
     return seen
 
 
@@ -422,8 +415,8 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     rec.caption("Its loss by hazard")
     scroll_panel_to(panel, "Results for")
     rec.shot(4)
-    rec.caption("River flood depth at the asset, by how rare the flood is")
-    scroll_panel_to(panel, "River flood depth")
+    rec.caption("Its annual loss over time, by scenario, one hazard at a time")
+    scroll_panel_to(panel, "Over time")
     page.wait_for_timeout(500)
     rec.shot(5)
     return panel
@@ -475,6 +468,53 @@ def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -
         rec.shot(4.5)
         if index == 0:
             zoom_out_hazard_map(rec, panel)
+    record_grid_maps(rec, panel, hazard_tiles)
+
+
+def record_grid_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
+    """Show wildfire and wind on the same regional view, in the dashboard's period if mapped.
+
+    The tile map is recreated, and loses its zoom, if a hazard with no map is selected, so switch to
+    the historical period first, while a flood map that has it is still showing.
+    """
+    page = rec.page
+    scenario = dashboard_filter(page, "Scenario").input_value()
+    year = dashboard_filter(page, "Year").input_value()
+    params = {"scenario": scenario} | ({"year": year} if year else {})
+    layers = api(page, "hazard-maps", **params)
+    available = {layer["hazard"]: layer["available"] for layer in layers}
+    missing = [hazard for hazard, _ in GRID_MAPS if hazard not in available]
+    if missing:
+        raise RuntimeError(f"no {', '.join(missing)} hazard map layer: check hazard_map_layers")
+    in_pair = [m for m in GRID_MAPS if available[m[0]]]
+    historical = [m for m in GRID_MAPS if not available[m[0]]]
+    if historical:
+        # Wildfire has no historical map, so the fallback isn't always one.
+        past = {
+            layer["hazard"]: layer["available"]
+            for layer in api(page, "hazard-maps", scenario="historical")
+        }
+        unmapped = [hazard for hazard, _ in historical if not past.get(hazard)]
+        if unmapped:
+            raise RuntimeError(f"no {', '.join(unmapped)} map for {scenario} {year} or historical")
+    period = panel.locator("fieldset.segmented label")
+    for maps, label in ((in_pair, None), (historical, HISTORICAL_PERIOD)):
+        if not maps:
+            continue
+        if label is not None:
+            rec.click(period.filter(has_text=label))
+            settle_map(page)
+        name = label or period.filter(has_not_text=HISTORICAL_PERIOD).inner_text().strip()
+        for hazard, caption in maps:
+            before = len(hazard_tiles)
+            panel.get_by_label("Hazard").select_option(hazard)
+            rec.caption(f"{caption}, {name}")
+            settle_map(page)
+            if not any(f"/hazard-maps/{hazard}/" in url for url in hazard_tiles[before:]):
+                raise RuntimeError(f"no {hazard} map tile loaded")
+            if panel.locator(".asset-map").count() == 0:
+                raise RuntimeError(f"the {hazard} map isn't showing")
+            rec.shot(5)
 
 
 def settle_map(page: Page) -> None:
@@ -516,7 +556,7 @@ def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[st
     if "OpenStreetMap" not in page.locator(".maplibregl-ctrl-attrib").inner_text():
         raise RuntimeError("the map's attribution isn't showing")
 
-    rec.caption("Step 3: see the results, including how many building types were assumed")
+    rec.caption("The results, including how many building types were assumed")
     rec.shot(4.5)
     cluster = record_clusters(rec)
     panel = open_focus_asset(rec, cluster)

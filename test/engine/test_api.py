@@ -466,11 +466,15 @@ def test_hazard_curve_failure_is_reported(client, finished, monkeypatch):
 def test_hazard_maps_list_the_flood_layers(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
     layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
-    assert [layer["hazard"] for layer in layers] == ["RiverineInundation", "CoastalInundation"]
+    hazards = [layer["hazard"] for layer in layers]
+    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire", "Wind"]
     river = layers[0]
     assert river["available"] is True
     assert river["reason"] is None
     assert (river["return_period"], river["units"], river["max_zoom"]) == (1000, "m", 6)
+    assert (river["measure"], river["no_data_label"]) == ("Flood depth", "No flood in the data")
+    assert "1-in-1000-year" in river["note"]
+    assert "WRI" in river["source"]
     assert len(river["legend"]) == 5
     assert river["tile_url"] == (
         f"/api/runs/{finished}/hazard-maps/RiverineInundation/{{z}}/{{x}}/{{y}}.png"
@@ -478,6 +482,141 @@ def test_hazard_maps_list_the_flood_layers(client, finished):
     )
     baseline = client.get(url, params={"scenario": "historical"}).json()
     assert baseline[0]["tile_url"].endswith("?scenario=historical")
+
+
+def test_hazard_maps_list_wildfire_describing_itself(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    fire = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()[2]
+    assert fire["available"] is True
+    assert fire["return_period"] is None
+    assert (fire["units"], fire["min_value"], fire["max_value"], fire["max_zoom"]) == (
+        "",
+        0.0,
+        0.7,
+        6,
+    )
+    assert "within 100 km" in fire["measure"]
+    assert fire["no_data_label"].startswith("No data")
+    assert "divides it by 500" in fire["note"]
+    assert "Jupiter Intelligence" in fire["source"] and "Commercial" in fire["source"]
+    assert len(fire["legend"]) == 9
+    assert fire["tile_url"] == (
+        f"/api/runs/{finished}/hazard-maps/Fire/{{z}}/{{x}}/{{y}}.png?scenario=ssp585&year=2050"
+    )
+
+
+def test_wildfire_has_no_historical_map_but_flood_does(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    river, _, fire, _ = client.get(url, params={"scenario": "historical"}).json()
+    assert river["available"] is True
+    assert (fire["available"], fire["tile_url"]) == (False, None)
+    assert fire["reason"] == "physrisk's wildfire data has no historical baseline"
+
+
+def test_hazard_maps_list_wind_describing_itself(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    wind = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()[3]
+    assert wind["hazard"] == "Wind"
+    assert wind["available"] is True
+    assert (wind["return_period"], wind["units"], wind["max_value"], wind["max_zoom"]) == (
+        100,
+        "m/s",
+        90.0,
+        7,
+    )
+    assert "not proof of low risk" in wind["note"]
+    assert "IRIS" in wind["source"] and "CC BY 4.0" in wind["source"]
+    assert wind["tile_url"] == (
+        f"/api/runs/{finished}/hazard-maps/Wind/{{z}}/{{x}}/{{y}}.png?scenario=ssp585&year=2050"
+    )
+    baseline = client.get(url, params={"scenario": "historical"}).json()[3]
+    assert baseline["available"] is True
+
+
+@pytest.fixture
+def map_settings(settings):
+    """Settings with only wildfire and wind maps, at other zooms and legend sizes."""
+    from dataclasses import replace
+
+    from engine import hazard_maps
+
+    yield replace(
+        settings,
+        hazard_map_layers=("Fire", "Wind"),
+        wind_map_max_zoom=5,
+        hazard_map_legend_stops=4,
+    )
+    hazard_maps.configure()
+
+
+def test_hazard_map_settings_reach_the_layers(map_settings):
+    with TestClient(api_app(map_settings, complete_run)) as client:
+        run_id = upload(client).json()["run_id"]
+        assert wait_until_finished(client, run_id)["status"] == "completed"
+        url = f"/api/runs/{run_id}/hazard-maps"
+        layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
+        assert [layer["hazard"] for layer in layers] == ["Fire", "Wind"]
+        assert layers[1]["max_zoom"] == 5
+        assert [len(layer["legend"]) for layer in layers] == [4, 4]
+        tile = f"{url}/RiverineInundation/5/23/13.png"
+        assert client.get(tile, params={"scenario": "historical"}).status_code == 404
+
+
+def test_hazard_maps_report_a_changed_inventory(client, finished, monkeypatch):
+    from engine import fire_map
+
+    def gone():
+        raise fire_map.HazardMapConfigError("physrisk's inventory has no fire/jupiter/...")
+
+    monkeypatch.setattr(fire_map, "coverage", gone)
+    response = client.get(f"/api/runs/{finished}/hazard-maps", params={"scenario": "historical"})
+    assert response.status_code == 502
+    assert "physrisk's inventory has no fire" in response.json()["detail"]
+
+
+@pytest.fixture
+def fire_grid(monkeypatch):
+    """A 90 degree wildfire grid with land in the west and no data in the east."""
+    import numpy as np
+
+    from engine import fire_map
+
+    nan = np.nan
+    values = np.array([[0.0, 0.3, nan, nan, nan], [0.5, 0.7, nan, nan, nan]], "f4")
+    grid = fire_map.Grid(values, -225.0, 90.0, 90.0, -90.0)
+    monkeypatch.setattr(fire_map, "_load", lambda scenario, year: grid)
+    fire_map.clear_caches()
+    yield
+    fire_map.clear_caches()
+
+
+def test_wildfire_tile(client, finished, fire_grid):
+    url = f"/api/runs/{finished}/hazard-maps/Fire/0/0/0.png"
+    response = client.get(url, params={"scenario": "ssp585", "year": 2050})
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG")
+    pair = {"scenario": "ssp585", "year": 2050}
+    east = client.get(f"/api/runs/{finished}/hazard-maps/Fire/1/1/0.png", params=pair)
+    assert east.status_code == 404  # all no data: transparent
+    baseline = client.get(url, params={"scenario": "historical"})
+    assert baseline.status_code == 404
+
+
+def test_wildfire_tile_s3_failure_is_reported(client, finished, monkeypatch):
+    from engine import fire_map
+
+    def fail(scenario, year):
+        raise OSError("S3 unreachable")
+
+    monkeypatch.setattr(fire_map, "_load", fail)
+    fire_map.clear_caches()
+    response = client.get(
+        f"/api/runs/{finished}/hazard-maps/Fire/0/0/0.png",
+        params={"scenario": "ssp585", "year": 2050},
+    )
+    assert response.status_code == 502
+    assert "S3 unreachable" in response.json()["detail"]
 
 
 def test_hazard_maps_say_why_a_scenario_has_none(client, finished):
@@ -527,7 +666,7 @@ def test_hazard_map_tile(client, finished, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "path", ["Wind/5/23/13.png", "RiverineInundation/9/0/0.png", "RiverineInundation/1/2/0.png"]
+    "path", ["Hail/5/23/13.png", "RiverineInundation/9/0/0.png", "RiverineInundation/1/2/0.png"]
 )
 def test_hazard_map_tile_with_no_map_is_404(client, finished, path):
     response = client.get(

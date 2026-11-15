@@ -1,33 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
-import {
-  ApiError,
-  getAsset,
-  getHazardCurve,
-  type AssetDetail,
-  type HazardCurve,
-  type Pair,
-} from "@/api/client";
-import { BASELINE, BASELINE_LABEL, isBaseline, pairLabel, SCORE_NOTES, scoreKind } from "@/lib/dashboard";
+import { ApiError, getAsset, type AssetDetail, type Pair } from "@/api/client";
+import { isBaseline, pairLabel, SCORE_NOTES, scoreKind } from "@/lib/dashboard";
 import { assetLabel, percent } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
+import { AssetChart } from "./AssetChart";
 import { AssetHazardMap } from "./AssetHazardMap";
-import { ChartLegend } from "./ChartLegend";
-import { ChartTooltip } from "./ChartTooltip";
 import { FloodZone } from "./FloodZone";
-
-const HISTORICAL_COLOR = "var(--series-other)";
-const SCENARIO_COLOR = "var(--series-1)";
 
 function matchText(asset: AssetDetail): string {
   switch (asset.match_type) {
@@ -61,167 +41,16 @@ const EXCLUSIONS: Record<string, string> = {
   no_curve: "Excluded: physrisk has no damage model for this building type and region.",
 };
 
-function HazardCurveChart({ runId, rowNum, pair }: { runId: string; rowNum: number; pair: Pair }) {
-  const [curves, setCurves] = useState<{
-    historical: HazardCurve;
-    scenario: HazardCurve | null;
-  } | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
-  const { scenario, year } = pair;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    setCurves(null);
-    setError(null);
-    Promise.all([
-      getHazardCurve(runId, rowNum, BASELINE, signal),
-      // The baseline is the historical curve, so it's fetched once.
-      isBaseline({ scenario, year }) ? null : getHazardCurve(runId, rowNum, { scenario, year }, signal),
-    ])
-      .then(([historical, selected]) => setCurves({ historical, scenario: selected }))
-      .catch((e: unknown) => {
-        if (signal.aborted) return;
-        setError(e instanceof ApiError ? e.message : "The hazard curve couldn't be loaded.");
-      });
-    return () => controller.abort();
-  }, [runId, rowNum, scenario, year]);
-
-  if (error) return <p className="notice notice-warning">{error}</p>;
-  if (!curves) return <p className="muted">Loading…</p>;
-
-  const name = pairLabel({ scenario, year });
-  const selected = curves.scenario;
-  const historicalName = selected ? "Historical" : BASELINE_LABEL;
-  const periods = sortedPeriods(curves.historical, ...(selected ? [selected] : []));
-  if (periods.length === 0) return <p className="muted">No river flood data at this location.</p>;
-  const lookup = (curve: HazardCurve, period: number) => {
-    const index = curve.return_periods.indexOf(period);
-    return index === -1 ? null : curve.intensities[index];
-  };
-  const data = periods.map((period) => ({
-    period,
-    historical: lookup(curves.historical, period),
-    scenario: selected ? lookup(selected, period) : null,
-  }));
-  const depth = (value: number | null) => (value === null ? "–" : `${value.toFixed(2)} m`);
-
-  return (
-    <>
-      <div
-        className="chart-frame"
-        role="img"
-        aria-label="Lines of river flood depth by return period. The table below has the same values."
-      >
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
-            <CartesianGrid vertical={false} stroke="var(--grid)" />
-            <XAxis
-              dataKey="period"
-              stroke="var(--axis)"
-              tick={{ fill: "var(--muted)", fontSize: 12 }}
-              label={{
-                value: "Return period (years)",
-                position: "insideBottom",
-                offset: -2,
-                fill: "var(--muted)",
-                fontSize: 12,
-              }}
-              height={40}
-            />
-            <YAxis
-              width={60}
-              domain={[0, "auto"]}
-              stroke="var(--axis)"
-              tick={{ fill: "var(--muted)", fontSize: 12 }}
-              tickFormatter={(value: number) => `${value} m`}
-            />
-            <Tooltip
-              cursor={{ stroke: "var(--axis)" }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                return (
-                  <ChartTooltip
-                    title={`1 in ${label} years`}
-                    rows={payload.map((item) => ({
-                      key: String(item.dataKey),
-                      label: String(item.name),
-                      value: depth(item.value as number | null),
-                      color: String(item.color),
-                    }))}
-                  />
-                );
-              }}
-            />
-            <Line
-              dataKey="historical"
-              name={historicalName}
-              stroke={HISTORICAL_COLOR}
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive={false}
-            />
-            {selected && (
-              <Line
-                dataKey="scenario"
-                name={name}
-                stroke={SCENARIO_COLOR}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <ChartLegend
-        items={[
-          { key: "historical", label: historicalName, color: HISTORICAL_COLOR, kind: "line" as const },
-          ...(selected
-            ? [{ key: "scenario", label: name, color: SCENARIO_COLOR, kind: "line" as const }]
-            : []),
-        ]}
-      />
-      <details className="twin">
-        <summary>Show as a table</summary>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Return period</th>
-                <th scope="col">{historicalName}</th>
-                {selected && <th scope="col">{name}</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((datum) => (
-                <tr key={datum.period}>
-                  <th scope="row">{datum.period} years</th>
-                  <td>{depth(datum.historical)}</td>
-                  {selected && <td>{depth(datum.scenario)}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </>
-  );
-}
-
-const sortedPeriods = (...curves: HazardCurve[]) =>
-  [...new Set(curves.flatMap((curve) => curve.return_periods))].sort((a, b) => a - b);
-
 interface AssetPanelProps {
   runId: string;
   rowNum: number;
   pair: Pair;
+  /** The run's scenarios, so the chart can name one with no results for a hazard. */
+  scenarios: string[];
   onClose: () => void;
 }
 
-export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
+export function AssetPanel({ runId, rowNum, pair, scenarios, onClose }: AssetPanelProps) {
   const [asset, setAsset] = useState<AssetDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -349,12 +178,8 @@ export function AssetPanel({ runId, rowNum, pair, onClose }: AssetPanelProps) {
                   </tbody>
                 </table>
               </div>
-              <h3>River flood depth</h3>
-              <HazardCurveChart runId={runId} rowNum={rowNum} pair={pair} />
-              <p className="panel-note">
-                Raw hazard data, before any assumed flood protection. A flat line at zero means this
-                exact point is dry in the data, not that the area has no flood risk.
-              </p>
+              <h3>Over time</h3>
+              <AssetChart asset={asset} pair={pair} scenarios={scenarios} />
               {asset.lat !== null && asset.lon !== null && (
                 <>
                   <h3>Hazard maps</h3>
