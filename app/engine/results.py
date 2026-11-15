@@ -185,6 +185,18 @@ def coverage(run: Run) -> list[dict]:
         )
 
 
+def map_points(run: Run) -> list[dict]:
+    """Assets a map can place, in input order: real coordinates, within the globe's range."""
+    with run.connect() as con:
+        return _rows(
+            con,
+            "SELECT row_num, lat, lon FROM assets "
+            "WHERE NOT isnan(lat) AND NOT isnan(lon) AND abs(lat) <= ? AND abs(lon) <= ? "
+            "ORDER BY row_num",
+            [90, 180],
+        )
+
+
 def clusters(run: Run) -> list[dict]:
     """The run's DBSCAN clusters with their members, centre and bounds.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import threading
 import uuid
 from collections.abc import Iterator
@@ -80,6 +81,24 @@ def create_run(
             [run_id, source_name, total_rows],
         )
     return run
+
+
+class RunInUseError(Exception):
+    """The run's database is open, so its folder can't be removed yet."""
+
+
+def delete_run(run: Run) -> None:
+    """Remove the run's folder for good.
+
+    The folder is first renamed out of the runs list under the connection lock, so no reader can
+    open the database while it's being removed: a name that isn't a UUID is never found again.
+    """
+    with _open_lock:
+        if run.directory / DATABASE in _open:
+            raise RunInUseError(run.run_id)
+        doomed = run.directory.with_name(f".deleting-{run.run_id}")
+        run.directory.rename(doomed)
+    shutil.rmtree(doomed)
 
 
 def load_assets(run: Run) -> int:

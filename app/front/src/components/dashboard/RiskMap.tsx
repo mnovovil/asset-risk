@@ -9,11 +9,24 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Asset, Cluster } from "@/api/client";
-import { type ClusterSummary, clusteredRowNums, summariseClusters } from "@/lib/clusters";
+import {
+  type ClusterSummary,
+  clusteredRowNums,
+  summariseClusters,
+  toBubbles,
+} from "@/lib/clusters";
 import { type AssetRow } from "@/lib/dashboard";
 import { count, percent } from "@/lib/format";
-import { lossBreaks, lossLegend, NO_RESULT_COLOR, ramp, SCORE_LABELS } from "@/lib/mapColors";
-import { COLOR_BY_TOTAL, placeable, toFeatures, totalsOf } from "@/lib/mapFeatures";
+import { lossBreaks, lossLegend, ramp, SCORE_LABELS } from "@/lib/mapColors";
+import {
+  boundsOf,
+  COLOR_BY_TOTAL,
+  FIT_PADDING_PX,
+  MAX_FIT_ZOOM,
+  placeable,
+  toFeatures,
+  totalsOf,
+} from "@/lib/mapFeatures";
 import { basemapStyle, blankStyle, pointRing } from "@/lib/mapStyle";
 import { usePrefersDark } from "@/hooks/useColorScheme";
 
@@ -28,8 +41,6 @@ const CLUSTER_LAYER = "clusters";
 const CLUSTER_ZOOM_SPAN = 1;
 const BUBBLE_OPACITY = 0.8;
 const HIT_RADIUS_PX = 12;
-const FIT_PADDING_PX = 48;
-const MAX_FIT_ZOOM = 11;
 
 interface RiskMapProps {
   assets: Asset[];
@@ -38,24 +49,6 @@ interface RiskMapProps {
   colorBy: string;
   selected: number | null;
   onSelect: (rowNum: number) => void;
-}
-
-function toBubbles(summaries: ClusterSummary[], dark: boolean): GeoJSON.FeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features: summaries.map((summary) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [summary.lon, summary.lat] },
-      properties: {
-        clusterId: summary.clusterId,
-        label: `${summary.count} nearby assets`,
-        detail: summary.detail,
-        color: summary.color ?? "rgba(0,0,0,0)",
-        ring: summary.color ? pointRing(dark) : NO_RESULT_COLOR,
-        radius: summary.radius,
-      },
-    })),
-  };
 }
 
 export default function RiskMap({
@@ -90,7 +83,7 @@ export default function RiskMap({
     () => summariseClusters(clusters, assets, rows, colorBy, dark),
     [clusters, assets, rows, colorBy, dark],
   );
-  const bubbles = useMemo(() => toBubbles(summaries, dark), [summaries, dark]);
+  const bubbles = useMemo(() => toBubbles(summaries, pointRing(dark)), [summaries, dark]);
   const bubblesRef = useRef(bubbles);
   bubblesRef.current = bubbles;
   const boundsRef = useRef(new Map<number, ClusterSummary["bounds"]>());
@@ -171,16 +164,9 @@ export default function RiskMap({
     const coordinates = featuresRef.current.features.map(
       (f) => (f.geometry as GeoJSON.Point).coordinates as [number, number],
     );
-    if (coordinates.length > 0) {
-      const lons = coordinates.map(([lon]) => lon);
-      const lats = coordinates.map(([, lat]) => lat);
-      map.fitBounds(
-        [
-          [Math.min(...lons), Math.min(...lats)],
-          [Math.max(...lons), Math.max(...lats)],
-        ],
-        { padding: FIT_PADDING_PX, maxZoom: MAX_FIT_ZOOM, animate: false },
-      );
+    const bounds = boundsOf(coordinates);
+    if (bounds) {
+      map.fitBounds(bounds, { padding: FIT_PADDING_PX, maxZoom: MAX_FIT_ZOOM, animate: false });
     }
     // Relative to the opening view, so bubbles show only there, whatever the portfolio's extent.
     threshold = map.getZoom() + CLUSTER_ZOOM_SPAN;

@@ -318,6 +318,7 @@ def test_failed_run_reports_its_error_and_has_no_results(settings):
         assert client.get(f"/api/runs/{run_id}/assets").status_code == 409
         assert client.get(f"/api/runs/{run_id}/export.csv").status_code == 409
         assert client.get(f"/api/runs/{run_id}/clusters").status_code == 409
+        assert client.get(f"/api/runs/{run_id}/overview").status_code == 409
 
 
 def test_a_crash_in_the_pipeline_does_not_stop_the_queue(settings):
@@ -419,6 +420,80 @@ def test_a_run_from_before_clustering_has_no_clusters(client, finished, settings
         con.execute("DROP TABLE asset_clusters")
     response = client.get(f"/api/runs/{finished}/clusters")
     assert (response.status_code, response.json()) == (200, [])
+
+
+def test_overview_matches_the_separate_endpoints(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("INSERT INTO asset_clusters VALUES (1, 0), (2, 0)")
+    body = client.get(f"/api/runs/{finished}/overview").json()
+    for name in ("summary", "trajectory", "clusters"):
+        assert body[name] == client.get(f"/api/runs/{finished}/{name}").json()
+
+
+def test_overview_points_are_placeable_assets_in_input_order(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute(
+            "INSERT INTO assets (row_num, asset_id, lat, lon, match_type, assessable, "
+            "exclusion_reason) VALUES (4, 'far', 10, 200, 'invalid', false, 'invalid'), "
+            "(5, 'none', NULL, NULL, 'invalid', false, 'invalid')"
+        )
+    points = client.get(f"/api/runs/{finished}/overview").json()["points"]
+    assert points == [
+        {"row_num": 1, "lat": 40.4, "lon": -3.7},
+        {"row_num": 2, "lat": 29.7, "lon": -95.3},
+    ]
+
+
+def test_overview_of_a_run_from_before_clustering(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("DROP TABLE asset_clusters")
+    response = client.get(f"/api/runs/{finished}/overview")
+    assert (response.status_code, response.json()["clusters"]) == (200, [])
+
+
+def test_delete_removes_a_finished_run(client, finished, settings):
+    response = client.delete(f"/api/runs/{finished}")
+    assert response.status_code == 204
+    assert client.get(f"/api/runs/{finished}").status_code == 404
+    assert finished not in {r["run_id"] for r in client.get("/api/runs").json()}
+    assert list((settings.data_dir / "runs").iterdir()) == []
+
+
+def test_delete_a_failed_run(settings):
+    def fail(run, points, settings):
+        set_status(run, "failed", error="S3 is down")
+        return False
+
+    with TestClient(api_app(settings, fail)) as client:
+        run_id = upload(client).json()["run_id"]
+        wait_until_finished(client, run_id)
+        assert client.delete(f"/api/runs/{run_id}").status_code == 204
+
+
+def test_delete_refuses_a_run_that_has_not_finished(settings):
+    pipeline = Blocking()
+    with TestClient(api_app(settings, pipeline)) as client:
+        running = upload(client).json()["run_id"]
+        assert pipeline.first_started.wait(10)
+        queued = upload(client).json()["run_id"]
+        for run_id, state in ((running, "running"), (queued, "queued")):
+            response = client.delete(f"/api/runs/{run_id}")
+            assert response.status_code == 409
+            assert state in response.json()["detail"]
+        pipeline.proceed.set()
+    assert {r.run_id for r in all_runs(settings.data_dir)} == {running, queued}
+
+
+def test_delete_refuses_a_run_being_read(client, finished, settings):
+    with _run(settings, finished).connect():
+        response = client.delete(f"/api/runs/{finished}")
+    assert response.status_code == 409
+    assert client.get(f"/api/runs/{finished}").status_code == 200
+
+
+@pytest.mark.parametrize("run_id", ["11111111-1111-4111-8111-111111111111", "..", "not-a-uuid"])
+def test_delete_an_unknown_run(client, run_id):
+    assert client.delete(f"/api/runs/{run_id}").status_code == 404
 
 
 @pytest.mark.parametrize("row_num", ["99", "abc"])
