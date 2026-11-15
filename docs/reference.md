@@ -227,5 +227,26 @@ wind layer isn't in `hazard_map_layers` or has no map for the period, or its haz
 tile. Without `--build` it reuses the existing image. The upload and progress screens get one short
 frame per stage the page shows as current, and it reports those stages.
 
+A narrated 60-second video of the same tour is made the same way. It isn't committed:
+
+```bash
+uv run script/record_video.py --build        # writes docs/assets/demo.mp4
+uv run script/record_video.py --voice-only   # just voice the narration and time the scenes
+```
+
+It reuses the GIF script's stack, upload and map steps, so it needs the same things, plus torch
+(CPU) and the Kokoro-82M weights, which the first run downloads. The narration is in `SCENES` in
+the script. Each line is voiced with Kokoro (voice `af_heart`, or `--voice`) and cached in
+`~/.cache/asset-risk/voice`. A scene lasts as long as its line plus 0.4 s, and its beats land on
+the words Kokoro times. Over 60 s, the padding shrinks to 0.2 s and then the voice speeds up to
+1.1, and past that the script stops rather than cut a line. Under 58 s, the end card is held
+longer. The page is recorded at 1920x1080 and device scale 2, map animations are stepped at 30 fps
+on Playwright's fake clock, and each shot keeps the box of the element its line is about. Pillow
+then eases the zoom between those boxes (at most 2.2x), ffmpeg burns in the narration as subtitles
+and normalises the voice to -16 LUFS. `--frames DIR` keeps the shots, and `--from-frames DIR`
+makes the video again from them without Docker or the browser. It stops for the same reasons as
+the GIF script, and also if the dashboard's sections are recorded in another order than the
+narration's.
+
 `script/overture_values.py` audits the building type map against a live release, and
 `script/build_regions.py` rebuilds the region data.
