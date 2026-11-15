@@ -192,9 +192,71 @@ def test_find_run_never_builds_a_path_from_a_bad_id(tmp_path):
     assert find_run(tmp_path, "../runs/x") is None
 
 
-def test_runs_are_not_listed(client):
-    upload(client)
-    assert client.get("/api/runs").status_code == 405
+def test_no_runs_lists_empty(client, settings):
+    assert not (settings.data_dir / "runs").exists()
+    assert client.get("/api/runs").json() == []
+    (settings.data_dir / "runs").mkdir(parents=True)
+    assert client.get("/api/runs").json() == []
+
+
+def test_runs_are_listed_newest_first(client):
+    ids = [upload(client, name=f"p{i}.csv").json()["run_id"] for i in range(3)]
+    for run_id in ids:
+        wait_until_finished(client, run_id)
+    body = client.get("/api/runs").json()
+    assert [r["run_id"] for r in body] == ids[::-1]
+    assert [r["source_name"] for r in body] == ["p2.csv", "p1.csv", "p0.csv"]
+    assert {r["total_rows"] for r in body} == {3}
+
+
+def unreadable_runs(data_dir):
+    """A run folder with a corrupt database, and one whose database has no runs row yet."""
+    corrupt = data_dir / "runs" / str(uuid.uuid4())
+    corrupt.mkdir(parents=True)
+    (corrupt / "run.duckdb").write_bytes(b"not a duckdb file" * 512)
+    half_created = create_run(data_dir, 1)
+    with half_created.connect() as con:
+        con.execute("DELETE FROM runs")
+    return corrupt.name, half_created.run_id
+
+
+def test_unreadable_runs_are_skipped_and_logged(client, settings, caplog):
+    listed = upload(client).json()["run_id"]
+    wait_until_finished(client, listed)
+    skipped = unreadable_runs(settings.data_dir)
+    with caplog.at_level("WARNING", logger="engine.store"):
+        body = client.get("/api/runs").json()
+    assert [r["run_id"] for r in body] == [listed]
+    for run_id in skipped:
+        assert run_id in caplog.text
+
+
+def test_startup_survives_an_unreadable_run(settings):
+    unreadable_runs(settings.data_dir)
+    unfinished = create_run(settings.data_dir, 1)
+    with TestClient(api_app(settings, complete_run)) as client:
+        assert client.get(f"/api/runs/{unfinished.run_id}").json()["status"] == "interrupted"
+
+
+def test_each_status_is_listed_as_stored(settings):
+    pipeline = Blocking()
+    with TestClient(api_app(settings, pipeline)) as client:
+        running = upload(client).json()["run_id"]
+        assert pipeline.first_started.wait(10)
+        queued = upload(client).json()["run_id"]
+        done, failed, interrupted = (create_run(settings.data_dir, 1) for _ in range(3))
+        set_status(done, "completed")
+        set_status(failed, "failed", error="geolocate failed: S3 is down")
+        set_status(interrupted, "interrupted", error="The app restarted")
+        by_id = {r["run_id"]: r for r in client.get("/api/runs").json()}
+        pipeline.proceed.set()
+
+    assert (by_id[running]["status"], by_id[running]["stage"]) == ("running", "geolocating")
+    assert by_id[running]["queue_position"] is None
+    assert (by_id[queued]["status"], by_id[queued]["queue_position"]) == ("queued", 1)
+    assert by_id[done.run_id]["status"] == "completed"
+    assert by_id[failed.run_id]["error"] == "geolocate failed: S3 is down"
+    assert by_id[interrupted.run_id]["status"] == "interrupted"
 
 
 class Blocking:
