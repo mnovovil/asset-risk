@@ -7,9 +7,9 @@
 After the upload and progress screens, which go by in under 2 s, it opens the
 New Orleans risk-concentration bubble on the map, clicks one of its assets to show its details, its
 FEMA flood zone and what that zone means, its loss over time and hazard maps, zooms the
-hazard map out to all of southern Louisiana, switches it to coastal flood, wildfire and tropical
-cyclone wind, then goes through the rest of the dashboard, including the present-day (baseline)
-view.
+hazard map out to all of southern Louisiana, switches it to coastal flood, wildfire, tropical
+cyclone wind and large hail, then goes through the rest of the dashboard, including the
+present-day (baseline) view.
 
 It needs the FEMA flood zone database that .asset-risk.json names (flood_zones_db): see
 script/build_flood_zones.py. Without it every asset's flood zone would read "unavailable".
@@ -81,10 +81,11 @@ HAZARD_MAPS = [
 ]
 # Shown after the flood maps, at the same zoom: their cells are 10 to 28 km across, so they read
 # best at the regional view. A layer with no map for the dashboard's scenario and year is shown
-# for the historical period instead, if it has one there: wildfire doesn't.
+# for the historical period instead, if it has one there: wildfire and hail don't.
 GRID_MAPS = [
     ("Fire", "Wildfire: the highest monthly chance of a fire within 100 km"),
     ("Wind", "Tropical cyclone wind: the speed reached about once in 100 years"),
+    ("Hail", "Large hail: days a year when hail over 5 cm is possible"),
 ]
 HISTORICAL_PERIOD = "Historical"
 # Scrolling out over the panel's hazard map, from street level (zoom 14) to about zoom 5.6, where it
@@ -472,7 +473,7 @@ def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -
 
 
 def record_grid_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
-    """Show wildfire and wind on the same regional view, in the dashboard's period if mapped.
+    """Show wildfire, wind and hail on the same regional view, in the dashboard's period if mapped.
 
     The tile map is recreated, and loses its zoom, if a hazard with no map is selected, so switch to
     the historical period first, while a flood map that has it is still showing.
@@ -489,7 +490,7 @@ def record_grid_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> 
     in_pair = [m for m in GRID_MAPS if available[m[0]]]
     historical = [m for m in GRID_MAPS if not available[m[0]]]
     if historical:
-        # Wildfire has no historical map, so the fallback isn't always one.
+        # Wildfire and hail have no historical map, so the fallback isn't always one.
         past = {
             layer["hazard"]: layer["available"]
             for layer in api(page, "hazard-maps", scenario="historical")
