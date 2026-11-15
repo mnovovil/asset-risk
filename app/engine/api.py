@@ -181,6 +181,17 @@ def get_clusters(run: FinishedRunDep) -> list[schemas.Cluster]:
     return [schemas.Cluster(**row) for row in results.clusters(run)]
 
 
+@router.get("/runs/{run_id}/overview")
+def get_overview(run: FinishedRunDep) -> schemas.RunOverview:
+    """What the Portfolios page shows for a run: its counts, trajectory and where its assets are."""
+    return schemas.RunOverview(
+        summary=schemas.Summary(**results.summary(run)),
+        trajectory=[schemas.TrajectoryPoint(**row) for row in results.trajectory(run)],
+        clusters=[schemas.Cluster(**row) for row in results.clusters(run)],
+        points=[schemas.MapPoint(**row) for row in results.map_points(run)],
+    )
+
+
 def _asset(run: FinishedRunDep, row_num: int) -> dict:
     row = results.asset(run, row_num)
     if row is None:

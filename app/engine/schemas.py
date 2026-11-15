@@ -90,6 +90,23 @@ class Cluster(BaseModel):
     bounds: list[float]  # west, south, east, north; east is past 180 across the antimeridian
 
 
+class MapPoint(BaseModel):
+    """Where an asset is, for a map that needs nothing else about it."""
+
+    row_num: int
+    lat: float
+    lon: float
+
+
+class RunOverview(BaseModel):
+    """What a portfolio's card on the Portfolios page needs, in one small response."""
+
+    summary: Summary
+    trajectory: list[TrajectoryPoint]
+    clusters: list[Cluster]
+    points: list[MapPoint]  # assets with real coordinates only, in input order
+
+
 class AssetImpact(BaseModel):
     scenario: str
     year: int | None  # None is the historical baseline

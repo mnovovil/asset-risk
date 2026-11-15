@@ -318,6 +318,7 @@ def test_failed_run_reports_its_error_and_has_no_results(settings):
         assert client.get(f"/api/runs/{run_id}/assets").status_code == 409
         assert client.get(f"/api/runs/{run_id}/export.csv").status_code == 409
         assert client.get(f"/api/runs/{run_id}/clusters").status_code == 409
+        assert client.get(f"/api/runs/{run_id}/overview").status_code == 409
 
 
 def test_a_crash_in_the_pipeline_does_not_stop_the_queue(settings):
@@ -419,6 +420,35 @@ def test_a_run_from_before_clustering_has_no_clusters(client, finished, settings
         con.execute("DROP TABLE asset_clusters")
     response = client.get(f"/api/runs/{finished}/clusters")
     assert (response.status_code, response.json()) == (200, [])
+
+
+def test_overview_matches_the_separate_endpoints(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("INSERT INTO asset_clusters VALUES (1, 0), (2, 0)")
+    body = client.get(f"/api/runs/{finished}/overview").json()
+    for name in ("summary", "trajectory", "clusters"):
+        assert body[name] == client.get(f"/api/runs/{finished}/{name}").json()
+
+
+def test_overview_points_are_placeable_assets_in_input_order(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute(
+            "INSERT INTO assets (row_num, asset_id, lat, lon, match_type, assessable, "
+            "exclusion_reason) VALUES (4, 'far', 10, 200, 'invalid', false, 'invalid'), "
+            "(5, 'none', NULL, NULL, 'invalid', false, 'invalid')"
+        )
+    points = client.get(f"/api/runs/{finished}/overview").json()["points"]
+    assert points == [
+        {"row_num": 1, "lat": 40.4, "lon": -3.7},
+        {"row_num": 2, "lat": 29.7, "lon": -95.3},
+    ]
+
+
+def test_overview_of_a_run_from_before_clustering(client, finished, settings):
+    with _run(settings, finished).connect() as con:
+        con.execute("DROP TABLE asset_clusters")
+    response = client.get(f"/api/runs/{finished}/overview")
+    assert (response.status_code, response.json()["clusters"]) == (200, [])
 
 
 @pytest.mark.parametrize("row_num", ["99", "abc"])
