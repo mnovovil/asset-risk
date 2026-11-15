@@ -4,13 +4,21 @@ physrisk's image API only draws the public WRI flood maps: it refuses the other 
 permissions. Some of their arrays are public anyway, so a GridLayer reads one anonymously with s3fs
 and zarr and draws Web Mercator tiles itself. A layer is a GridSpec (what the data is, and how it's
 coloured and described: kept in code) plus the run settings from .asset-risk.json (bucket, path,
-zoom, alpha, legend and cache sizes). fire_map.py and wind_map.py are the two layers.
+zoom, alpha, legend and cache sizes). fire_map.py, wind_map.py, hail_map.py and drought_map.py
+are the layers.
 
 Each layer:
 - checks its path against physrisk's embedded inventory, and takes its scenarios, years, units,
   licence and colour scale from there. Only an exact scenario and year match gets a map
-- checks the array's layout (a north-up, unrotated EPSG:4326 grid), and picks one return period
-  from its index when the array has several
+- checks the array's layout (a north-up, unrotated EPSG:4326 grid), and picks one slice from its
+  index when the array has several: a return period, or another index value such as a threshold
+- reads the group's "indicator" array where the inventory says the resource stores netCDF
+  coordinates, as physrisk does
+
+A GridSpec's options cover arrays laid out differently from fire's, wind's and hail's, and their
+defaults keep those three as they were: params fills fixed path placeholders such as drought's
+{gcm}, index_value and index_attr pick a slice that isn't a return period, and zero_is_no_data
+draws 0 clear where the data stores no data as 0.
 - samples each tile pixel from the cell its centre falls in (nearest neighbour), shifting a
   longitude by 360 degrees only when it falls outside the grid
 - draws NaN transparent and every finite value on its ramp, interpolated in OKLab
@@ -24,7 +32,7 @@ from __future__ import annotations
 import io
 import json
 from collections.abc import Callable, Mapping, MutableMapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 from importlib import resources
 from typing import Any
@@ -57,6 +65,7 @@ class Coverage:
     max_value: float
     units: str = ""
     attribution: str = ""
+    netcdf_coords: bool = False  # the path is a group, and the values are its "indicator" array
 
 
 def physrisk_inventory() -> list[dict[str, Any]]:
@@ -65,11 +74,32 @@ def physrisk_inventory() -> list[dict[str, Any]]:
     return json.loads(source.read_text())["resources"]
 
 
-def read_coverage(inventory: list[dict[str, Any]], path: str, hazard_type: str) -> Coverage:
-    """A resource's scenarios, years, licence and top value. Raises if it's gone or changed."""
-    resource = next((r for r in inventory if r.get("path") == path), None)
+def _filled(template: str, params: Mapping[str, str]) -> str:
+    for name, value in params.items():
+        template = template.replace(f"{{{name}}}", value)
+    return template
+
+
+def read_coverage(
+    inventory: list[dict[str, Any]],
+    path: str,
+    hazard_type: str,
+    params: Mapping[str, str] | None = None,
+) -> Coverage:
+    """A resource's scenarios, years, licence and top value. Raises if it's gone or changed.
+
+    params fills placeholders other than {scenario} and {year} in the inventory's path, such as
+    drought's {gcm}: the layer's path has them filled in, and each value must be one the resource
+    lists under its own params.
+    """
+    params = params or {}
+    resource = next((r for r in inventory if _filled(r.get("path") or "", params) == path), None)
     if resource is None:
         raise HazardMapConfigError(f"physrisk's inventory has no {path}")
+    for name, value in params.items():
+        allowed = (resource.get("params") or {}).get(name) or []
+        if value not in allowed:
+            raise HazardMapConfigError(f"{path}: physrisk's inventory has no {name} {value}")
     if resource.get("hazard_type") != hazard_type:
         raise HazardMapConfigError(f"{path} is no longer a {hazard_type} resource")
     scenarios = {
@@ -89,6 +119,7 @@ def read_coverage(inventory: list[dict[str, Any]], path: str, hazard_type: str) 
         max_value,
         str(resource.get("units") or ""),
         str(resource.get("attribution") or ""),
+        bool(resource.get("store_netcdf_coords")),
     )
 
 
@@ -158,27 +189,31 @@ def grid_from(values: np.ndarray, attrs: Mapping[str, Any]) -> Grid:
     return Grid(np.asarray(values[0], dtype=np.float32), x0, dx, y0, dy)
 
 
-def return_period_index(attrs: Mapping[str, Any], depth: int, return_period: int) -> int:
-    """Where a return period sits in an array's first dimension. Raises if it isn't there."""
-    values = attrs.get("index_values")
+def return_period_index(
+    attrs: Mapping[str, Any], depth: int, value: float, attr: str = "index_values"
+) -> int:
+    """Where an index value (a return period, or a threshold) sits in an array's first dimension.
+
+    attr names the list of index values in the array's attrs. Raises if the value isn't there.
+    """
+    values = attrs.get(attr)
     if not isinstance(values, list | tuple) or len(values) != depth:
-        raise HazardMapConfigError(f"expected {depth} index_values, not {values!r}")
+        raise HazardMapConfigError(f"expected {depth} {attr}, not {values!r}")
     try:
-        return [float(v) for v in values].index(float(return_period))
+        return [float(v) for v in values].index(float(value))
     except ValueError:
-        raise HazardMapConfigError(
-            f"the array has no {return_period}-year return period, only {list(values)}"
-        ) from None
+        what = f"{value:g}-year return period" if attr == "index_values" else f"{attr} {value:g}"
+        raise HazardMapConfigError(f"the array has no {what}, only {list(values)}") from None
 
 
-def read_grid(array: Any, return_period: int | None) -> Grid:
-    """A zarr array as a Grid, reading only the one return period's slice when there are several."""
+def read_grid(array: Any, index: float | None, attr: str = "index_values") -> Grid:
+    """A zarr array as a Grid, reading only the one index value's slice when there are several."""
     attrs = dict(array.attrs)
-    if return_period is None:
+    if index is None:
         return grid_from(array[:], attrs)
     if len(array.shape) != 3:
         raise HazardMapConfigError(f"expected an (index, rows, cols) array, not {array.shape}")
-    i = return_period_index(attrs, array.shape[0], return_period)
+    i = return_period_index(attrs, array.shape[0], index, attr)
     return grid_from(array[i : i + 1], attrs)
 
 
@@ -323,6 +358,16 @@ class GridSpec:
     source: Callable[[Coverage], str]
     return_period: int | None = None  # the index to read, for an array of return periods
     other_years: str = ""  # appended to the reason when only the year is missing
+    # Options for arrays that aren't laid out as fire's, wind's and hail's. The defaults keep those.
+    params: Mapping[str, str] = field(default_factory=dict)  # fixed path placeholders, e.g. gcm
+    index_value: float | None = None  # the index to read when it isn't a return period
+    index_attr: str = "index_values"  # the attr listing the index values
+    zero_is_no_data: bool = False  # the data stores no data as 0: draw it clear, as NaN
+
+    @property
+    def index(self) -> float | None:
+        """The slice to read from an index array: index_value, or else the return period."""
+        return self.index_value if self.index_value is not None else self.return_period
 
 
 @dataclass(frozen=True)
@@ -409,7 +454,9 @@ class GridLayer:
 
     def _inventory_coverage(self) -> Coverage:
         if self._cover is None:
-            self._cover = read_coverage(physrisk_inventory(), self.path, self.spec.hazard)
+            self._cover = read_coverage(
+                physrisk_inventory(), self.path, self.spec.hazard, self.spec.params
+            )
         return self._cover
 
     def reason(self, scenario: str, year: int | None) -> str | None:
@@ -452,8 +499,13 @@ class GridLayer:
         root = zarr.open(
             self.store if self.store is not None else open_bucket(self.settings.bucket), mode="r"
         )
-        array = root[self.path.format(scenario=scenario, year=year)]
-        return read_grid(array, self.spec.return_period)
+        path = self.path.format(scenario=scenario, year=year)
+        if self._coverage().netcdf_coords:
+            path += "/indicator"  # as physrisk reads it
+        grid = read_grid(root[path], self.spec.index, self.spec.index_attr)
+        if self.spec.zero_is_no_data:
+            grid.values[grid.values == 0] = np.nan
+        return grid
 
     def grid(self, scenario: str, year: int) -> Grid:
         """The whole array for a pair, read once and kept while it's among the recently used."""
