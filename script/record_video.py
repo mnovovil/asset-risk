@@ -199,16 +199,10 @@ SCENES = (
             Beat("Hail", HAZARD_MAP, "large"),
         ),
     ),
+    # Not the GIF's switch to the present-day baseline: its empty Year box reads as missing data.
     Scene(
-        "Compare scenarios on the hazards they share, or switch to present-day risk.",
-        (
-            Beat("trajectory", section("Change over time")),
-            Beat(
-                "baseline",
-                lambda page, _: [page.locator(".filters"), page.locator(".kpis")],
-                "switch",
-            ),
-        ),
+        "Compare scenarios on the hazards they share.",
+        (Beat("trajectory", section("Change over time")),),
     ),
     Scene(
         "And see exactly how far to trust the results. Asset Risk: know where your portfolio is "
@@ -504,7 +498,6 @@ def record(folder: Path) -> list[Shot]:
         demo.close_panel(page, panel)
         rec.caption("", "trajectory")
         rec.scroll_to("Change over time", 4)
-        demo.record_baseline(rec, show_loss=False)
         rec.caption("", "trust")
         rec.scroll_to("How far to trust these results", 5)
         rec.caption("", "end")
