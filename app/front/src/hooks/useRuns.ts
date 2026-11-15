@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, listRuns, type RunStatus } from "@/api/client";
 import { POLL_INTERVAL_MS, isFinished } from "@/hooks/useRun";
@@ -12,8 +12,18 @@ interface RunsState {
 }
 
 /** Load every run, and keep polling only while one of them is queued or running. */
-export function useRuns(): RunsState {
+export function useRuns(): RunsState & { remove: (runId: string) => void } {
   const [state, setState] = useState<RunsState>({ runs: null, error: null, connectionLost: false });
+  // Deleted here, so a list that was already on its way can't bring them back.
+  const removed = useRef(new Set<string>());
+
+  const remove = useCallback((runId: string) => {
+    removed.current.add(runId);
+    setState((previous) => ({
+      ...previous,
+      runs: previous.runs?.filter((run) => run.run_id !== runId) ?? null,
+    }));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -22,7 +32,9 @@ export function useRuns(): RunsState {
 
     async function poll() {
       try {
-        const runs = await listRuns(controller.signal);
+        const runs = (await listRuns(controller.signal)).filter(
+          (run) => !removed.current.has(run.run_id),
+        );
         loaded = true;
         setState({ runs, error: null, connectionLost: false });
         if (runs.every(isFinished)) return;
@@ -46,5 +58,5 @@ export function useRuns(): RunsState {
     };
   }, []);
 
-  return state;
+  return { ...state, remove };
 }

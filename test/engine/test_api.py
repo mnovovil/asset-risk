@@ -451,6 +451,51 @@ def test_overview_of_a_run_from_before_clustering(client, finished, settings):
     assert (response.status_code, response.json()["clusters"]) == (200, [])
 
 
+def test_delete_removes_a_finished_run(client, finished, settings):
+    response = client.delete(f"/api/runs/{finished}")
+    assert response.status_code == 204
+    assert client.get(f"/api/runs/{finished}").status_code == 404
+    assert finished not in {r["run_id"] for r in client.get("/api/runs").json()}
+    assert list((settings.data_dir / "runs").iterdir()) == []
+
+
+def test_delete_a_failed_run(settings):
+    def fail(run, points, settings):
+        set_status(run, "failed", error="S3 is down")
+        return False
+
+    with TestClient(api_app(settings, fail)) as client:
+        run_id = upload(client).json()["run_id"]
+        wait_until_finished(client, run_id)
+        assert client.delete(f"/api/runs/{run_id}").status_code == 204
+
+
+def test_delete_refuses_a_run_that_has_not_finished(settings):
+    pipeline = Blocking()
+    with TestClient(api_app(settings, pipeline)) as client:
+        running = upload(client).json()["run_id"]
+        assert pipeline.first_started.wait(10)
+        queued = upload(client).json()["run_id"]
+        for run_id, state in ((running, "running"), (queued, "queued")):
+            response = client.delete(f"/api/runs/{run_id}")
+            assert response.status_code == 409
+            assert state in response.json()["detail"]
+        pipeline.proceed.set()
+    assert {r.run_id for r in all_runs(settings.data_dir)} == {running, queued}
+
+
+def test_delete_refuses_a_run_being_read(client, finished, settings):
+    with _run(settings, finished).connect():
+        response = client.delete(f"/api/runs/{finished}")
+    assert response.status_code == 409
+    assert client.get(f"/api/runs/{finished}").status_code == 200
+
+
+@pytest.mark.parametrize("run_id", ["11111111-1111-4111-8111-111111111111", "..", "not-a-uuid"])
+def test_delete_an_unknown_run(client, run_id):
+    assert client.delete(f"/api/runs/{run_id}").status_code == 404
+
+
 @pytest.mark.parametrize("row_num", ["99", "abc"])
 def test_unknown_asset(client, finished, row_num):
     assert client.get(f"/api/runs/{finished}/assets/{row_num}").status_code in (404, 422)

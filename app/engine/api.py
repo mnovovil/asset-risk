@@ -165,6 +165,18 @@ def get_run(run: RunDep, queue: QueueDep) -> schemas.RunStatus:
     return _status(run, queue)
 
 
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(run: RunDep) -> None:
+    """Delete a run and its results for good. A queued or running run must finish first."""
+    state = store.status(run)["status"]
+    if state in ("queued", "running"):
+        raise HTTPException(409, f"This run is {state}, so it can't be deleted until it finishes")
+    try:
+        store.delete_run(run)
+    except store.RunInUseError:
+        raise HTTPException(409, "This run is in use right now. Try again in a moment") from None
+
+
 @router.get("/runs/{run_id}/summary")
 def get_summary(run: FinishedRunDep) -> schemas.Summary:
     return schemas.Summary(**results.summary(run))

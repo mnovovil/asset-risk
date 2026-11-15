@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,14 +37,23 @@ type Results = { overview?: unknown; totals?: unknown };
 
 /**
  * Answer the list from a script of responses (the last repeats), and record every request. A
- * completed run's overview and totals come from `results`, by run id, or the defaults above.
+ * completed run's overview and totals come from `results`, by run id, or the defaults above, and
+ * each DELETE answers with the next status in `deletes`, 204 once they run out.
  */
 function stubList(
   responses: (RunStatus[] | number | "offline")[],
   results: Record<string, Results | number> = {},
+  deletes: number[] = [],
 ) {
   const requests: string[] = [];
-  vi.stubGlobal("fetch", async (url: string) => {
+  vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    if (init?.method === "DELETE") {
+      requests.push(`DELETE ${url}`);
+      const status = deletes.shift() ?? 204;
+      return status === 204
+        ? new Response(null, { status })
+        : jsonResponse({ detail: `Error ${status}` }, status);
+    }
     requests.push(url);
     if (url === "/api/config") return jsonResponse(CONFIG);
     const match = url.match(/^\/api\/runs\/([^/]+)\/(overview|totals)/);
@@ -226,6 +235,77 @@ describe("PortfoliosPage", () => {
     expect(card.getByText("No asset could be placed on a map.")).toBeInTheDocument();
   });
 
+  it("deletes a portfolio once confirmed, and says so", async () => {
+    const runs = [
+      runStatus({ run_id: id(1), source_name: "old.csv", status: "failed", error: "S3 is down" }),
+      runStatus({ run_id: id(2), source_name: "keep.csv", status: "interrupted" }),
+    ];
+    const requests = stubList([runs]);
+    renderAt();
+    await settle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete old.csv" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete old.csv?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await settle();
+
+    expect(requests).toContain(`DELETE /api/runs/${id(1)}`);
+    expect(screen.queryByRole("link", { name: "old.csv" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "keep.csv" })).toBeInTheDocument();
+    expect(screen.getByText("Deleted old.csv.")).toHaveAttribute("role", "status");
+    expect(screen.getByRole("heading", { name: "Portfolios" })).toHaveFocus();
+  });
+
+  it("deletes nothing when cancelled", async () => {
+    const failed = runStatus({ run_id: id(1), source_name: "p.csv", status: "failed" });
+    const requests = stubList([[failed]]);
+    renderAt();
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Delete p.csv" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await settle();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(requests.some((url) => url.startsWith("DELETE"))).toBe(false);
+    expect(screen.getByRole("link", { name: "p.csv" })).toBeInTheDocument();
+  });
+
+  it("keeps the portfolio and shows why when the delete fails", async () => {
+    stubList([[runStatus({ run_id: id(1), source_name: "p.csv", status: "failed" })]], {}, [409]);
+    renderAt();
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Delete p.csv" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await settle();
+    expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent("Error 409");
+    expect(screen.getByRole("link", { name: "p.csv" })).toBeInTheDocument();
+  });
+
+  it("offers no delete while a run is queued or running", async () => {
+    stubList([
+      [
+        runStatus({ run_id: id(1), source_name: "a.csv", status: "queued" }),
+        runStatus({ run_id: id(2), source_name: "b.csv", status: "running" }),
+      ],
+    ]);
+    renderAt();
+    await settle();
+    expect(screen.queryByRole("button", { name: /^Delete/ })).not.toBeInTheDocument();
+  });
+
+  it("doesn't bring back a deleted portfolio from a list already on its way", async () => {
+    const done = runStatus({ run_id: id(1), source_name: "old.csv", status: "completed" });
+    const running = runStatus({ run_id: id(2), source_name: "new.csv", status: "running" });
+    stubList([[done, running]]);
+    renderAt();
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Delete old.csv" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+    await settle();
+    // The next poll still lists it, as one sent before the delete would.
+    await nextPoll();
+    expect(screen.queryByRole("link", { name: "old.csv" })).not.toBeInTheDocument();
+  });
+
   it("encodes the run id in its link", async () => {
     stubList([[runStatus({ run_id: "a b/c", source_name: "odd.csv", status: "completed" })]]);
     renderAt();
@@ -282,7 +362,7 @@ describe("PortfoliosPage", () => {
     await settle();
     await nextPoll();
     expect(screen.getByRole("link", { name: "p.csv" })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Lost contact");
+    expect(screen.getByText(/Lost contact/)).toHaveAttribute("role", "status");
     await nextPoll();
     expect(screen.queryByText(/Lost contact/)).not.toBeInTheDocument();
   });
