@@ -36,8 +36,10 @@ KEYS = (
     "hazard_map_bucket",
     "fire_map_path",
     "wind_map_path",
+    "hail_map_path",
     "fire_map_max_zoom",
     "wind_map_max_zoom",
+    "hail_map_max_zoom",
     "hazard_map_alpha",
     "hazard_map_legend_stops",
     "hazard_map_array_cache",
@@ -49,7 +51,7 @@ BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Res
 # error. Present-day risk is the historical baseline, which always comes back.
 YEARS = (2030, 2050, 2080)
 # The hazard map layers, in the order the API lists them.
-HAZARD_MAP_LAYERS = ("RiverineInundation", "CoastalInundation", "Fire", "Wind")
+HAZARD_MAP_LAYERS = ("RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail")
 MAX_MAP_ZOOM = 10
 MAX_LEGEND_STOPS = 33
 # A layer's path names one array per scenario and year, so it needs both placeholders and nothing
@@ -87,8 +89,10 @@ class Settings:
     hazard_map_bucket: str = "os-climate-physical-risk/hazard-indicators/hazard.zarr"
     fire_map_path: str = "fire/jupiter/v1/fire_probability_{scenario}_{year}"
     wind_map_path: str = "wind/iris/v1/max_speed_{scenario}_{year}"
+    hail_map_path: str = "hail/jupiter/v1/days_above_5cm_{scenario}_{year}"
     fire_map_max_zoom: int = 6
     wind_map_max_zoom: int = 7
+    hail_map_max_zoom: int = 6
     hazard_map_alpha: int = 200
     hazard_map_legend_stops: int = 9
     hazard_map_array_cache: int = 4
@@ -180,11 +184,11 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
     if not isinstance(bucket, str) or not _BUCKET.fullmatch(bucket):
         raise bad("hazard_map_bucket", "a bucket and folder, like my-bucket/hazard.zarr, no s3://")
 
-    for key in ("fire_map_path", "wind_map_path"):
+    for key in ("fire_map_path", "wind_map_path", "hail_map_path"):
         if not _is_map_path(raw[key]):
             raise bad(key, "a path with {scenario} and {year} once each")
 
-    for key in ("fire_map_max_zoom", "wind_map_max_zoom"):
+    for key in ("fire_map_max_zoom", "wind_map_max_zoom", "hail_map_max_zoom"):
         if not _is_int(raw[key]) or not 0 <= raw[key] <= MAX_MAP_ZOOM:
             raise bad(key, f"a whole number from 0 to {MAX_MAP_ZOOM}")
 
@@ -220,8 +224,10 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         hazard_map_bucket=bucket,
         fire_map_path=raw["fire_map_path"],
         wind_map_path=raw["wind_map_path"],
+        hail_map_path=raw["hail_map_path"],
         fire_map_max_zoom=raw["fire_map_max_zoom"],
         wind_map_max_zoom=raw["wind_map_max_zoom"],
+        hail_map_max_zoom=raw["hail_map_max_zoom"],
         hazard_map_alpha=raw["hazard_map_alpha"],
         hazard_map_legend_stops=stops,
         hazard_map_array_cache=raw["hazard_map_array_cache"],

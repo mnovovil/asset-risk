@@ -35,12 +35,14 @@ VALID = {
     "api_port": 8000,
     "geolocate_config": "/abs/vendor/geolocate/.geolocate.json",
     "flood_zones_db": "data/fema/flood-zones.duckdb",
-    "hazard_map_layers": ["RiverineInundation", "CoastalInundation", "Fire", "Wind"],
+    "hazard_map_layers": ["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail"],
     "hazard_map_bucket": "os-climate-physical-risk/hazard-indicators/hazard.zarr",
     "fire_map_path": "fire/jupiter/v1/fire_probability_{scenario}_{year}",
     "wind_map_path": "wind/iris/v1/max_speed_{scenario}_{year}",
+    "hail_map_path": "hail/jupiter/v1/days_above_5cm_{scenario}_{year}",
     "fire_map_max_zoom": 6,
     "wind_map_max_zoom": 7,
+    "hail_map_max_zoom": 6,
     "hazard_map_alpha": 200,
     "hazard_map_legend_stops": 9,
     "hazard_map_array_cache": 4,
@@ -174,7 +176,7 @@ def test_missing_key(tmp_path, key):
         ("api_port", 65536),
         ("hazard_map_layers", "Fire"),
         ("hazard_map_layers", ["Fire", "Fire"]),
-        ("hazard_map_layers", ["Hail"]),
+        ("hazard_map_layers", ["Drought"]),
         ("hazard_map_layers", [1]),
         ("hazard_map_bucket", ""),
         ("hazard_map_bucket", "s3://os-climate-physical-risk"),
@@ -189,10 +191,14 @@ def test_missing_key(tmp_path, key):
         ("wind_map_path", "/wind/{scenario}_{year}"),
         ("wind_map_path", "{scenario}{year}"),
         ("wind_map_path", None),
+        ("hail_map_path", "hail/days_above_5cm"),
+        ("hail_map_path", "hail/{scenario}_{year}_{year}"),
         ("fire_map_max_zoom", -1),
         ("fire_map_max_zoom", 11),
         ("wind_map_max_zoom", 7.5),
         ("wind_map_max_zoom", True),
+        ("hail_map_max_zoom", 11),
+        ("hail_map_max_zoom", "6"),
         ("hazard_map_alpha", 0),
         ("hazard_map_alpha", 256),
         ("hazard_map_legend_stops", 1),
@@ -277,7 +283,8 @@ def _terraform_default(name: str) -> str:
 def test_hazard_map_defaults_match_terraform_and_the_code():
     """The Terraform defaults, the Settings defaults and VALID all reproduce today's maps."""
     defaults = Settings.__dataclass_fields__
-    for key in [k for k in KEYS if k.startswith(("hazard_map", "fire_map", "wind_map"))]:
+    prefixes = ("hazard_map", "fire_map", "wind_map", "hail_map")
+    for key in [k for k in KEYS if k.startswith(prefixes)]:
         value = json.loads(_terraform_default(key))
         code = defaults[key].default
         assert value == (list(code) if isinstance(code, tuple) else code), key
@@ -285,13 +292,15 @@ def test_hazard_map_defaults_match_terraform_and_the_code():
 
 
 def test_hazard_map_defaults_match_the_layers():
-    from engine import fire_map, grid_layer, wind_map
+    from engine import fire_map, grid_layer, hail_map, wind_map
 
     defaults = Settings.__dataclass_fields__
     assert defaults["fire_map_path"].default == fire_map.FIRE_PATH
     assert defaults["wind_map_path"].default == wind_map.WIND_PATH
     assert defaults["fire_map_max_zoom"].default == fire_map.MAX_ZOOM
     assert defaults["wind_map_max_zoom"].default == wind_map.MAX_ZOOM
+    assert defaults["hail_map_path"].default == hail_map.HAIL_PATH
+    assert defaults["hail_map_max_zoom"].default == hail_map.MAX_ZOOM
     assert defaults["hazard_map_bucket"].default == grid_layer.BUCKET_ROOT
     assert defaults["hazard_map_alpha"].default == fire_map.ALPHA
     assert defaults["hazard_map_legend_stops"].default == fire_map.LEGEND_STOPS
