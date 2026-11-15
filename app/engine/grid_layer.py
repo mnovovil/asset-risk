@@ -4,7 +4,7 @@ physrisk's image API only draws the public WRI flood maps: it refuses the other 
 permissions. Some of their arrays are public anyway, so a GridLayer reads one anonymously with s3fs
 and zarr and draws Web Mercator tiles itself. A layer is a GridSpec (what the data is, and how it's
 coloured and described: kept in code) plus the run settings from .asset-risk.json (bucket, path,
-zoom, alpha, legend and cache sizes). fire_map.py and wind_map.py are the two layers.
+zoom, alpha, legend and cache sizes). fire_map.py, wind_map.py and hail_map.py are the layers.
 
 Each layer:
 - checks its path against physrisk's embedded inventory, and takes its scenarios, years, units,

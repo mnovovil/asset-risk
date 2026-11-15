@@ -467,7 +467,7 @@ def test_hazard_maps_list_the_flood_layers(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
     layers = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()
     hazards = [layer["hazard"] for layer in layers]
-    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire", "Wind"]
+    assert hazards == ["RiverineInundation", "CoastalInundation", "Fire", "Wind", "Hail"]
     river = layers[0]
     assert river["available"] is True
     assert river["reason"] is None
@@ -507,7 +507,7 @@ def test_hazard_maps_list_wildfire_describing_itself(client, finished):
 
 def test_wildfire_has_no_historical_map_but_flood_does(client, finished):
     url = f"/api/runs/{finished}/hazard-maps"
-    river, _, fire, _ = client.get(url, params={"scenario": "historical"}).json()
+    river, _, fire, _, _ = client.get(url, params={"scenario": "historical"}).json()
     assert river["available"] is True
     assert (fire["available"], fire["tile_url"]) == (False, None)
     assert fire["reason"] == "physrisk's wildfire data has no historical baseline"
@@ -531,6 +531,28 @@ def test_hazard_maps_list_wind_describing_itself(client, finished):
     )
     baseline = client.get(url, params={"scenario": "historical"}).json()[3]
     assert baseline["available"] is True
+
+
+def test_hazard_maps_list_hail_describing_itself(client, finished):
+    url = f"/api/runs/{finished}/hazard-maps"
+    hail = client.get(url, params={"scenario": "ssp585", "year": 2050}).json()[4]
+    assert hail["hazard"] == "Hail"
+    assert hail["available"] is True
+    assert (hail["return_period"], hail["units"], hail["max_value"], hail["max_zoom"]) == (
+        None,
+        "days/year",
+        4.0,
+        6,
+    )
+    assert "5 cm" in hail["measure"]
+    assert "1 in 50" in hail["note"] and "not proof of low risk" in hail["note"]
+    assert "Jupiter Intelligence" in hail["source"] and "Commercial" in hail["source"]
+    assert len(hail["legend"]) == 9
+    assert hail["tile_url"] == (
+        f"/api/runs/{finished}/hazard-maps/Hail/{{z}}/{{x}}/{{y}}.png?scenario=ssp585&year=2050"
+    )
+    baseline = client.get(url, params={"scenario": "historical"}).json()[4]
+    assert baseline["reason"] == "physrisk's hail data has no historical baseline"
 
 
 @pytest.fixture
