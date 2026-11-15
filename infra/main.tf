@@ -51,9 +51,11 @@ resource "local_file" "asset_risk_config" {
     fire_map_path           = var.fire_map_path
     wind_map_path           = var.wind_map_path
     hail_map_path           = var.hail_map_path
+    drought_map_path        = var.drought_map_path
     fire_map_max_zoom       = var.fire_map_max_zoom
     wind_map_max_zoom       = var.wind_map_max_zoom
     hail_map_max_zoom       = var.hail_map_max_zoom
+    drought_map_max_zoom    = var.drought_map_max_zoom
     hazard_map_alpha        = var.hazard_map_alpha
     hazard_map_legend_stops = var.hazard_map_legend_stops
     hazard_map_array_cache  = var.hazard_map_array_cache

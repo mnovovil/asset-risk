@@ -206,16 +206,16 @@ from a list, across every year and scenario of the run. Read it with these limit
 ## Hazard maps
 
 The asset panel can show a map around the asset. It answers where the flood plain is, or where
-wildfire, tropical cyclones or large hail are likely, which a single point's numbers can't. **Open larger map** opens the same map,
+wildfire, tropical cyclones, large hail or drought are likely, which a single point's numbers can't. **Open larger map** opens the same map,
 hazard and period full-size in a new tab. Each map's legend, no-data key and note come from the
 layer itself. Read it, at any size, with these limits:
 
-- **Only river flood, coastal flood, wildfire, tropical cyclone wind and hail.** physrisk's maps of
-  heat and drought aren't public, so these hazards are listed but can't be chosen. The
+- **Only river flood, coastal flood, wildfire, tropical cyclone wind, hail and drought.**
+  physrisk's maps of heat aren't public, so heat is listed but can't be chosen. The
   `hazard_map_layers` setting can turn maps off.
 - **A clear area means no data**, not no risk: no flood in the flood maps, ocean or no data in the
   wildfire map, no tropical cyclone in the wind map, and no data (most open ocean, and Antarctica)
-  in the hail map.
+  in the hail map, and open water (or, rarely, no months below the threshold) in the drought map.
 
 ### Flood
 
@@ -285,6 +285,28 @@ physrisk's hail losses use. It reads the array anonymously from physrisk's publi
 - **A low or empty area is not proof of low risk.**
 - **Source:** Jupiter Intelligence, via OS-Climate physrisk, which lists its licence as
   "Commercial".
+
+### Drought
+
+The app draws this map itself from OS-Climate's drought indicator, the 12-month SPEI data that
+physrisk's drought model reads. It reads the array anonymously from physrisk's public bucket.
+
+- **The value is how many months a year the 12-month Standardized Precipitation Evapotranspiration
+  Index is below −2**, "extreme drought" on the SPEI scale. It's a 20-year mean, across several
+  climate models (`multi_model_0`, the combination physrisk picks).
+- **physrisk models no drought loss for buildings.** Its only drought model is for disruption to
+  manufacturing, which starts at SPEI −2. So the map shows the hazard, while the results show
+  "No model" for drought, not a low score.
+- **Every default scenario and year has a map**: SSP2-4.5 and SSP5-8.5 for 2030, 2050 and 2080, and
+  a 2005 baseline (SSP1-2.6 too). There's no SSP3-7.0.
+- **The baseline is much milder than the projections.** SPEI is measured against the past climate,
+  so months below −2 are rare in 2005 and common later in drying regions.
+- **A clear area is open water**, which the data stores as 0, so the app draws every 0 clear. A
+  land cell with no months below −2 is also clear, but that's rare.
+- **About 28 km pixels** (0.25°), drawn as blocks, from 90° N to 60° S, so the map shows the region,
+  not the property.
+- **A low or empty area is not proof of low risk.**
+- **Source:** OS-Climate physrisk's drought indicators. physrisk lists no licence for them.
 
 **Use it to** screen many sites and find which deserve a closer look. **Don't use it for** decisions
 about a single site, or for currency estimates of loss.

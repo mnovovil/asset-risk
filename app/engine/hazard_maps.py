@@ -1,4 +1,4 @@
-"""Hazard map tiles around an asset: flood from physrisk, and wildfire, wind and hail from S3.
+"""Hazard map tiles around an asset: flood from physrisk, and the other hazards drawn from S3.
 
 Each layer describes itself (its measure, units, no-data label, note and source), so the dashboard
 shows whatever a layer says and holds no hazard wording of its own. Every layer serves 512 px PNG
@@ -25,6 +25,11 @@ wind_map.py. It has a historical baseline and 2050 for ssp119, ssp245 and ssp585
 Hail is read from Jupiter Intelligence's public large-hail array, the one physrisk's hail losses
 use: see hail_map.py. Like wildfire, it has no historical baseline and covers ssp126 and ssp585
 only. It isn't rescaled, but physrisk counts about 1 in 50 of its potential hail days as damaging.
+
+Drought is read from OS-Climate's public 12-month SPEI array (multi_model_0), the indicator
+physrisk's drought model reads: see drought_map.py. It covers every default scenario and year and
+a 2005 baseline, shows months below SPEI -2, and draws open water (stored as 0) clear. physrisk
+models no drought loss for buildings, only manufacturing disruption.
 """
 
 from __future__ import annotations
@@ -33,7 +38,7 @@ from dataclasses import dataclass, fields
 from types import SimpleNamespace
 from typing import Protocol, cast
 
-from engine import fire_map, hail_map, wind_map
+from engine import drought_map, fire_map, hail_map, wind_map
 from engine.assess import HISTORICAL, HISTORICAL_YEAR, _physrisk_lock, default_requester
 from engine.fire_map import HazardMapConfigError
 from engine.grid_layer import GridSettings
@@ -191,7 +196,7 @@ FLOOD_LAYERS = (
 
 LAYERS: dict[str, MapLayer] = {}
 # Settings' own defaults for its hazard map fields, which every one of them has.
-_MAP_FIELDS = ("hazard_map", "fire_map", "wind_map", "hail_map")
+_MAP_FIELDS = ("hazard_map", "fire_map", "wind_map", "hail_map", "drought_map")
 _DEFAULTS = SimpleNamespace(
     **{f.name: f.default for f in fields(Settings) if f.name.startswith(_MAP_FIELDS)}
 )
@@ -200,8 +205,8 @@ _DEFAULTS = SimpleNamespace(
 def configure(settings: Settings | SimpleNamespace | None = None) -> dict[str, MapLayer]:
     """Build the layers from the run settings (None: the code's defaults, every layer on).
 
-    LAYERS is updated in place, in the order flood, wildfire, wind, hail, keeping only enabled
-    layers.
+    LAYERS is updated in place, in the order flood, wildfire, wind, hail, drought, keeping only
+    enabled layers.
     """
     global _cache
     s = settings if settings is not None else _DEFAULTS
@@ -218,6 +223,7 @@ def configure(settings: Settings | SimpleNamespace | None = None) -> dict[str, M
         fire_map.configure(s.fire_map_path, s.fire_map_max_zoom, grid),
         wind_map.configure(s.wind_map_path, s.wind_map_max_zoom, grid),
         hail_map.configure(s.hail_map_path, s.hail_map_max_zoom, grid),
+        drought_map.configure(s.drought_map_path, s.drought_map_max_zoom, grid),
     ]
     LAYERS.clear()
     LAYERS.update({layer.hazard: layer for layer in built if layer.hazard in s.hazard_map_layers})
