@@ -62,6 +62,9 @@ export const getConfig = (signal?: AbortSignal) => request<AppConfig>("/config",
 export const getFloodZoneDefinitions = (signal?: AbortSignal) =>
   request<FloodZoneDefinitions>("/flood-zone-definitions", { signal });
 
+/** Every portfolio run, newest first. */
+export const listRuns = (signal?: AbortSignal) => request<RunStatus[]>("/runs", { signal });
+
 export const getRun = (runId: string, signal?: AbortSignal) =>
   request<RunStatus>(`/runs/${encodeURIComponent(runId)}`, { signal });
 

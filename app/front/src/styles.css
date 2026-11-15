@@ -274,6 +274,55 @@ progress {
   margin: 0 auto;
 }
 
+/* Portfolios */
+.page-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.portfolios th[scope="row"] a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.status {
+  display: block;
+  font-weight: 600;
+}
+
+.status-completed {
+  color: var(--success);
+}
+
+.status-failed {
+  color: var(--error);
+}
+
+.status-error {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.empty-state {
+  padding: 24px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.empty-state p + p {
+  margin-top: 8px;
+}
+
 /* Dashboard */
 .filters {
   display: flex;

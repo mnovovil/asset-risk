@@ -13,9 +13,9 @@ function RunStub() {
 
 function renderPage() {
   render(
-    <MemoryRouter initialEntries={["/"]}>
+    <MemoryRouter initialEntries={["/upload"]}>
       <Routes>
-        <Route path="/" element={<UploadPage />} />
+        <Route path="/upload" element={<UploadPage />} />
         <Route path="/runs/:runId" element={<RunStub />} />
       </Routes>
     </MemoryRouter>,
