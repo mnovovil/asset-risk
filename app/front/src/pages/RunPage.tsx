@@ -11,7 +11,7 @@ export function RunPage() {
   return (
     <section aria-labelledby="run-heading" className={run?.status === "completed" ? "" : "narrow"}>
       <p>
-        <Link to="/">← New portfolio</Link>
+        <Link to="/">← All portfolios</Link>
       </p>
       <h1 id="run-heading">{run?.source_name ?? "Portfolio run"}</h1>
       {error && (
