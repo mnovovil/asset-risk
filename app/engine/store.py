@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import uuid
@@ -15,6 +16,8 @@ import duckdb
 SQL_DIR = Path(__file__).parent / "sql"
 GEOLOCATED_CSV = "geolocated.csv"
 DATABASE = "run.duckdb"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -110,6 +113,21 @@ def all_runs(data_dir: str | os.PathLike[str]) -> list[Run]:
     ]
 
 
+def readable_runs(data_dir: str | os.PathLike[str]) -> Iterator[tuple[Run, dict]]:
+    """Each run with its status, skipping any whose database can't be read.
+
+    A folder can be corrupt, or caught while create_run is still writing its schema, and one such
+    folder must not stop the others from being listed or the API from starting.
+    """
+    for run in all_runs(data_dir):
+        try:
+            state = status(run)
+        except (duckdb.Error, LookupError) as e:
+            logger.warning("Skipping run %s: its database can't be read (%s)", run.run_id, e)
+            continue
+        yield run, state
+
+
 def set_status(run: Run, status: str, stage: str | None = None, error: str | None = None) -> None:
     """Record where the run is. Progress within the stage restarts at zero."""
     with run.connect() as con:
@@ -140,4 +158,7 @@ def summary(run: Run) -> dict:
 def _one_row(con: duckdb.DuckDBPyConnection, sql: str) -> dict:
     cursor = con.execute(sql)
     names = [d[0] for d in cursor.description]
-    return dict(zip(names, cursor.fetchone(), strict=True))
+    row = cursor.fetchone()
+    if row is None:
+        raise LookupError("the query returned no row")
+    return dict(zip(names, row, strict=True))

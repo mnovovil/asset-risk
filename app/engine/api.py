@@ -150,6 +150,16 @@ def _without_path(message: str, path: str) -> str:
     return message.replace(f"{path} ", "The file ").replace(path, "the file")
 
 
+@router.get("/runs")
+def list_runs(settings: SettingsDep, queue: QueueDep) -> list[schemas.RunStatus]:
+    """Every portfolio run, newest first. A run whose database can't be read is left out."""
+    runs = [
+        schemas.RunStatus(**state, queue_position=queue.position(run.run_id))
+        for run, state in store.readable_runs(settings.data_dir)
+    ]
+    return sorted(runs, key=lambda r: r.created_at, reverse=True)
+
+
 @router.get("/runs/{run_id}")
 def get_run(run: RunDep, queue: QueueDep) -> schemas.RunStatus:
     return _status(run, queue)
@@ -333,8 +343,8 @@ class _SinglePageApp(StaticFiles):
 
 def _mark_interrupted(data_dir: Path) -> None:
     """Work is held in memory, so anything unfinished at startup can never finish."""
-    for run in store.all_runs(data_dir):
-        if store.status(run)["status"] in ("queued", "running"):
+    for run, state in store.readable_runs(data_dir):
+        if state["status"] in ("queued", "running"):
             store.set_status(run, "interrupted", error=INTERRUPTED_MESSAGE)
 
 

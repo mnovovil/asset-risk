@@ -39,8 +39,8 @@ For FEMA flood zones on US assets, build their database once from FEMA's flood h
 [Data sources](docs/data-sources.md#fema-flood-zones)). Without it, runs work as usual and show the
 zones as unavailable.
 
-Open the address and drop in a CSV. The page has a sample to download, and your file needs a header
-with these columns:
+Open the address to see every portfolio assessed so far, then choose **New portfolio** and drop in
+a CSV. The upload page has a sample to download, and your file needs a header with these columns:
 
 ```csv
 id,lat,lon

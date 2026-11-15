@@ -181,3 +181,14 @@ describe("RunPage", () => {
     expect(polls).toHaveBeenCalledTimes(count);
   });
 });
+
+describe("RunPage navigation", () => {
+  it("links back to every portfolio", async () => {
+    stubPolls(runStatus({ status: "failed", error: "S3 is down" }));
+    renderPage();
+    expect(await screen.findByRole("link", { name: "← All portfolios" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+  });
+});
