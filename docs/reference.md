@@ -68,6 +68,7 @@ npm --prefix app/front ci && npm --prefix app/front run build
 
 Runs go to `data/` here, and to the `asset-risk_data` volume in Docker. They don't see each other.
 To remove Docker's runs, use `docker compose -f docker/compose.yml down --volumes`.
+To remove one run, use **Delete** on its card on the Portfolios page, or `DELETE /api/runs/{id}`.
 
 ## API
 
@@ -79,6 +80,8 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `POST /api/runs` | Upload a CSV as the `file` field. Returns 202, or 413 or 422 with the reason |
 | `GET /api/runs` | Every run's status, newest first, as on the Portfolios page at `/`. A run whose database can't be read is left out and logged |
 | `GET /api/runs/{id}` | Status, stage, progress and any error |
+| `DELETE /api/runs/{id}` | Delete a run and its results for good. 204, or 409 while it's queued or running, or while its database is in use |
+| `GET /api/runs/{id}/overview` | What the Portfolios page's card needs: summary, trajectory, clusters and the placeable assets' `row_num`, `lat` and `lon`. The card shows the scenario and year the dashboard opens on, so its figures match the dashboard |
 | `GET /api/runs/{id}/summary` | Counts, exclusions and shared hazards |
 | `GET /api/runs/{id}/assets`, `.../assets/{row_num}` | Assets, or one with its footprint and results |
 | `GET /api/runs/{id}/clusters` | DBSCAN clusters with their members, centre and bounds. Empty when none was found |
