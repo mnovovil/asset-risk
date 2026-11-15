@@ -15,6 +15,23 @@ function describe(asset: Asset, row: AssetRow | undefined, colorBy: string): str
   return `${hazardLabel(colorBy)}: ${row?.scores[colorBy]?.label ?? "No result"}`;
 }
 
+/** How the map frames the portfolio when it opens: shared by the dashboard map and thumbnails. */
+export const FIT_PADDING_PX = 48;
+export const MAX_FIT_ZOOM = 11;
+
+/** The west-south and east-north corners around points, or null when there are none. */
+export function boundsOf(
+  coordinates: [number, number][],
+): [[number, number], [number, number]] | null {
+  if (coordinates.length === 0) return null;
+  const lons = coordinates.map(([lon]) => lon);
+  const lats = coordinates.map(([, lat]) => lat);
+  return [
+    [Math.min(...lons), Math.min(...lats)],
+    [Math.max(...lons), Math.max(...lats)],
+  ];
+}
+
 /** The losses the colour classes are drawn from: assets with a result only. */
 export const totalsOf = (rows: AssetRow[]) =>
   rows.flatMap((row) => (row.total === null ? [] : [row.total]));

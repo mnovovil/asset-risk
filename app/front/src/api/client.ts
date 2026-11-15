@@ -15,6 +15,8 @@ export type HazardMapLayer = components["schemas"]["HazardMapLayer"];
 export type Impact = components["schemas"]["Impact"];
 export type Score = components["schemas"]["Score"];
 export type TrajectoryPoint = components["schemas"]["TrajectoryPoint"];
+export type MapPoint = components["schemas"]["MapPoint"];
+export type RunOverview = components["schemas"]["RunOverview"];
 
 /** A scenario and year that were assessed. The historical baseline has year null. */
 export interface Pair {
@@ -90,6 +92,10 @@ export const getAssets = (runId: string, signal?: AbortSignal) =>
 
 export const getClusters = (runId: string, signal?: AbortSignal) =>
   request<Cluster[]>(`${runPath(runId)}/clusters`, { signal });
+
+/** What a portfolio's card needs: counts, trajectory, clusters and where the assets are. */
+export const getOverview = (runId: string, signal?: AbortSignal) =>
+  request<RunOverview>(`${runPath(runId)}/overview`, { signal });
 
 export const getAsset = (runId: string, rowNum: number, signal?: AbortSignal) =>
   request<AssetDetail>(`${runPath(runId)}/assets/${rowNum}`, { signal });

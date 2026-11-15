@@ -283,9 +283,237 @@ progress {
   justify-content: space-between;
 }
 
-.portfolios th[scope="row"] a {
-  font-weight: 600;
+.portfolios-page .page-heading h1 {
+  margin-bottom: 4px;
+  font-size: 2rem;
+  letter-spacing: -0.01em;
+}
+
+.portfolios-page .lede {
+  max-width: 64ch;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portfolio-grid > li {
+  display: flex;
+  min-width: 0;
+}
+
+.portfolio-card {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.portfolio-card:hover,
+.portfolio-card:focus-within {
+  border-color: var(--axis);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 10%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .portfolio-card:hover,
+  .portfolio-card:focus-within {
+    transform: translateY(-2px);
+  }
+}
+
+.portfolio-card:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card-header {
+  order: 1;
+  padding: 16px 16px 0;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.35;
+}
+
+.card-link {
+  color: var(--ink);
+  text-decoration: none;
   overflow-wrap: anywhere;
+}
+
+/* The whole card is the link's target. */
+.card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.card-link:focus-visible {
+  outline: none;
+}
+
+.portfolio-card:hover .card-link {
+  text-decoration: underline;
+}
+
+.card-meta {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.card-meta .status {
+  display: inline;
+}
+
+/* The map sits on top, though the heading comes first for screen readers. */
+.card-results {
+  display: contents;
+}
+
+.card-map {
+  position: relative;
+  order: 0;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.card-map-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-map-attribution {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  max-width: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  border-top-left-radius: 4px;
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  color: var(--muted);
+  font-size: 0.625rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.card-map-placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card-map-loading {
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      color-mix(in srgb, var(--line) 60%, transparent) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: card-shimmer 1.4s linear infinite;
+  }
+}
+
+@keyframes card-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.card-map-offscreen {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  pointer-events: none;
+}
+
+.card-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  height: 100%;
+  padding: 16px 20px;
+}
+
+.card-pending progress {
+  width: 100%;
+}
+
+.card-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  order: 2;
+  margin: 0;
+  padding: 16px;
+}
+
+.card-figure dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.card-figure dd {
+  margin: 2px 0 0;
+}
+
+.card-figure-value {
+  display: block;
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-figure-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.card-figure-warning .card-figure-value,
+.card-figure-warning .card-figure-note {
+  color: var(--warning);
+}
+
+.card-message {
+  order: 2;
+  margin: 0;
+  padding: 16px;
 }
 
 .status {
