@@ -206,7 +206,7 @@ After changing the API, regenerate the front end's types:
 .venv/bin/python script/export_openapi.py && npm --prefix app/front run gen:api
 ```
 
-After a visible change to the app, record the README's GIF again. Each new version stays in git
+After a visible change to the app, record the demo GIF again. Each new version stays in git
 history, so don't do this for small changes:
 
 ```bash
@@ -227,11 +227,23 @@ wind layer isn't in `hazard_map_layers` or has no map for the period, or its haz
 tile. Without `--build` it reuses the existing image. The upload and progress screens get one short
 frame per stage the page shows as current, and it reports those stages.
 
-A narrated 60-second video of the same tour is made the same way. It isn't committed:
+A narrated 60-second video of the same tour is made the same way, and the README shows it. It
+isn't committed:
 
 ```bash
 uv run script/record_video.py --build        # writes docs/assets/demo.mp4
 uv run script/record_video.py --voice-only   # just voice the narration and time the scenes
+```
+
+GitHub only plays a README video from its own attachments: drag the file into a comment box on
+GitHub and use the `https://github.com/user-attachments/assets/...` link it gives. Free plans take
+videos up to 10 MB, so the README's copy is cut to 53 s, inside the end card, and encoded in two
+passes at 1.45 Mbit/s:
+
+```bash
+ffmpeg -i docs/assets/demo.mp4 -t 53 -c:v libx264 -preset veryslow -b:v 1450k -pass 1 -an -f mp4 /dev/null
+ffmpeg -i docs/assets/demo.mp4 -t 53 -c:v libx264 -preset veryslow -b:v 1450k -pass 2 \
+  -pix_fmt yuv420p -c:a aac -b:a 160k -movflags +faststart demo-github.mp4
 ```
 
 It reuses the GIF script's stack, upload and map steps, so it needs the same things, plus torch
