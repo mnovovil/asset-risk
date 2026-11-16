@@ -10,22 +10,6 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 
 https://github.com/user-attachments/assets/97d704e0-aa61-42ec-8060-1aaca6f5165f
 
-*A real run of the [demo portfolio](docs/assets/demo_portfolio.csv), 500 properties in the USA and
-Spain, narrated and subtitled. After the upload, the dashboard shows the portfolio's figures and a
-map of where risk concentrates. New Orleans is opened because it has some of the portfolio's
-highest flood and wind losses: scoring below it doesn't make an asset low risk. The asset shown,
-`US-312`, is by the French Quarter. Its panel shows how it was modelled, its annual loss by hazard
-and over time by scenario, and its FEMA flood zone, a shaded Zone X behind the levees, with what
-that zone means for flood insurance. It then shows physrisk's 1-in-1000-year river and coastal
-flood maps, zoomed out to all of southern Louisiana, and its wildfire, 1-in-100-year tropical
-cyclone wind and large hail maps on the same view. Change over time compares SSP2-4.5 and SSP5-8.5
-on the hazards both have: river flood, coastal flood and wind. Its figures are screening estimates
-for illustration, and its flood zone is not an official determination. Voice by Kokoro-82M. Map
-data © OpenStreetMap contributors, via OpenFreeMap and OpenMapTiles. Flood maps from WRI Aqueduct
-Floods, via physrisk. Wildfire and hail maps from Jupiter Intelligence and wind map from IRIS, the
-Imperial College Storm Model, all via physrisk. Flood zones from FEMA's National Flood Hazard
-Layer.*
-
 ## Quick start
 
 You need Docker, [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.3 or OpenTofu,
@@ -126,3 +110,13 @@ gitGraph
 ## License
 
 [MIT](LICENSE). `vendor/geolocate`, physrisk and the data sources have their own terms.
+
+## About the demo video
+
+A real run of the [demo portfolio](docs/assets/demo_portfolio.csv), 500 properties in the USA and
+Spain. Its figures are screening estimates, its flood zone isn't an official determination, and a
+low score doesn't make an asset low risk.
+
+Voice by Kokoro-82M. Map data © OpenStreetMap contributors, via OpenFreeMap and OpenMapTiles.
+Hazard maps from WRI Aqueduct Floods, Jupiter Intelligence and IRIS, via physrisk. Flood zones
+from FEMA's National Flood Hazard Layer.
