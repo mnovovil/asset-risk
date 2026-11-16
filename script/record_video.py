@@ -204,14 +204,8 @@ SCENES = (
         "Compare scenarios on the hazards they share.",
         (Beat("trajectory", section("Change over time")),),
     ),
-    Scene(
-        "And see exactly how far to trust the results. Asset Risk: know where your portfolio is "
-        "exposed.",
-        (
-            Beat("trust", section("How far to trust these results")),
-            Beat("end", whole_frame, "Asset"),
-        ),
-    ),
+    # Straight from the comparison to the end card, without the trust section.
+    Scene("Asset Risk: know where your portfolio is exposed.", (Beat("end", whole_frame),)),
 )
 BEATS = [beat for scene in SCENES for beat in scene.beats]
 BEAT_INDEX = {beat.key: index for index, beat in enumerate(BEATS)}
@@ -498,8 +492,6 @@ def record(folder: Path) -> list[Shot]:
         demo.close_panel(page, panel)
         rec.caption("", "trajectory")
         rec.scroll_to("Change over time", 4)
-        rec.caption("", "trust")
-        rec.scroll_to("How far to trust these results", 5)
         rec.caption("", "end")
         page.evaluate(END_CARD, ["Asset Risk", repo_url()])
         rec.shot(4)
