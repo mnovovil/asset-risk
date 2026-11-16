@@ -27,3 +27,6 @@ infra/.terraform.lock.hcl
 # Front end
 node_modules/
 dist/
+
+# The narrated demo video: made by script/record_video.py, not committed
+docs/assets/demo.mp4

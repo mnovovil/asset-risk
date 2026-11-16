@@ -206,7 +206,7 @@ After changing the API, regenerate the front end's types:
 .venv/bin/python script/export_openapi.py && npm --prefix app/front run gen:api
 ```
 
-After a visible change to the app, record the README's GIF again. Each new version stays in git
+After a visible change to the app, record the demo GIF again. Each new version stays in git
 history, so don't do this for small changes:
 
 ```bash
@@ -226,6 +226,41 @@ be clicked on the map, isn't mapped in a levee-protected Zone X as its caption s
 wind layer isn't in `hazard_map_layers` or has no map for the period, or its hazard maps load no
 tile. Without `--build` it reuses the existing image. The upload and progress screens get one short
 frame per stage the page shows as current, and it reports those stages.
+
+A narrated 60-second video of the same tour is made the same way, and the README shows it. It
+isn't committed:
+
+```bash
+uv run script/record_video.py --build        # writes docs/assets/demo.mp4
+uv run script/record_video.py --voice-only   # just voice the narration and time the scenes
+```
+
+GitHub only plays a README video from its own attachments: drag the file into a comment box on
+GitHub and use the `https://github.com/user-attachments/assets/...` link it gives. Free plans take
+videos up to 10 MB, so the README's copy is cut to 53 s, inside the end card, and encoded in two
+passes at 1.45 Mbit/s:
+
+```bash
+ffmpeg -i docs/assets/demo.mp4 -t 53 -c:v libx264 -preset veryslow -b:v 1450k -pass 1 -an -f mp4 /dev/null
+ffmpeg -i docs/assets/demo.mp4 -t 53 -c:v libx264 -preset veryslow -b:v 1450k -pass 2 \
+  -pix_fmt yuv420p -c:a aac -b:a 160k -movflags +faststart demo-github.mp4
+```
+
+It reuses the GIF script's stack, upload and map steps, so it needs the same things, plus torch
+(CPU) and the Kokoro-82M weights, which the first run downloads. The narration is in `SCENES` in
+the script. Each line is voiced with Kokoro (voice `af_heart`, or `--voice`) and cached in
+`~/.cache/asset-risk/voice`. A scene lasts as long as its line plus 0.4 s, and its beats land on
+the words Kokoro times. Over 60 s, the padding shrinks to 0.2 s and then the voice speeds up to
+1.1, and past that the script stops rather than cut a line. Under 58 s, the end card is held
+longer. The page is recorded at 1920x1080 and device scale 2, map animations are stepped at 30 fps
+on Playwright's fake clock, and each shot keeps the box of the element its line is about. Pillow
+zooms in on those boxes (at most 2.2x) only for the upload and the asset panel, whose text is too
+small at full frame, and only moves the camera when the box changes. ffmpeg burns in the narration
+as subtitles and
+normalises the voice to -16 LUFS. `--frames DIR` keeps the shots, and `--from-frames DIR` makes
+the video again from them without Docker or the browser. It stops for the same reasons as the GIF
+script, and also if the dashboard's sections are recorded in another order than the
+narration's.
 
 `script/overture_values.py` audits the building type map against a live release, and
 `script/build_regions.py` rebuilds the region data.

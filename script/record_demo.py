@@ -31,12 +31,14 @@ import sys
 import tempfile
 import time
 from collections import Counter
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import imageio_ffmpeg
+from playwright.sync_api import Browser, Locator, Page, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Locator, Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 # 500 properties in the USA and Spain: 13 dense metro clusters and 48 isolated towns.
@@ -127,12 +129,19 @@ class Frame:
 
 
 class Recorder:
+    """Takes the GIF's frames. record_video.py subclasses it to take the video's."""
+
+    scroll_steps = SCROLL_STEPS
+    scroll_step_seconds = SCROLL_STEP_SECONDS
+
     def __init__(self, page: Page, folder: Path):
         self.page = page
         self.folder = folder
         self.frames: list[Frame] = []
 
-    def caption(self, text: str) -> None:
+    def caption(self, text: str, beat: str, point: tuple[float, float] | None = None) -> None:
+        """Show the caption. `beat` names what's on screen and `point` is a spot on the page it's
+        about: the GIF ignores both, and record_video.py zooms into them."""
         self.page.evaluate(SHOW_CAPTION, text)
 
     def click(self, target: Locator) -> None:
@@ -146,7 +155,8 @@ class Recorder:
         self.page.mouse.move(0, 0)
         self.page.evaluate(HIDE_MAP_POPUP)
 
-    def shot(self, seconds: float) -> None:
+    def shot(self, seconds: float, motion: bool = False) -> None:
+        """Take a frame shown for `seconds`. `motion` marks a step of a scroll or an animation."""
         path = self.folder / f"{len(self.frames):04d}.png"
         self.page.screenshot(path=path)
         # Identical frames add to the file for nothing, so hold the last one for longer.
@@ -155,6 +165,19 @@ class Recorder:
             path.unlink()
         else:
             self.frames.append(Frame(path, seconds))
+
+    @contextmanager
+    def motion(self) -> Iterator[None]:
+        """Around an animation taken with advance(). The video steps the page's clock in here."""
+        yield
+
+    def wait(self, seconds: float) -> None:
+        self.page.wait_for_timeout(seconds * 1000)
+
+    def advance(self, seconds: float) -> None:
+        """Let an animation run for `seconds`, then take a frame of it."""
+        self.wait(seconds)
+        self.shot(seconds, motion=True)
 
     def scroll_to(self, heading: str, hold: float) -> None:
         """Scroll in steps so a viewer keeps their place, then hold on the section."""
@@ -166,10 +189,13 @@ class Recorder:
 
     def scroll_to_y(self, target: float, hold: float) -> None:
         start = self.page.evaluate("scrollY")
-        for step in range(1, SCROLL_STEPS + 1):
-            y = start + (target - start) * step / SCROLL_STEPS
+        for step in range(1, self.scroll_steps + 1):
+            y = start + (target - start) * step / self.scroll_steps
             self.page.evaluate("y => window.scrollTo({top: y, behavior: 'instant'})", y)
-            self.shot(hold if step == SCROLL_STEPS else SCROLL_STEP_SECONDS)
+            if step == self.scroll_steps:
+                self.shot(hold)
+            else:
+                self.shot(self.scroll_step_seconds, motion=True)
 
 
 def flood_zones_file() -> Path:
@@ -217,10 +243,10 @@ INTRO_CAPTION = "Upload a CSV of id, lat, lon: each building is found, classifie
 
 
 def record_upload(rec: Recorder) -> None:
-    rec.page.goto(BASE)
+    rec.page.goto(f"{BASE}/upload")
     rec.page.get_by_role("heading", name="Assess a portfolio").wait_for()
     rec.page.wait_for_load_state("networkidle")
-    rec.caption(INTRO_CAPTION)
+    rec.caption(INTRO_CAPTION, "upload")
     rec.page.locator('input[type="file"]').set_input_files(SAMPLE)
     start = rec.page.get_by_role("button", name="Assess this portfolio")
     start.wait_for()
@@ -232,7 +258,7 @@ def record_upload(rec: Recorder) -> None:
 def record_progress(rec: Recorder) -> list[str]:
     """Take one short frame per stage the page shows as current, returning those stages."""
     page = rec.page
-    rec.caption(INTRO_CAPTION)
+    rec.caption(INTRO_CAPTION, "stages")
     current_stage = page.locator('.stage-label[aria-current="step"]')
     finished = page.get_by_role("heading", name="Where the risk is")
     seen: list[str] = []
@@ -351,7 +377,9 @@ def find_bubble(bubbles: list[dict], clusters: list[dict], target: dict) -> dict
 def record_clusters(rec: Recorder) -> dict:
     """Show the opening bubbles, open New Orleans', and return that cluster."""
     page = rec.page
-    rec.caption("Where the risk is: groups of nearby assets, from green (lowest) to red (highest)")
+    rec.caption(
+        "Where the risk is: groups of nearby assets, from green (lowest) to red (highest)", "map"
+    )
     rec.scroll_to("Where the risk is", 4)
     clusters = api(page, "clusters")
     target = next((c for c in clusters if contains(c["bounds"], FOCUS_LAT, FOCUS_LON)), None)
@@ -366,23 +394,26 @@ def record_clusters(rec: Recorder) -> dict:
     )
     page.mouse.move(bubble["x"], bubble["y"])
     page.wait_for_timeout(300)
-    rec.caption(f"{FOCUS_NAME}: the bubble's mean, and how many of its assets have results")
+    spot = (bubble["x"], bubble["y"])
+    rec.caption(
+        f"{FOCUS_NAME}: the bubble's mean, and how many of its assets have results", "bubble", spot
+    )
     rec.shot(4)
-    rec.caption("Click a bubble to zoom in to its assets")
-    rec.click_at(bubble["x"], bubble["y"])
-    for _ in range(ZOOM_FRAMES):
-        page.wait_for_timeout(ZOOM_FRAME_SECONDS * 1000)
-        rec.shot(ZOOM_FRAME_SECONDS)
+    rec.caption("Click a bubble to zoom in to its assets", "fly")
+    with rec.motion():
+        rec.click_at(*spot)
+        for _ in range(ZOOM_FRAMES):
+            rec.advance(ZOOM_FRAME_SECONDS)
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
     fail_on_alert(page)
-    rec.caption(f"Every asset in {FOCUS_NAME}, coloured by its own annual loss")
+    rec.caption(f"Every asset in {FOCUS_NAME}, coloured by its own annual loss", "assets")
     rec.shot(4)
     return target
 
 
-def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
-    """Click the focus asset on the map, and return the panel it opens."""
+def open_focus_asset(rec: Recorder, cluster: dict) -> tuple[Locator, int]:
+    """Click the focus asset on the map, and return the panel it opens and the asset's row."""
     page = rec.page
     bubbles, points = scan_map(page)
     if bubbles or not points:
@@ -397,7 +428,11 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     page.wait_for_timeout(300)
     if page.locator(".maplibregl-popup strong").first.text_content() != FOCUS_ASSET:
         raise RuntimeError(f"hovering {FOCUS_ASSET}'s point shows another asset")
-    rec.caption(f"Click an asset to see its details: {FOCUS_ASSET}, in the Mississippi")
+    rec.caption(
+        f"Click an asset to see its details: {FOCUS_ASSET}, in the Mississippi",
+        "asset",
+        (point["x"], point["y"]),
+    )
     rec.shot(3)
     rec.click_at(point["x"], point["y"])
     panel = page.get_by_role("dialog", name="Asset details")
@@ -410,17 +445,19 @@ def open_focus_asset(rec: Recorder, cluster: dict) -> Locator:
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
     fail_on_alert(page)
-    rec.caption("Its building, and how it was modelled")
+    rec.caption("Its building, and how it was modelled", "modelled")
     rec.shot(4)
-    record_flood_zone(rec, panel, rows[0])
-    rec.caption("Its loss by hazard")
+    return panel, rows[0]
+
+
+def record_asset_results(rec: Recorder, panel: Locator) -> None:
+    rec.caption("Its loss by hazard", "loss")
     scroll_panel_to(panel, "Results for")
     rec.shot(4)
-    rec.caption("Its annual loss over time, by scenario, one hazard at a time")
+    rec.caption("Its annual loss over time, by scenario, one hazard at a time", "over_time")
     scroll_panel_to(panel, "Over time")
-    page.wait_for_timeout(500)
+    rec.page.wait_for_timeout(500)
     rec.shot(5)
-    return panel
 
 
 def record_flood_zone(rec: Recorder, panel: Locator, row_num: int) -> None:
@@ -432,11 +469,11 @@ def record_flood_zone(rec: Recorder, panel: Locator, row_num: int) -> None:
     # The caption says so, so check it: FEMA's subtype for a shaded Zone X behind a levee.
     if "LEVEE" not in (asset.get("fema_zone_subtype") or ""):
         raise RuntimeError(f"{FOCUS_ASSET} isn't in a levee-protected FEMA zone any more")
-    rec.caption(f"Its FEMA flood zone: {FOCUS_ASSET} is behind New Orleans' levees")
+    rec.caption(f"Its FEMA flood zone: {FOCUS_ASSET} is behind New Orleans' levees", "zone")
     scroll_panel_to(panel, "FEMA flood zone")
     rec.shot(5)
     explainer = panel.locator("details.twin > summary", has_text="mean?")
-    rec.caption("What the zone means, and whether flood insurance is required")
+    rec.caption("What the zone means, and whether flood insurance is required", "explainer")
     rec.click(explainer)
     explainer.evaluate("e => e.scrollIntoView({block: 'start', behavior: 'instant'})")
     rec.shot(5.5)
@@ -453,7 +490,12 @@ def scroll_panel_to(panel: Locator, heading: str) -> None:
     )
 
 
-def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> None:
+def record_hazard_maps(
+    rec: Recorder,
+    panel: Locator,
+    hazard_tiles: list[str],
+    zoom_out_step_seconds: float = ZOOM_OUT_STEP_SECONDS,
+) -> None:
     """Show river flood around the asset, zoom out to the region, then switch to coastal flood."""
     page = rec.page
     heading = panel.get_by_role("heading", name="Hazard maps", level=3)
@@ -461,14 +503,14 @@ def record_hazard_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -
     heading.evaluate("e => e.scrollIntoView({block: 'start', behavior: 'instant'})")
     for index, (hazard, caption) in enumerate(HAZARD_MAPS):
         panel.get_by_label("Hazard").select_option(hazard)
-        rec.caption(caption)
+        rec.caption(caption, hazard)
         settle_map(page)
         # A tile only loads where physrisk has one: none would mean an empty hazard map.
         if not any(f"/hazard-maps/{hazard}/" in url for url in hazard_tiles):
             raise RuntimeError(f"no {hazard} map tile loaded")
         rec.shot(4.5)
         if index == 0:
-            zoom_out_hazard_map(rec, panel)
+            zoom_out_hazard_map(rec, panel, zoom_out_step_seconds)
     record_grid_maps(rec, panel, hazard_tiles)
 
 
@@ -509,7 +551,7 @@ def record_grid_maps(rec: Recorder, panel: Locator, hazard_tiles: list[str]) -> 
         for hazard, caption in maps:
             before = len(hazard_tiles)
             panel.get_by_label("Hazard").select_option(hazard)
-            rec.caption(f"{caption}, {name}")
+            rec.caption(f"{caption}, {name}", hazard)
             settle_map(page)
             if not any(f"/hazard-maps/{hazard}/" in url for url in hazard_tiles[before:]):
                 raise RuntimeError(f"no {hazard} map tile loaded")
@@ -524,30 +566,29 @@ def settle_map(page: Page) -> None:
     fail_on_alert(page)
 
 
-def zoom_out_hazard_map(rec: Recorder, panel: Locator) -> None:
+def zoom_out_hazard_map(rec: Recorder, panel: Locator, step_seconds: float) -> None:
     """Scroll out over the panel's map until it shows all of southern Louisiana."""
     page = rec.page
     box = panel.locator(".asset-map").bounding_box()
     if box is None:
         raise RuntimeError("the asset panel has no hazard map")
-    rec.caption("Zoom out: physrisk's flood maps cover all of southern Louisiana")
-    # Start at the asset, in the map's centre, so the pointer's spot is the asset's.
-    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    page.mouse.wheel(0, ZOOM_OUT_WHEEL_PX)
-    page.wait_for_timeout(ZOOM_OUT_STEP_SECONDS * 1000)
-    share_x, share_y = ZOOM_OUT_POINTER
-    page.mouse.move(box["x"] + box["width"] * share_x, box["y"] + box["height"] * share_y)
-    for _ in range(ZOOM_OUT_STEPS - 1):
+    rec.caption("Zoom out: physrisk's flood maps cover all of southern Louisiana", "zoom_out")
+    with rec.motion():
+        # Start at the asset, in the map's centre, so the pointer's spot is the asset's.
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
         page.mouse.wheel(0, ZOOM_OUT_WHEEL_PX)
-        page.wait_for_timeout(ZOOM_OUT_STEP_SECONDS * 1000)
-        rec.shot(ZOOM_OUT_STEP_SECONDS)
-    page.mouse.move(0, 0)
+        rec.wait(step_seconds)
+        share_x, share_y = ZOOM_OUT_POINTER
+        page.mouse.move(box["x"] + box["width"] * share_x, box["y"] + box["height"] * share_y)
+        for _ in range(ZOOM_OUT_STEPS - 1):
+            page.mouse.wheel(0, ZOOM_OUT_WHEEL_PX)
+            rec.advance(step_seconds)
+        page.mouse.move(0, 0)
     settle_map(page)
     rec.shot(5)
 
 
-def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[str]) -> None:
-    page = rec.page
+def wait_for_results(page: Page, tiles_loaded: list[str]) -> None:
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
     fail_on_alert(page)
@@ -557,36 +598,47 @@ def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[st
     if "OpenStreetMap" not in page.locator(".maplibregl-ctrl-attrib").inner_text():
         raise RuntimeError("the map's attribution isn't showing")
 
-    rec.caption("The results, including how many building types were assumed")
-    rec.shot(4.5)
-    cluster = record_clusters(rec)
-    panel = open_focus_asset(rec, cluster)
-    record_hazard_maps(rec, panel, hazard_tiles)
+
+def close_panel(page: Page, panel: Locator) -> None:
     page.keyboard.press("Escape")
     panel.wait_for(state="hidden")
-    rec.caption("What drives the loss, against the historical baseline")
+
+
+def record_results(rec: Recorder, tiles_loaded: list[str], hazard_tiles: list[str]) -> None:
+    page = rec.page
+    wait_for_results(page, tiles_loaded)
+    rec.caption("The results, including how many building types were assumed", "figures")
+    rec.shot(4.5)
+    cluster = record_clusters(rec)
+    panel, row_num = open_focus_asset(rec, cluster)
+    record_flood_zone(rec, panel, row_num)
+    record_asset_results(rec, panel)
+    record_hazard_maps(rec, panel, hazard_tiles)
+    close_panel(page, panel)
+    rec.caption("What drives the loss, against the historical baseline", "loss_by_hazard")
     rec.scroll_to("Annual loss by hazard", 3.5)
-    rec.caption('Scores per hazard: "No model" and "No data" are not low risk')
+    rec.caption('Scores per hazard: "No model" and "No data" are not low risk', "scores")
     rec.scroll_to("Risk by asset and hazard", 4)
-    rec.caption("Change over time, comparing scenarios on shared hazards only")
+    rec.caption("Change over time, comparing scenarios on shared hazards only", "trajectory")
     rec.scroll_to("Change over time", 3.5)
     record_baseline(rec)
-    rec.caption("How far to trust these results: a screening tool, not a site assessment")
+    rec.caption("How far to trust these results: a screening tool, not a site assessment", "trust")
     rec.scroll_to("How far to trust these results", 5.5)
 
 
-def record_baseline(rec: Recorder) -> None:
-    """Switch the whole dashboard to present-day risk."""
+def record_baseline(rec: Recorder, show_loss: bool = True) -> None:
+    """Switch the whole dashboard to present-day risk, then show its loss by hazard."""
     page = rec.page
-    rec.caption("Or see present-day risk: physrisk's historical baseline")
+    rec.caption("Or see present-day risk: physrisk's historical baseline", "baseline")
     rec.scroll_to_y(0, 1.5)
     dashboard_filter(page, "Scenario").select_option(label=BASELINE_LABEL)
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(MAP_SETTLE_SECONDS * 1000)
     fail_on_alert(page)
     rec.shot(4.5)
-    rec.caption("Today's loss by hazard, on the hazards the baseline has")
-    rec.scroll_to("Annual loss by hazard", 4)
+    if show_loss:
+        rec.caption("Today's loss by hazard, on the hazards the baseline has", "baseline_loss")
+        rec.scroll_to("Annual loss by hazard", 4)
 
 
 def encode(frames: list[Frame], folder: Path, output: Path) -> None:
@@ -606,22 +658,32 @@ def encode(frames: list[Frame], folder: Path, output: Path) -> None:
     subprocess.run([*command, "-vf", video_filter, "-loop", "0", str(output)], check=True)
 
 
+def new_page(
+    browser: Browser, viewport: dict = VIEWPORT, device_scale_factor: float = 1
+) -> tuple[Page, list[str], list[str]]:
+    """A page, and the base map and hazard map tiles it loads as it goes."""
+    page = browser.new_page(
+        viewport=viewport, device_scale_factor=device_scale_factor, color_scheme="light"
+    )
+    tiles_loaded: list[str] = []
+    hazard_tiles: list[str] = []
+
+    def on_response(response) -> None:
+        if not response.ok:
+            return
+        if response.url.endswith(".pbf"):
+            tiles_loaded.append(response.url)
+        elif "/hazard-maps/" in response.url:
+            hazard_tiles.append(response.url)
+
+    page.on("response", on_response)
+    return page, tiles_loaded, hazard_tiles
+
+
 def record(folder: Path, output: Path) -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(args=CHROMIUM_ARGS)
-        page = browser.new_page(viewport=VIEWPORT, color_scheme="light")
-        tiles_loaded: list[str] = []
-        hazard_tiles: list[str] = []
-
-        def on_response(response) -> None:
-            if not response.ok:
-                return
-            if response.url.endswith(".pbf"):
-                tiles_loaded.append(response.url)
-            elif "/hazard-maps/" in response.url:
-                hazard_tiles.append(response.url)
-
-        page.on("response", on_response)
+        page, tiles_loaded, hazard_tiles = new_page(browser)
         rec = Recorder(page, folder)
         record_upload(rec)
         seen = record_progress(rec)
@@ -632,12 +694,8 @@ def record(folder: Path, output: Path) -> None:
     encode(rec.frames, folder, output)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Record the README's demo GIF.")
-    parser.add_argument("--build", action="store_true", help="rebuild the image first")
-    parser.add_argument("--output", type=Path, default=OUTPUT, help="default: %(default)s")
-    args = parser.parse_args()
-
+def with_stack(build: bool, work: Callable[[], None]) -> int:
+    """Start the demo's compose project, do the work, and always take the project down again."""
     try:
         # Inside the try, because a container that fails its health check is still left running.
         flood_zones = flood_zones_file()
@@ -645,16 +703,30 @@ def main() -> int:
             "up",
             "--detach",
             "--wait",
-            *(["--build"] if args.build else []),
+            *(["--build"] if build else []),
             flood_zones=flood_zones,
         )
-        with tempfile.TemporaryDirectory() as folder:
-            record(Path(folder), args.output)
+        work()
     except (RuntimeError, PlaywrightError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     finally:
         compose("down", "--volumes")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Record the README's demo GIF.")
+    parser.add_argument("--build", action="store_true", help="rebuild the image first")
+    parser.add_argument("--output", type=Path, default=OUTPUT, help="default: %(default)s")
+    args = parser.parse_args()
+
+    def work() -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            record(Path(folder), args.output)
+
+    if with_stack(args.build, work):
+        return 1
     print(f"Wrote {args.output} ({args.output.stat().st_size / 1024 / 1024:.1f} MB)")
     return 0
 
