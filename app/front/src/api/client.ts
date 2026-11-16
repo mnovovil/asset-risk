@@ -15,6 +15,8 @@ export type HazardMapLayer = components["schemas"]["HazardMapLayer"];
 export type Impact = components["schemas"]["Impact"];
 export type Score = components["schemas"]["Score"];
 export type TrajectoryPoint = components["schemas"]["TrajectoryPoint"];
+export type MapPoint = components["schemas"]["MapPoint"];
+export type RunOverview = components["schemas"]["RunOverview"];
 
 /** A scenario and year that were assessed. The historical baseline has year null. */
 export interface Pair {
@@ -45,7 +47,7 @@ async function errorFrom(response: Response): Promise<ApiError> {
   return new ApiError(response.status, message);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, init);
@@ -54,7 +56,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(0, "Can't reach the server. Check that it's running.");
   }
   if (!response.ok) throw await errorFrom(response);
-  return (await response.json()) as T;
+  return response;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await (await send(path, init)).json()) as T;
 }
 
 export const getConfig = (signal?: AbortSignal) => request<AppConfig>("/config", { signal });
@@ -79,6 +85,11 @@ export function createRun(file: File): Promise<RunStatus> {
 
 const runPath = (runId: string) => `/runs/${encodeURIComponent(runId)}`;
 
+/** Delete a finished run and its results for good. The server answers 204, with no body. */
+export async function deleteRun(runId: string): Promise<void> {
+  await send(runPath(runId), { method: "DELETE" });
+}
+
 function pairQuery({ scenario, year }: Pair): string {
   const params = new URLSearchParams({ scenario });
   if (year !== null) params.set("year", String(year));
@@ -90,6 +101,10 @@ export const getAssets = (runId: string, signal?: AbortSignal) =>
 
 export const getClusters = (runId: string, signal?: AbortSignal) =>
   request<Cluster[]>(`${runPath(runId)}/clusters`, { signal });
+
+/** What a portfolio's card needs: counts, trajectory, clusters and where the assets are. */
+export const getOverview = (runId: string, signal?: AbortSignal) =>
+  request<RunOverview>(`${runPath(runId)}/overview`, { signal });
 
 export const getAsset = (runId: string, rowNum: number, signal?: AbortSignal) =>
   request<AssetDetail>(`${runPath(runId)}/assets/${rowNum}`, { signal });

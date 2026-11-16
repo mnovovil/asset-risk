@@ -1,61 +1,41 @@
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { RunStatus } from "@/api/client";
+
+import { PortfolioCard } from "@/components/portfolios/PortfolioCard";
 import { useRuns } from "@/hooks/useRuns";
-import { count } from "@/lib/format";
-
-const STAGE_LABELS: Record<string, string> = {
-  geolocating: "geolocating",
-  classifying: "classifying",
-  flood_zones: "looking up flood zones",
-  assessing: "assessing",
-};
-
-/** Said in words, so a status never depends on its colour. */
-function statusText(run: RunStatus): string {
-  switch (run.status) {
-    case "completed":
-      return "Results ready";
-    case "queued":
-      return run.queue_position != null
-        ? `Waiting to start (number ${run.queue_position} in the queue)`
-        : "Waiting to start";
-    case "running": {
-      const stage = run.stage ? STAGE_LABELS[run.stage] ?? run.stage : null;
-      const progress = run.total > 0 ? ` (${count(run.done)} of ${count(run.total)})` : "";
-      return stage ? `Running: ${stage}${progress}` : "Running";
-    }
-    case "failed":
-      return "Failed";
-    case "interrupted":
-      return "Didn't finish";
-    default:
-      return run.status;
-  }
-}
-
-const STATUS_CLASS: Record<string, string> = {
-  completed: "status status-completed",
-  failed: "status status-failed",
-  interrupted: "status status-failed",
-};
-
-const created = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 export function PortfoliosPage() {
-  const { runs, error, connectionLost } = useRuns();
+  const { runs, error, connectionLost, remove } = useRuns();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [deleted, setDeleted] = useState<string | null>(null);
+
+  // The card and its button are gone, so focus goes to the heading and the change is announced.
+  function onDeleted(run: RunStatus) {
+    remove(run.run_id);
+    setDeleted(`Deleted ${run.source_name ?? "Untitled portfolio"}.`);
+    heading.current?.focus();
+  }
 
   return (
-    <section aria-labelledby="portfolios-heading" className="narrow">
+    <section aria-labelledby="portfolios-heading" className="portfolios-page">
       <div className="page-heading">
-        <h1 id="portfolios-heading">Portfolios</h1>
+        <h1 id="portfolios-heading" ref={heading} tabIndex={-1}>
+          Portfolios
+        </h1>
         <Link to="/upload" className="button button-primary">
           New portfolio
         </Link>
       </div>
-      <p className="lede">The climate risk results of every portfolio assessed here.</p>
+      <p className="lede">
+        The climate risk results of every portfolio assessed here. Each card shows the scenario and
+        year the dashboard opens on, which can differ between portfolios.
+      </p>
 
+      <p className="visually-hidden" role="status">
+        {deleted}
+      </p>
       {error && (
         <p className="notice notice-error" role="alert">
           {error}
@@ -76,41 +56,13 @@ export function PortfoliosPage() {
         </div>
       )}
       {runs && runs.length > 0 && (
-        <div className="table-scroll">
-          <table className="portfolios">
-            <thead>
-              <tr>
-                <th scope="col">Portfolio</th>
-                <th scope="col">Assets</th>
-                <th scope="col">Status</th>
-                <th scope="col">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={run.run_id}>
-                  <th scope="row">
-                    <Link to={`/runs/${encodeURIComponent(run.run_id)}`}>
-                      {run.source_name ?? "Untitled portfolio"}
-                    </Link>
-                  </th>
-                  <td>{count(run.total_rows)}</td>
-                  <td>
-                    <span className={STATUS_CLASS[run.status] ?? "status muted"}>
-                      {statusText(run)}
-                    </span>
-                    {(run.status === "failed" || run.status === "interrupted") && run.error && (
-                      <span className="status-error">{run.error}</span>
-                    )}
-                  </td>
-                  <td>
-                    <time dateTime={run.created_at}>{created(run.created_at)}</time>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="portfolio-grid">
+          {runs.map((run) => (
+            <li key={run.run_id}>
+              <PortfolioCard run={run} onDeleted={onDeleted} />
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

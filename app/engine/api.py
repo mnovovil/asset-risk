@@ -165,6 +165,18 @@ def get_run(run: RunDep, queue: QueueDep) -> schemas.RunStatus:
     return _status(run, queue)
 
 
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(run: RunDep) -> None:
+    """Delete a run and its results for good. A queued or running run must finish first."""
+    state = store.status(run)["status"]
+    if state in ("queued", "running"):
+        raise HTTPException(409, f"This run is {state}, so it can't be deleted until it finishes")
+    try:
+        store.delete_run(run)
+    except store.RunInUseError:
+        raise HTTPException(409, "This run is in use right now. Try again in a moment") from None
+
+
 @router.get("/runs/{run_id}/summary")
 def get_summary(run: FinishedRunDep) -> schemas.Summary:
     return schemas.Summary(**results.summary(run))
@@ -179,6 +191,17 @@ def get_assets(run: FinishedRunDep) -> list[schemas.Asset]:
 def get_clusters(run: FinishedRunDep) -> list[schemas.Cluster]:
     """Spatial clusters of assets, from DBSCAN. Empty when no group is dense enough."""
     return [schemas.Cluster(**row) for row in results.clusters(run)]
+
+
+@router.get("/runs/{run_id}/overview")
+def get_overview(run: FinishedRunDep) -> schemas.RunOverview:
+    """What the Portfolios page shows for a run: its counts, trajectory and where its assets are."""
+    return schemas.RunOverview(
+        summary=schemas.Summary(**results.summary(run)),
+        trajectory=[schemas.TrajectoryPoint(**row) for row in results.trajectory(run)],
+        clusters=[schemas.Cluster(**row) for row in results.clusters(run)],
+        points=[schemas.MapPoint(**row) for row in results.map_points(run)],
+    )
 
 
 def _asset(run: FinishedRunDep, row_num: int) -> dict:

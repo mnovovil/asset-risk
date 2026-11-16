@@ -1499,6 +1499,67 @@
         "title": "InsuranceRule",
         "type": "object"
       },
+      "MapPoint": {
+        "description": "Where an asset is, for a map that needs nothing else about it.",
+        "properties": {
+          "lat": {
+            "title": "Lat",
+            "type": "number"
+          },
+          "lon": {
+            "title": "Lon",
+            "type": "number"
+          },
+          "row_num": {
+            "title": "Row Num",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row_num",
+          "lat",
+          "lon"
+        ],
+        "title": "MapPoint",
+        "type": "object"
+      },
+      "RunOverview": {
+        "description": "What a portfolio's card on the Portfolios page needs, in one small response.",
+        "properties": {
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/Cluster"
+            },
+            "title": "Clusters",
+            "type": "array"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MapPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "trajectory": {
+            "items": {
+              "$ref": "#/components/schemas/TrajectoryPoint"
+            },
+            "title": "Trajectory",
+            "type": "array"
+          }
+        },
+        "required": [
+          "summary",
+          "trajectory",
+          "clusters",
+          "points"
+        ],
+        "title": "RunOverview",
+        "type": "object"
+      },
       "RunStatus": {
         "properties": {
           "created_at": {
@@ -1944,6 +2005,37 @@
       }
     },
     "/api/runs/{run_id}": {
+      "delete": {
+        "description": "Delete a run and its results for good. A queued or running run must finish first.",
+        "operationId": "delete_run_api_runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Run"
+      },
       "get": {
         "operationId": "get_run_api_runs__run_id__get",
         "parameters": [
@@ -2504,6 +2596,46 @@
           }
         },
         "summary": "Get Impacts"
+      }
+    },
+    "/api/runs/{run_id}/overview": {
+      "get": {
+        "description": "What the Portfolios page shows for a run: its counts, trajectory and where its assets are.",
+        "operationId": "get_overview_api_runs__run_id__overview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Overview"
       }
     },
     "/api/runs/{run_id}/scores": {

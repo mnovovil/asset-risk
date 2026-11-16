@@ -4,7 +4,13 @@ import type { Asset, Cluster } from "@/api/client";
 import { type AssetRow, scoreKind } from "@/lib/dashboard";
 import { percent } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
-import { lossBreaks, SCORE_LABELS, scoreColor, totalColor } from "@/lib/mapColors";
+import {
+  lossBreaks,
+  NO_RESULT_COLOR,
+  SCORE_LABELS,
+  scoreColor,
+  totalColor,
+} from "@/lib/mapColors";
 import { COLOR_BY_TOTAL, totalsOf } from "@/lib/mapFeatures";
 
 const MIN_RADIUS_PX = 12;
@@ -100,3 +106,22 @@ export function summariseClusters(
 /** Assets drawn as part of a bubble when zoomed out. */
 export const clusteredRowNums = (clusters: Cluster[]) =>
   new Set(clusters.flatMap((cluster) => cluster.row_nums));
+
+/** The bubbles as GeoJSON. A bubble with no result is hollow: a grey ring, never a low colour. */
+export function toBubbles(summaries: ClusterSummary[], ring: string): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: summaries.map((summary) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [summary.lon, summary.lat] },
+      properties: {
+        clusterId: summary.clusterId,
+        label: `${summary.count} nearby assets`,
+        detail: summary.detail,
+        color: summary.color ?? "rgba(0,0,0,0)",
+        ring: summary.color ? ring : NO_RESULT_COLOR,
+        radius: summary.radius,
+      },
+    })),
+  };
+}

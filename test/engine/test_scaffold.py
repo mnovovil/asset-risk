@@ -44,7 +44,13 @@ def test_committed_files_are_not_ignored(path):
     assert subprocess.run(["git", "check-ignore", "-q", path], cwd=ROOT).returncode == 1
 
 
-def test_readme_demo_gif_exists_and_stays_small():
-    assert "(docs/assets/demo.gif)" in (ROOT / "README.md").read_text()
-    # Each version stays in git history for good, and the README loads the whole file.
+def test_readme_shows_the_demo_video():
+    # GitHub only plays a README video from its own attachments, uploaded by hand.
+    readme = (ROOT / "README.md").read_text()
+    assert "\nhttps://github.com/user-attachments/assets/" in readme
+    assert "demo.mp4" not in readme  # it isn't committed
+
+
+def test_demo_gif_stays_small():
+    # Each version stays in git history for good.
     assert (ROOT / "docs/assets/demo.gif").stat().st_size < MAX_DEMO_GIF_BYTES

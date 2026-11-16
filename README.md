@@ -8,21 +8,7 @@ This is a screening tool, not a site-level assessment. Results are a share of as
 [most buildings have no known type](docs/methodology.md#building-type), so read
 [the methodology](docs/methodology.md) before relying on a number.
 
-![Uploading the 500-asset demo portfolio and a brief glimpse of its progress stages, then the dashboard's figures, the map's risk-concentration bubbles, a click on the New Orleans bubble that zooms in to its assets, a click on one of its assets to show its details, its FEMA flood zone and what that zone means, its annual loss over time and its river flood map zoomed out to all of southern Louisiana, then its coastal flood, wildfire, tropical cyclone wind and large hail maps, the charts, the portfolio's change over time under two scenarios, the present-day view and the data quality notes](docs/assets/demo.gif)
-
-*A real run of the [demo portfolio](docs/assets/demo_portfolio.csv), 500 properties in the USA and
-Spain, with the upload and progress screens cut to under 2 seconds. New Orleans is opened because it
-has some of the portfolio's highest flood and wind losses: scoring below it doesn't make an asset
-low risk. The asset shown, `US-312`, is by the French Quarter. The panel shows its FEMA flood zone,
-a shaded Zone X behind the levees, and what that zone means for flood insurance. It then shows its
-annual loss over time by scenario, and physrisk's 1-in-1000-year river and coastal flood maps,
-zoomed out to all of southern Louisiana, then its wildfire, 1-in-100-year tropical cyclone wind and
-large hail maps on the same view. Change over time compares SSP2-4.5 and SSP5-8.5 on the hazards both have:
-river flood, coastal flood and wind. Its figures are screening estimates for illustration, and its
-flood zone is not an official determination. Map data © OpenStreetMap contributors, via OpenFreeMap
-and OpenMapTiles. Flood maps from WRI Aqueduct Floods, via physrisk. Wildfire and hail maps from
-Jupiter Intelligence and wind map from IRIS, the Imperial College Storm Model, all via physrisk. Flood
-zones from FEMA's National Flood Hazard Layer.*
+https://github.com/user-attachments/assets/97d704e0-aa61-42ec-8060-1aaca6f5165f
 
 ## Quick start
 
@@ -39,8 +25,9 @@ For FEMA flood zones on US assets, build their database once from FEMA's flood h
 [Data sources](docs/data-sources.md#fema-flood-zones)). Without it, runs work as usual and show the
 zones as unavailable.
 
-Open the address to see every portfolio assessed so far, then choose **New portfolio** and drop in
-a CSV. The upload page has a sample to download, and your file needs a header with these columns:
+Open the address to see every portfolio assessed so far, each as a card with its mean annual loss,
+its counts and a picture of its risk map. **Delete** removes a finished one. Choose
+**New portfolio** and drop in a CSV. The upload page has a sample to download, and your file needs a header with these columns:
 
 ```csv
 id,lat,lon
@@ -123,3 +110,13 @@ gitGraph
 ## License
 
 [MIT](LICENSE). `vendor/geolocate`, physrisk and the data sources have their own terms.
+
+## About the demo video
+
+A real run of the [demo portfolio](docs/assets/demo_portfolio.csv), 500 properties in the USA and
+Spain. Its figures are screening estimates, its flood zone isn't an official determination, and a
+low score doesn't make an asset low risk.
+
+Voice by Kokoro-82M. Map data © OpenStreetMap contributors, via OpenFreeMap and OpenMapTiles.
+Hazard maps from WRI Aqueduct Floods, Jupiter Intelligence and IRIS, via physrisk. Flood zones
+from FEMA's National Flood Hazard Layer.

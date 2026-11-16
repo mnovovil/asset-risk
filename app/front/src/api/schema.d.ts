@@ -93,7 +93,11 @@ export interface paths {
         get: operations["get_run_api_runs__run_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Run
+         * @description Delete a run and its results for good. A queued or running run must finish first.
+         */
+        delete: operations["delete_run_api_runs__run_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -261,6 +265,26 @@ export interface paths {
         };
         /** Get Impacts */
         get: operations["get_impacts_api_runs__run_id__impacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overview
+         * @description What the Portfolios page shows for a run: its counts, trajectory and where its assets are.
+         */
+        get: operations["get_overview_api_runs__run_id__overview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -710,6 +734,31 @@ export interface components {
             /** Text */
             text: string;
         };
+        /**
+         * MapPoint
+         * @description Where an asset is, for a map that needs nothing else about it.
+         */
+        MapPoint: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Row Num */
+            row_num: number;
+        };
+        /**
+         * RunOverview
+         * @description What a portfolio's card on the Portfolios page needs, in one small response.
+         */
+        RunOverview: {
+            /** Clusters */
+            clusters: components["schemas"]["Cluster"][];
+            /** Points */
+            points: components["schemas"]["MapPoint"][];
+            summary: components["schemas"]["Summary"];
+            /** Trajectory */
+            trajectory: components["schemas"]["TrajectoryPoint"][];
+        };
         /** RunStatus */
         RunStatus: {
             /**
@@ -953,6 +1002,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RunStatus"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_run_api_runs__run_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1249,6 +1327,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Impact"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_overview_api_runs__run_id__overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOverview"];
                 };
             };
             /** @description Validation Error */
