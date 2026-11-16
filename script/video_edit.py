@@ -162,23 +162,31 @@ class Move:
 
 def camera(
     beats: Sequence[tuple[float, Box]],
-    scene_ends: Sequence[float],
+    end: float,
     full: Box,
     ease: float = EASE_SECONDS,
 ) -> list[Move]:
-    """The camera's moves: ease to each beat's crop as it starts, and back out to the whole frame
-    as each scene ends. beats are (start, crop), and each scene ends where the next begins."""
-    wanted: list[tuple[float, float, Box]] = []
-    ends = [*[b[0] for b in beats[1:]], scene_ends[-1]]
-    for (start, crop), end in zip(beats, ends, strict=True):
-        wanted.append((start, min(ease, end - start), crop))
-    for end in scene_ends[:-1]:
-        wanted.append((end - ease, ease, full))
-    wanted.sort(key=lambda w: w[0])
+    """The camera's moves: it eases to a beat's crop only when the crop changes, and otherwise
+    stays still. beats are (start, crop) and the last one lasts until end.
+
+    Going back to the whole frame finishes as the beat starts, so a cut to a new view happens at
+    full frame. Any other move starts with its beat, once the new view is on screen.
+    """
     moves: list[Move] = []
-    for start, length, target in wanted:
-        origin = crop_at(moves, start, full)
-        moves.append(Move(start, start + max(length, 0.0), origin, target))
+    current, free = full, 0.0  # where the camera is, and when its last move ends
+    stops = [*[b[0] for b in beats[1:]], end]
+    for (start, crop), stop in zip(beats, stops, strict=True):
+        if crop == current:
+            continue
+        if crop == full:
+            length = max(0.0, min(ease, start - free))
+            begin = start - length
+        else:
+            begin = max(start, free)
+            length = max(0.0, min(ease, stop - begin))
+        origin = crop_at(moves, begin, full)
+        moves.append(Move(begin, begin + length, origin, crop))
+        current, free = crop, begin + length
     return moves
 
 
@@ -187,7 +195,7 @@ def crop_at(moves: Sequence[Move], t: float, full: Box) -> Box:
     for move in moves:
         if t < move.start:
             break
-        if t >= move.end:
+        if t >= move.end or move.end == move.start:
             box = move.target
         else:
             box = lerp_box(

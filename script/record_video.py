@@ -75,8 +75,6 @@ VOICE_CACHE = Path.home() / ".cache" / "asset-risk" / "voice"
 BEAT_LEAD_SECONDS = 0.15
 # Around a zoom target, in CSS pixels.
 MARGIN_PX = 32
-# A point the narration is about, like a bubble: zoomed in as far as allowed.
-POINT_BOX_PX = 120
 # Under -40 dBFS over a clip's last 100 ms counts as silence.
 SILENCE_DBFS = -40
 SCROLL_STEPS = 12
@@ -105,16 +103,6 @@ def in_panel(*headings: tuple[str, str]) -> Target:
     return find
 
 
-def section(heading: str) -> Target:
-    return lambda page, _: [
-        page.locator("section.panel", has=page.get_by_role("heading", name=heading, level=2))
-    ]
-
-
-def point(page: Page, spot: tuple[float, float] | None) -> None:
-    return None  # the recorder makes the box from the point itself
-
-
 def whole_frame(page: Page, _) -> None:
     return None
 
@@ -133,8 +121,9 @@ class Scene:
     beats: tuple[Beat, ...]
 
 
-MAP = css(".map")
 HAZARD_MAP = css(".asset-map")
+# The camera zooms in only where the text is too small to read at full frame: the upload and its
+# progress, and the asset panel. Everything else is shown whole, so the camera stays still.
 SCENES = (
     Scene(
         "Upload a list of coordinates. Asset Risk finds each building and assesses its physical "
@@ -144,21 +133,21 @@ SCENES = (
     Scene(
         "Your whole portfolio at a glance: expected annual loss, and how many building types were "
         "assumed.",
-        (Beat("figures", css(".kpis")),),
+        (Beat("figures", whole_frame),),
     ),
     Scene(
         "The map shows where risk concentrates, from green to red.",
-        (Beat("map", MAP), Beat("bubble", point, "concentrates")),
+        (Beat("map", whole_frame), Beat("bubble", whole_frame, "concentrates")),
     ),
     Scene(
         "Click New Orleans to see every building, coloured by its own annual loss.",
-        (Beat("fly", MAP), Beat("assets", MAP, "every")),
+        (Beat("fly", whole_frame), Beat("assets", whole_frame, "every")),
     ),
     Scene(
         "Open one to see how it was modelled, its loss by hazard, and how that loss changes by "
         "scenario.",
         (
-            Beat("asset", point),
+            Beat("asset", whole_frame),
             Beat(
                 "modelled",
                 in_panel(("Building", "."), ("How it was modelled", "following-sibling::dl[1]")),
@@ -202,7 +191,7 @@ SCENES = (
     # Not the GIF's switch to the present-day baseline: its empty Year box reads as missing data.
     Scene(
         "Compare scenarios on the hazards they share.",
-        (Beat("trajectory", section("Change over time")),),
+        (Beat("trajectory", whole_frame),),
     ),
     # Straight from the comparison to the end card, without the trust section.
     Scene("Asset Risk: know where your portfolio is exposed.", (Beat("end", whole_frame),)),
@@ -381,25 +370,18 @@ class VideoRecorder(demo.Recorder):
 
     def target_box(self, required: bool) -> list[float] | None:
         beat = BEATS[BEAT_INDEX[self.beat]]
-        if beat.target is point:
-            if self.spot is None:
-                raise RuntimeError(f"the {beat.key} beat has no point")
-            x, y = self.spot
-            half = POINT_BOX_PX / 2
-            box = edit.Box(x - half, y - half, POINT_BOX_PX, POINT_BOX_PX)
-        else:
-            locators = beat.target(self.page, self.spot)
-            if locators is None:
+        locators = beat.target(self.page, self.spot)
+        if locators is None:
+            return None
+        found = [loc.bounding_box() for loc in locators]
+        boxes = [edit.Box(b["x"], b["y"], b["width"], b["height"]) for b in found if b]
+        if not boxes:
+            if not required:
                 return None
-            found = [loc.bounding_box() for loc in locators]
-            boxes = [edit.Box(b["x"], b["y"], b["width"], b["height"]) for b in found if b]
-            if not boxes:
-                if not required:
-                    return None
-                raise RuntimeError(f"the {beat.key} beat's element isn't on screen")
-            box = boxes[0]
-            for other in boxes[1:]:
-                box = box.union(other)
+            raise RuntimeError(f"the {beat.key} beat's element isn't on screen")
+        box = boxes[0]
+        for other in boxes[1:]:
+            box = box.union(other)
         visible = clip_to_viewport(box)
         if visible is None:
             if not required:
@@ -528,11 +510,13 @@ def render(shots: list[Shot], folder: Path, times: Timeline, total: float, video
     crops, crop = [], full
     for index in range(len(BEATS)):
         boxes = [s.box for s in shots if BEAT_INDEX[s.beat] == index and s.box is not None]
+        if BEATS[index].target is whole_frame:  # whatever box older kept frames recorded
+            boxes = []
         if any(BEAT_INDEX[s.beat] == index for s in shots):
             target = edit.Box(*boxes[-1]) if boxes else None
             crop = edit.crop_box(target, full.w, full.h, MARGIN_PX * SCALE)
         crops.append(crop)
-    moves = edit.camera(list(zip(times.beat_starts, crops, strict=True)), times.scene_ends, full)
+    moves = edit.camera(list(zip(times.beat_starts, crops, strict=True)), total, full)
 
     font, fonts_dir = subtitle_font()
     ass = folder / "subtitles.ass"

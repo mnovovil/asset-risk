@@ -140,21 +140,29 @@ def test_the_union_of_two_boxes_covers_both():
 # Camera
 
 
-def test_the_camera_eases_in_on_each_beat_and_out_at_the_end_of_a_scene():
+def test_the_camera_zooms_in_after_a_cut_and_out_before_one():
     near = video_edit.crop_box(Box(400, 400, 400, 300), W, H, margin=0)
-    moves = video_edit.camera([(0.0, near), (5.0, FULL)], scene_ends=[5.0, 10.0], full=FULL)
+    moves = video_edit.camera([(0.0, FULL), (2.0, near), (5.0, FULL)], end=10.0, full=FULL)
     crop_at = video_edit.crop_at
-    assert crop_at(moves, 0.0, FULL) == FULL
-    assert crop_at(moves, 0.3, FULL).w == pytest.approx((W + near.w) / 2, rel=1e-3)
-    assert crop_at(moves, 2.0, FULL) == near
-    assert FULL.w > crop_at(moves, 4.7, FULL).w > near.w  # easing out before the scene ends
+    assert crop_at(moves, 1.9, FULL) == FULL
+    assert crop_at(moves, 2.3, FULL).w == pytest.approx((W + near.w) / 2, rel=1e-3)
+    assert crop_at(moves, 4.0, FULL) == near
+    assert FULL.w > crop_at(moves, 4.7, FULL).w > near.w  # easing out before the next beat
     assert crop_at(moves, 5.0, FULL) == FULL
+
+
+def test_the_camera_stays_still_while_the_crop_is_the_same():
+    near = video_edit.crop_box(Box(400, 400, 400, 300), W, H, margin=0)
+    beats = [(0.0, FULL), (1.0, FULL), (2.0, near), (4.0, near), (6.0, near), (8.0, FULL)]
+    moves = video_edit.camera(beats, end=10.0, full=FULL)
+    assert [m.target for m in moves] == [near, FULL]  # no zooming out and back in between
+    assert all(video_edit.crop_at(moves, t, FULL) == near for t in (3.0, 4.0, 5.9, 7.3))
 
 
 def test_a_beat_shorter_than_the_ease_reaches_its_crop_before_the_next():
     a = video_edit.crop_box(Box(400, 400, 400, 300), W, H, margin=0)
     b = video_edit.crop_box(Box(2400, 1400, 400, 300), W, H, margin=0)
-    moves = video_edit.camera([(0.0, a), (1.0, b), (1.3, a)], scene_ends=[8.0], full=FULL)
+    moves = video_edit.camera([(0.0, a), (1.0, b), (1.3, a)], end=8.0, full=FULL)
     assert video_edit.crop_at(moves, 1.3, FULL) == b
     # Each move starts where the camera was, so the crop never jumps.
     for t in (0.999, 1.0, 1.001, 1.299, 1.3, 1.301):
