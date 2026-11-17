@@ -35,10 +35,6 @@ empire-state,40.7484,-73.9857
 big-ben,51.5007,-0.1246
 ```
 
-When a run finishes, its dashboard shows the results. **Download PDF report** saves a few pages on
-the scenario and year you have selected, with the caveats, for someone without the app, and
-**Download results as CSV** saves every asset's results.
-
 The app has no login, so it only listens on localhost. Don't expose it as it stands.
 
 ## How it works

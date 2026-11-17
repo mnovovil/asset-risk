@@ -91,7 +91,6 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
 | `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
-| `GET /api/runs/{id}/report.pdf` | A PDF report for one `scenario` and `year` (`scenario=historical` with no year for the baseline), as a download. Built on request from the run's database, so it needs neither physrisk nor the network. 404 for a pair that wasn't assessed |
 | `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
 | `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
 

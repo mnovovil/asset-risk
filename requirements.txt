@@ -6,10 +6,6 @@ zarr>=2.18,<3
 s3fs>=2024.6
 numpy>=1.26
 pillow>=10.0
-# The PDF report (app/engine/report.py): reportlab lays it out and matplotlib draws its charts.
-# matplotlib also comes with physrisk, but the app imports it directly.
-reportlab>=4.4
-matplotlib>=3.9
 pytz>=2024.1  # DuckDB needs it to return TIMESTAMPTZ values
 fastapi>=0.162.0
 scikit-learn>=1.9  # DBSCAN for the map's clusters

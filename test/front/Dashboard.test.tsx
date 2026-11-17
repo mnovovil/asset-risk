@@ -120,14 +120,6 @@ describe("Dashboard", () => {
     });
   });
 
-  it("links a PDF report of the scenario and year on screen", async () => {
-    await renderDashboard();
-    const link = () => screen.getByRole("link", { name: "Download PDF report" });
-    expect(link()).toHaveAttribute("href", `/api/runs/${RUN}/report.pdf?scenario=ssp585&year=2050`);
-    await userEvent.selectOptions(screen.getByLabelText("Scenario"), "Today (baseline)");
-    expect(link()).toHaveAttribute("href", `/api/runs/${RUN}/report.pdf?scenario=historical`);
-  });
-
   it("doesn't offer a year with no results", async () => {
     const empty = { ...TRAJECTORY[3], year: 2025, assets: 0, mean_total_aal: null, mean_shared_aal: null };
     stub({ trajectory: [...TRAJECTORY, empty] });

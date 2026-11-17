@@ -1,4 +1,4 @@
-import { exportUrl, reportUrl, type Pair, type TrajectoryPoint } from "@/api/client";
+import { exportUrl, type Pair, type TrajectoryPoint } from "@/api/client";
 import {
   BASELINE,
   BASELINE_LABEL,
@@ -92,9 +92,6 @@ export function Filters({
           ))}
         </select>
       </label>
-      <a className="button" href={reportUrl(runId, pair)}>
-        Download PDF report
-      </a>
       <a className="button" href={exportUrl(runId)}>
         Download results as CSV
       </a>
