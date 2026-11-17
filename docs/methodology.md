@@ -203,6 +203,23 @@ from a list, across every year and scenario of the run. Read it with these limit
   to Very high, not measurements. "No model", "No data" and "Error" are listed under the chart, not
   drawn, and a low score isn't proof of low risk.
 
+## The PDF report
+
+**Download PDF report** on the dashboard saves the scenario and year selected in the filters as a
+PDF of a few pages, whatever the portfolio's size:
+
+- the run's details, the headline figures and **How far to trust these results**, as on the
+  dashboard
+- change over time, over shared hazards only, or a sentence saying there are none
+- each hazard's mean loss, with "No model" and "No data" listed as such, not as low values
+- a map of the assets coloured by quintile of total loss, with assets that have no result hollow
+- the 20 assets with the highest total loss, each with its building type and where that type came
+  from, its FEMA flood zone, its highest score and its loss by hazard
+- FEMA flood zone counts, when the run has US points, and the notes on how to read the figures
+
+The CSV download is the complete record. The report uses DejaVu Sans, so ids in Latin, Greek and
+Cyrillic print as uploaded, but Chinese, Japanese and Korean characters print as empty boxes.
+
 ## Hazard maps
 
 The asset panel can show a map around the asset. It answers where the flood plain is, or where
