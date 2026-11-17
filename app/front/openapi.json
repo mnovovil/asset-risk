@@ -2638,6 +2638,67 @@
         "summary": "Get Overview"
       }
     },
+    "/api/runs/{run_id}/report.pdf": {
+      "get": {
+        "description": "A PDF report for one `scenario` and `year`, as the dashboard shows them, with its caveats.\n\nFor the baseline, use `scenario=historical` with no year. Built on request from the run's\nresults, so it needs neither physrisk nor the network.",
+        "operationId": "get_report_api_runs__run_id__report_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario",
+            "required": true,
+            "schema": {
+              "title": "Scenario",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Report"
+      }
+    },
     "/api/runs/{run_id}/scores": {
       "get": {
         "operationId": "get_scores_api_runs__run_id__scores_get",

@@ -136,3 +136,7 @@ export const getHazardMaps = (runId: string, pair: Pair, signal?: AbortSignal) =
 export const absoluteTileUrl = (tileUrl: string) => `${window.location.origin}${tileUrl}`;
 
 export const exportUrl = (runId: string) => `/api/runs/${encodeURIComponent(runId)}/export.csv`;
+
+/** The PDF report for one scenario and year, as the dashboard shows them. */
+export const reportUrl = (runId: string, pair: Pair) =>
+  `/api${runPath(runId)}/report.pdf?${pairQuery(pair)}`;

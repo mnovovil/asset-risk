@@ -1021,6 +1021,6 @@ def test_committed_openapi_is_current():
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert (
-        module.OPENAPI_JSON.read_text() == module.schema_text()
-    ), "Run `.venv/bin/python script/export_openapi.py`"
+    assert module.OPENAPI_JSON.read_text() == module.schema_text(), (
+        "Run `.venv/bin/python script/export_openapi.py`"
+    )
