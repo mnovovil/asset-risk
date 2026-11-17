@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, createRun, getRun } from "@/api/client";
+import { ApiError, createRun, getRun, reportUrl } from "@/api/client";
 
 import { jsonResponse } from "./helpers";
 
@@ -35,6 +35,15 @@ describe("the API client", () => {
     vi.stubGlobal("fetch", fetchMock);
     await getRun("../etc");
     expect(fetchMock).toHaveBeenCalledWith("/api/runs/..%2Fetc", expect.anything());
+  });
+
+  it("builds a report link for a scenario and year, or the baseline", () => {
+    expect(reportUrl("../x", { scenario: "ssp585", year: 2050 })).toBe(
+      "/api/runs/..%2Fx/report.pdf?scenario=ssp585&year=2050",
+    );
+    expect(reportUrl("r", { scenario: "historical", year: null })).toBe(
+      "/api/runs/r/report.pdf?scenario=historical",
+    );
   });
 
   it("uploads the file as multipart form data", async () => {

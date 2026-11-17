@@ -293,6 +293,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Report
+         * @description A PDF report for one `scenario` and `year`, as the dashboard shows them, with its caveats.
+         *
+         *     For the baseline, use `scenario=historical` with no year. Built on request from the run's
+         *     results, so it needs neither physrisk nor the network.
+         */
+        get: operations["get_report_api_runs__run_id__report_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/scores": {
         parameters: {
             query?: never;
@@ -1358,6 +1381,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_api_runs__run_id__report_pdf_get: {
+        parameters: {
+            query: {
+                scenario: string;
+                year?: number | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
                 };
             };
             /** @description Validation Error */

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import tempfile
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
@@ -28,7 +29,10 @@ from engine.ingest import PortfolioError
 from engine.pipeline import execute as run_pipeline
 from engine.pipeline import start as start_run
 from engine.queue import Execute, RunQueue
+from engine.report import build_report
 from engine.settings import ROOT, Settings, load_settings
+
+logger = logging.getLogger(__name__)
 
 FRONT_DIST = ROOT / "app" / "front" / "dist"
 BYTES_PER_MB = 1024 * 1024
@@ -349,6 +353,31 @@ def export_csv(run: FinishedRunDep) -> StreamingResponse:
         _csv_lines(columns, rows),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="asset-risk-{run.run_id}.csv"'},
+    )
+
+
+@router.get(
+    "/runs/{run_id}/report.pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+def get_report(run: FinishedRunDep, pair: PairDep) -> Response:
+    """A PDF report for one `scenario` and `year`, as the dashboard shows them, with its caveats.
+
+    For the baseline, use `scenario=historical` with no year. Built on request from the run's
+    results, so it needs neither physrisk nor the network.
+    """
+    scenario, year = pair
+    try:
+        pdf = build_report(run, scenario, year)
+    except Exception as e:
+        logger.exception("The report for run %s could not be built", run.run_id)
+        raise HTTPException(500, f"The report could not be built: {e}") from e
+    name = f"asset-risk-{run.run_id}-{scenario}-{'baseline' if year is None else year}.pdf"
+    return Response(
+        pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 

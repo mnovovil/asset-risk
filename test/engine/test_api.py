@@ -317,6 +317,8 @@ def test_failed_run_reports_its_error_and_has_no_results(settings):
         assert (body["status"], body["error"]) == ("failed", "geolocate failed: S3 is down")
         assert client.get(f"/api/runs/{run_id}/assets").status_code == 409
         assert client.get(f"/api/runs/{run_id}/export.csv").status_code == 409
+        report = f"/api/runs/{run_id}/report.pdf?scenario=ssp585&year=2050"
+        assert client.get(report).status_code == 409
         assert client.get(f"/api/runs/{run_id}/clusters").status_code == 409
         assert client.get(f"/api/runs/{run_id}/overview").status_code == 409
 
@@ -970,6 +972,47 @@ def test_static_files_cannot_escape_the_folder(settings, tmp_path):
     with TestClient(spa_app(settings, tmp_path)) as client:
         assert "secret" not in client.get("/..%2fsecret.txt").text
         assert "secret" not in client.get("/api/runs/..%2f..%2f..%2fsecret.txt").text
+
+
+def test_report_is_a_pdf_download_for_one_pair(client, finished):
+    response = client.get(f"/api/runs/{finished}/report.pdf?scenario=ssp585&year=2050")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    assert response.headers["content-disposition"] == (
+        f'attachment; filename="asset-risk-{finished}-ssp585-2050.pdf"'
+    )
+
+
+def test_baseline_report_has_no_year(client, finished):
+    response = client.get(f"/api/runs/{finished}/report.pdf?scenario=historical")
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].endswith('-historical-baseline.pdf"')
+
+
+@pytest.mark.parametrize(
+    ("query", "status"),
+    [("scenario=ssp245&year=2050", 404), ("scenario=ssp585&year=2080", 404), ("year=2050", 422)],
+)
+def test_report_needs_an_assessed_pair(client, finished, query, status):
+    response = client.get(f"/api/runs/{finished}/report.pdf?{query}")
+    assert response.status_code == status
+    assert response.json()["detail"]
+
+
+def test_report_of_an_unknown_run_is_404(client):
+    response = client.get(f"/api/runs/{uuid.uuid4()}/report.pdf?scenario=ssp585&year=2050")
+    assert response.status_code == 404
+
+
+def test_report_failure_is_a_readable_500(client, finished, monkeypatch):
+    def broken(*_):
+        raise RuntimeError("no fonts")
+
+    monkeypatch.setattr("engine.api.build_report", broken)
+    response = client.get(f"/api/runs/{finished}/report.pdf?scenario=ssp585&year=2050")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "The report could not be built: no fonts"}
 
 
 def test_committed_openapi_is_current():
