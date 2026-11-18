@@ -125,6 +125,14 @@ class Layout {
     this.y = TOP;
   }
 
+  /** The height wrapped text would take. */
+  measure(content: string, { size = 9, bold = false, width = CONTENT_WIDTH } = {}): number {
+    this.doc.setFont(FONT, bold ? "bold" : "normal");
+    this.doc.setFontSize(size);
+    const lines = this.doc.splitTextToSize(content, width) as string[];
+    return lines.length * size * PT * 1.35;
+  }
+
   /** Wrapped text; returns its height. */
   text(
     content: string,
@@ -282,7 +290,7 @@ async function drawMap(
 
   layout.ensure(MAP_HEIGHT);
   const top = layout.y;
-  doc.addImage(snapshot.src, "PNG", layout.left, top, CONTENT_WIDTH, MAP_HEIGHT, undefined, "NONE");
+  doc.addImage(snapshot.src, "PNG", layout.left, top, CONTENT_WIDTH, MAP_HEIGHT, undefined, "SLOW");
   doc.setDrawColor(theme.line);
   doc.setLineWidth(0.3);
   doc.rect(layout.left, top, CONTENT_WIDTH, MAP_HEIGHT, "S");
@@ -381,7 +389,11 @@ function drawNotes(layout: Layout, content: ReportContent) {
     layout.text(group.heading, { size: 9.5, bold: true });
     layout.y += 1;
     for (const sentence of group.sentences) {
-      layout.text(`•  ${sentence}`, { size: 8.5, x: layout.left + 2, width: CONTENT_WIDTH - 2 });
+      const options = { size: 8.5, x: layout.left + 5, width: CONTENT_WIDTH - 5 };
+      // Break the page first, so the bullet and its sentence start together.
+      layout.ensure(layout.measure(sentence, options));
+      layout.doc.text("•", layout.left + 1.5, layout.y, { baseline: "top" });
+      layout.text(sentence, options);
       layout.y += 0.6;
     }
     layout.y += 3;

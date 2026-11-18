@@ -11,8 +11,11 @@ import { LossBars } from "@/components/dashboard/LossBars";
 import { Trajectory } from "@/components/dashboard/Trajectory";
 import type { AssetRow } from "@/lib/dashboard";
 
-/** CSS pixels: the PDF scales the vectors to the page. */
-export const CHART_WIDTH_PX = 680;
+/**
+ * CSS pixels: the PDF scales the vectors to its 180 mm column, so 12 px chart text prints at about
+ * 7.5 pt, and the loss bars and the trajectory fit on one page.
+ */
+export const CHART_WIDTH_PX = 820;
 const SETTLE_MS = 3_000;
 
 export interface CapturedLegendItem {
