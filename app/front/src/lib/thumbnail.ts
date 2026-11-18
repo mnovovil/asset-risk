@@ -3,11 +3,11 @@
  * annual loss. No MapLibre here, so it's testable.
  */
 
-import type { AssetTotal, Cluster, MapPoint } from "@/api/client";
+import type { Asset, AssetTotal, Cluster, MapPoint } from "@/api/client";
 import { summariseClusters, toBubbles } from "@/lib/clusters";
-import { buildRows } from "@/lib/dashboard";
+import { type AssetRow, buildRows } from "@/lib/dashboard";
 import { lossBreaks, NO_RESULT_COLOR, totalColor } from "@/lib/mapColors";
-import { boundsOf, COLOR_BY_TOTAL, totalsOf } from "@/lib/mapFeatures";
+import { boundsOf, COLOR_BY_TOTAL, toFeatures, totalsOf } from "@/lib/mapFeatures";
 
 /** As on the dashboard map, so a bubble reads as a group, not as one asset. */
 export const BUBBLE_OPACITY = 0.8;
@@ -64,4 +64,36 @@ export function thumbnailFeatures(
       }),
     },
   };
+}
+
+const withOpacity = (collection: GeoJSON.FeatureCollection, opacity: number) => {
+  for (const feature of collection.features) {
+    feature.properties = { ...feature.properties, opacity };
+  }
+  return collection;
+};
+
+/**
+ * The dashboard map's opening view for any "Colour the map by", as the PDF report draws it: bubbles
+ * only when the run has clusters, otherwise every placeable asset. Built from the same features as
+ * the live map, so the two can't disagree.
+ */
+export function mapViewFeatures(
+  assets: Asset[],
+  clusters: Cluster[],
+  rows: AssetRow[],
+  colorBy: string,
+  dark: boolean,
+  ring: string,
+): Thumbnail {
+  const hasClusters = clusters.length > 0;
+  const points = toFeatures(assets, rows, colorBy, null, dark, ring, hasClusters);
+  const bounds = boundsOf(
+    points.features.map((f) => (f.geometry as GeoJSON.Point).coordinates as [number, number]),
+  );
+  if (hasClusters) {
+    const bubbles = toBubbles(summariseClusters(clusters, assets, rows, colorBy, dark), ring);
+    return { features: withOpacity(bubbles, BUBBLE_OPACITY), bounds };
+  }
+  return { features: withOpacity(points, 1), bounds };
 }

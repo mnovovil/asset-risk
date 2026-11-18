@@ -26,7 +26,9 @@ export function RunPage() {
         </p>
       )}
       {run && (run.status === "queued" || run.status === "running") && <RunProgress run={run} />}
-      {run?.status === "completed" && <Dashboard runId={run.run_id} />}
+      {run?.status === "completed" && (
+        <Dashboard runId={run.run_id} label={run.source_name} createdAt={run.created_at} />
+      )}
       {(run?.status === "failed" || run?.status === "interrupted") && (
         <p className="notice notice-error" role="alert">
           {run.error ?? "This run didn't finish."}
