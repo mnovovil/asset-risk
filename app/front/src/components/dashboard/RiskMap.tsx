@@ -16,16 +16,13 @@ import {
   toBubbles,
 } from "@/lib/clusters";
 import { type AssetRow } from "@/lib/dashboard";
-import { count, percent } from "@/lib/format";
-import { lossBreaks, lossLegend, ramp, SCORE_LABELS } from "@/lib/mapColors";
+import { mapLegend } from "@/lib/mapLegend";
 import {
   boundsOf,
-  COLOR_BY_TOTAL,
   FIT_PADDING_PX,
   MAX_FIT_ZOOM,
   placeable,
   toFeatures,
-  totalsOf,
 } from "@/lib/mapFeatures";
 import { basemapStyle, blankStyle, pointRing } from "@/lib/mapStyle";
 import { usePrefersDark } from "@/hooks/useColorScheme";
@@ -250,9 +247,7 @@ export default function RiskMap({
     (mapRef.current?.getSource(CLUSTER_SOURCE) as GeoJSONSource | undefined)?.setData(bubbles);
   }, [bubbles, ready]);
 
-  const colors = ramp(dark);
-  const totals = totalsOf(rows);
-  const lossItems = lossLegend(totals, lossBreaks(totals), dark);
+  const legend = mapLegend({ rows, colorBy, hasClusters, outside, dark, interactive: true });
 
   return (
     <section className="panel" aria-labelledby="map-heading">
@@ -270,40 +265,26 @@ export default function RiskMap({
         />
       )}
       <ul className="map-legend">
-        {colorBy === COLOR_BY_TOTAL ? (
-          <>
-            <li>Total annual loss, about a fifth of assets per colour:</li>
-            {lossItems.map((item) => (
-              <li key={item.color}>
+        {legend.map((item) => (
+          <li key={`${item.kind}:${item.label}`}>
+            {item.kind === "dot" && (
+              <>
                 <span className="dot" style={{ background: item.color }} />{" "}
-                {item.min === item.max
-                  ? percent(item.min)
-                  : `${percent(item.min)} to ${percent(item.max)}`}
-              </li>
-            ))}
-          </>
-        ) : (
-          SCORE_LABELS.map((label, index) => (
-            <li key={label}>
-              <span className="dot" style={{ background: colors[index] }} /> {label}
-            </li>
-          ))
-        )}
-        <li>
-          <span className="dot dot-hollow" /> No result or excluded
-        </li>
-        {hasClusters && (
-          <li>
-            <span className="dot dot-bubble" /> Bubbles: groups of nearby assets, sized by count and
-            coloured by their mean. Zoom in or click one to see each asset
+              </>
+            )}
+            {item.kind === "hollow" && (
+              <>
+                <span className="dot dot-hollow" />{" "}
+              </>
+            )}
+            {item.kind === "bubble" && (
+              <>
+                <span className="dot dot-bubble" />{" "}
+              </>
+            )}
+            {item.label}
           </li>
-        )}
-        {hasClusters && outside > 0 && (
-          <li>
-            {count(outside)} {outside === 1 ? "asset" : "assets"} outside any group{" "}
-            {outside === 1 ? "shows" : "show"} when you zoom in
-          </li>
-        )}
+        ))}
       </ul>
     </section>
   );
