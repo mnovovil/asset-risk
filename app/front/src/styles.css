@@ -1,5 +1,7 @@
-/* Chart colours are checked with the dataviz palette validator, on these surfaces, in both modes. */
-:root {
+/* Chart colours are checked with the dataviz palette validator, on these surfaces, in both modes.
+   `.theme-light` keeps the light values inside a dark page, for what the PDF report draws. */
+:root,
+.theme-light {
   color-scheme: light dark;
   --ink: #0b0b0b;
   --muted: #52514e;
@@ -22,6 +24,10 @@
   --series-7: #6250d6;
   --series-8: #e34948;
   --series-other: #898781;
+}
+
+.theme-light {
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -519,7 +525,8 @@ progress {
   }
 }
 
-.card-map-offscreen {
+.card-map-offscreen,
+.report-offscreen {
   position: fixed;
   top: 0;
   left: -10000px;
@@ -646,8 +653,20 @@ progress {
   font: inherit;
 }
 
-.filters .button {
+.filters-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
   margin-left: auto;
+}
+
+.filters-downloads .report-status {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: right;
 }
 
 .dashboard-body {
