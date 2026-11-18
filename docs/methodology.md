@@ -189,6 +189,19 @@ How the zone is found, and how to read it:
 **It's not an official determination.** Check an address that matters on
 [FEMA's Flood Map Service Center](https://msc.fema.gov/portal/search).
 
+## PDF report
+
+**Download report as PDF** saves what the dashboard shows for the selected scenario, year and map
+colouring. It has the headline figures with where building types came from, the risk map with its
+legend, annual loss by hazard and change over time, and notes taken from this page.
+
+- The map is the view the dashboard opens with, not wherever it was panned or zoomed. It's drawn
+  again at about 290 dpi, always in the light theme.
+- The charts are the dashboard's own, kept as vectors, so they stay sharp when zoomed.
+- If the map tiles don't load, there's no report, rather than a map with gaps that passes for a
+  complete one.
+- It uses A4, or US Letter where the browser's region uses it.
+
 ## An asset over time
 
 The asset panel's **Over time** chart shows one asset's annual loss or score for one hazard, picked
