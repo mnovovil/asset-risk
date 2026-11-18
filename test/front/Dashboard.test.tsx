@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -14,21 +15,36 @@ import {
   TRAJECTORY,
 } from "./helpers";
 
+// What the mocked map reports once drawn: "loading" holds it, as a map whose tiles are slow.
+const map = vi.hoisted(() => ({ status: "ready" as "loading" | "ready" | "unavailable" }));
+
 vi.mock("@/components/dashboard/RiskMap", () => ({
-  default: ({
+  default: function MockRiskMap({
     colorBy,
     assets,
     clusters,
+    onStatusChange,
   }: {
     colorBy: string;
     assets: unknown[];
     clusters: unknown[];
-  }) => (
-    <p>
-      Map of {assets.length} assets in {clusters.length} clusters by {colorBy}
-    </p>
-  ),
+    onStatusChange?: (status: string) => void;
+  }) {
+    useEffect(() => onStatusChange?.(map.status), [onStatusChange]);
+    return (
+      <p>
+        Map of {assets.length} assets in {clusters.length} clusters by {colorBy}
+      </p>
+    );
+  },
 }));
+
+const buildReport = vi.hoisted(() => vi.fn());
+
+vi.mock("@/components/report/buildReport", () => {
+  class ReportError extends Error {}
+  return { buildReport, ReportError };
+});
 
 vi.mock("@/components/dashboard/HazardTileMap", () => ({
   default: ({ tileUrl, label }: { tileUrl: string | null; label: string }) => (
@@ -72,6 +88,82 @@ describe("Dashboard", () => {
   beforeEach(() => {
     forgetFloodZoneDefinitions();
     stub();
+    map.status = "ready";
+    buildReport.mockReset();
+  });
+
+  describe("PDF report", () => {
+    const reportButton = () => screen.getByRole("button", { name: /report/i });
+
+    it("sits right after the CSV download", async () => {
+      await renderDashboard();
+      const csv = screen.getByRole("link", { name: "Download results as CSV" });
+      expect(csv.nextElementSibling).toBe(screen.getByRole("button", { name: "Download report as PDF" }));
+    });
+
+    it("waits for the map, and says so", async () => {
+      map.status = "loading";
+      await renderDashboard();
+      expect(reportButton()).toBeDisabled();
+      expect(screen.getByText("Waiting for the map…")).toBeInTheDocument();
+    });
+
+    it("says why when the browser can't draw the map", async () => {
+      map.status = "unavailable";
+      await renderDashboard();
+      expect(reportButton()).toBeDisabled();
+      expect(screen.getByText(/can't draw the map, so it can't make the report/)).toBeInTheDocument();
+    });
+
+    it("builds the report of what's selected, showing progress", async () => {
+      let finish: (report: unknown) => void = () => undefined;
+      buildReport.mockImplementation(
+        (request: { onStage: (stage: string) => void }) =>
+          new Promise((resolve) => {
+            request.onStage("charts");
+            finish = resolve;
+          }),
+      );
+      const createObjectURL = vi.fn(() => "blob:report");
+      vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+      const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+      const user = userEvent.setup();
+      render(<Dashboard runId={RUN} label="Madrid.csv" createdAt="2026-10-30T12:00:00Z" />);
+      await screen.findByRole("heading", { name: "Risk by asset and hazard" }, { timeout: 5000 });
+      await user.selectOptions(screen.getByLabelText("Colour the map by"), "Wind");
+      await waitFor(() => expect(reportButton()).toBeEnabled());
+
+      await user.click(reportButton());
+      expect(await screen.findByText("Preparing the PDF: drawing the charts…")).toBeInTheDocument();
+      expect(reportButton()).toBeDisabled();
+      const [request] = buildReport.mock.calls[0];
+      expect(request.input).toMatchObject({
+        label: "Madrid.csv",
+        createdAt: "2026-10-30T12:00:00Z",
+        pair: { scenario: "ssp585", year: 2050 },
+        colorBy: "Wind",
+      });
+      expect(request.input.rows.length).toBeGreaterThan(0);
+
+      finish({ blob: new Blob(["%PDF"]), fileName: "asset-risk_madrid_ssp585_2050.pdf" });
+      await waitFor(() => expect(click).toHaveBeenCalled());
+      expect(createObjectURL).toHaveBeenCalled();
+      await waitFor(() => expect(reportButton()).toHaveTextContent("Download report as PDF"));
+      click.mockRestore();
+    });
+
+    it("explains a failure and lets the reader try again", async () => {
+      const { ReportError } = await import("@/components/report/buildReport");
+      buildReport.mockRejectedValue(new ReportError("the map tiles didn't load. Try again."));
+      const user = userEvent.setup();
+      await renderDashboard();
+      await waitFor(() => expect(reportButton()).toBeEnabled());
+      await user.click(reportButton());
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Couldn't build the report: the map tiles didn't load. Try again.",
+      );
+      expect(reportButton()).toBeEnabled();
+    });
   });
 
   it("starts on the fullest scenario and shows headline figures", async () => {

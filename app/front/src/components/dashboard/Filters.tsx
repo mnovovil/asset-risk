@@ -12,6 +12,7 @@ import { hazardLabel } from "@/lib/hazards";
 import { scenarioLabel } from "@/lib/format";
 
 import { COLOR_BY_TOTAL } from "@/lib/mapFeatures";
+import { type ReportState, STAGE_TEXT } from "@/hooks/useReport";
 
 export { COLOR_BY_TOTAL };
 
@@ -23,6 +24,12 @@ interface FiltersProps {
   hazards: string[];
   colorBy: string;
   onColorByChange: (value: string) => void;
+  report: {
+    state: ReportState;
+    /** Why the report can't be made yet, or null when it can. */
+    blocked: string | null;
+    onDownload: () => void;
+  };
 }
 
 /** One row above everything it scopes: every figure below follows these. */
@@ -34,8 +41,10 @@ export function Filters({
   hazards,
   colorBy,
   onColorByChange,
+  report,
 }: FiltersProps) {
   const years = yearsOf(trajectory, pair.scenario);
+  const generating = report.state.kind === "generating";
   const hasResults = (scenario: string) =>
     trajectory.some((p) => p.scenario === scenario && p.assets > 0);
 
@@ -92,9 +101,26 @@ export function Filters({
           ))}
         </select>
       </label>
-      <a className="button" href={exportUrl(runId)}>
-        Download results as CSV
-      </a>
+      <div className="filters-downloads">
+        <a className="button" href={exportUrl(runId)}>
+          Download results as CSV
+        </a>
+        <button
+          type="button"
+          className="button"
+          onClick={report.onDownload}
+          disabled={report.blocked !== null || generating}
+          aria-busy={generating}
+          aria-describedby="report-status"
+        >
+          {generating ? "Preparing report…" : "Download report as PDF"}
+        </button>
+        <p id="report-status" className="report-status" aria-live="polite">
+          {report.state.kind === "generating"
+            ? `Preparing the PDF: ${STAGE_TEXT[report.state.stage]}…`
+            : report.blocked}
+        </p>
+      </div>
     </div>
   );
 }

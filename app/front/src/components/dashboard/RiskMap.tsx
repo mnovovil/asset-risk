@@ -46,7 +46,11 @@ interface RiskMapProps {
   colorBy: string;
   selected: number | null;
   onSelect: (rowNum: number) => void;
+  /** Whether the map has drawn, so the PDF report can wait for it. */
+  onStatusChange?: (status: MapStatus) => void;
 }
+
+export type MapStatus = "loading" | "ready" | "unavailable";
 
 export default function RiskMap({
   assets,
@@ -55,6 +59,7 @@ export default function RiskMap({
   colorBy,
   selected,
   onSelect,
+  onStatusChange,
 }: RiskMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibre | null>(null);
@@ -63,6 +68,10 @@ export default function RiskMap({
   const [ready, setReady] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+
+  useEffect(() => {
+    onStatusChange?.(unavailable ? "unavailable" : ready ? "ready" : "loading");
+  }, [unavailable, ready, onStatusChange]);
 
   const hasClusters = clusters.length > 0;
   const features = useMemo(
