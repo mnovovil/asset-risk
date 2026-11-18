@@ -1,15 +1,17 @@
 /** Turn API responses into what the dashboard shows. No rendering here, so it's easy to test. */
 
 import type {
+  Asset,
   AssetDetail,
   AssetTotal,
   Coverage,
   Impact,
   Pair,
   Score,
+  Summary,
   TrajectoryPoint,
 } from "@/api/client";
-import { assetLabel, scenarioLabel } from "@/lib/format";
+import { assetLabel, count, percent, plural, scenarioLabel } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
 export type ScoreKind = "scored" | "no_model" | "no_data" | "error";
@@ -337,3 +339,70 @@ export function barData(rows: AssetRow[]) {
 /** Share of assessed assets whose building type is our assumption, from 0 to 1. */
 export const assumedShare = (assessable: number, assumed: number) =>
   assessable === 0 ? 0 : assumed / assessable;
+
+export interface KpiItem {
+  label: string;
+  value: string;
+  note: string | null;
+}
+
+/** The dashboard's headline figures, as the page and the PDF report both show them. */
+export function kpiItems(
+  summary: Summary,
+  point: TrajectoryPoint | undefined,
+  rows: AssetRow[],
+  baseline: boolean,
+): KpiItem[] {
+  const assumed = assumedShare(summary.assessable, summary.assumed_type);
+  const withHistorical = rows.filter((row) => row.historical !== null);
+  const historicalMean = withHistorical.length
+    ? withHistorical.reduce((sum, row) => sum + (row.historical as number), 0) /
+      withHistorical.length
+    : null;
+  const comparison = baseline
+    ? "physrisk's present-day baseline, which it treats as 2025"
+    : `Historical, same hazards: ${percent(historicalMean)}`;
+
+  return [
+    {
+      label: "Mean annual loss, equal-weighted",
+      value: percent(point?.mean_total_aal),
+      note: `of asset value, over ${plural(point?.hazards ?? 0, "hazard")}. ${comparison}`,
+    },
+    {
+      label: "Assets assessed",
+      value: `${count(summary.assessable)} of ${count(summary.total_assets)}`,
+      note:
+        summary.failed_assets > 0
+          ? `${plural(summary.failed_assets, "asset")} missing some results`
+          : null,
+    },
+    {
+      label: "Assets excluded",
+      value: count(summary.excluded),
+      note: "Invalid, off land or no damage model",
+    },
+    {
+      label: "Building type assumed",
+      value: `${Math.round(assumed * 100)}%`,
+      note: `${plural(summary.assumed_type, "asset")} had no building type to use`,
+    },
+  ];
+}
+
+export interface TypeSourceCounts {
+  class: number;
+  subtype: number;
+  assumed: number;
+}
+
+/** Where each assessed asset's building type came from: Overture's class, its subtype, or assumed. */
+export function typeSourceCounts(assets: Pick<Asset, "assessable" | "type_source">[]): TypeSourceCounts {
+  const counts: TypeSourceCounts = { class: 0, subtype: 0, assumed: 0 };
+  for (const asset of assets) {
+    if (!asset.assessable) continue;
+    const source = asset.type_source as keyof TypeSourceCounts | null;
+    if (source && source in counts) counts[source] += 1;
+  }
+  return counts;
+}

@@ -35,6 +35,11 @@ empire-state,40.7484,-73.9857
 big-ben,51.5007,-0.1246
 ```
 
+A finished portfolio's page has two downloads beside its filters: **Download results as CSV**, with
+every figure, and **Download report as PDF**, the map, loss bars and change over time for the
+selected scenario, year and map colouring. The browser builds the PDF itself, so it needs the map
+tiles to load.
+
 The app has no login, so it only listens on localhost. Don't expose it as it stands.
 
 ## How it works

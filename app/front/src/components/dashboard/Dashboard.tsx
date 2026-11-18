@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 
 import { getConfig, type Pair } from "@/api/client";
 import { useRunData, usePairData } from "@/hooks/useDashboard";
+import { useReport } from "@/hooks/useReport";
 import { buildRows, defaultPair, isBaseline, missingHazards, pointFor, scenariosOf } from "@/lib/dashboard";
 import { sortHazards } from "@/lib/hazards";
 
@@ -13,10 +14,24 @@ import { LossBars } from "./LossBars";
 import { ScoreTable } from "./ScoreTable";
 import { Trajectory } from "./Trajectory";
 
+import type { MapStatus } from "./RiskMap";
+
 // The map library is large, and the rest of the dashboard works without it.
 const RiskMap = lazy(() => import("./RiskMap"));
 
-export function Dashboard({ runId }: { runId: string }) {
+interface DashboardProps {
+  runId: string;
+  /** The uploaded file's name, for the PDF report. Only ever a label. */
+  label?: string | null;
+  createdAt?: string;
+}
+
+const REPORT_BLOCKED: Record<Exclude<MapStatus, "ready">, string> = {
+  loading: "Waiting for the map…",
+  unavailable: "This browser can't draw the map, so it can't make the report.",
+};
+
+export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
   const { data: run, error: runError } = useRunData(runId);
   const [pair, setPair] = useState<Pair | null>(null);
   const [colorBy, setColorBy] = useState(COLOR_BY_TOTAL);
@@ -24,6 +39,8 @@ export function Dashboard({ runId }: { runId: string }) {
   const [defaultType, setDefaultType] = useState<string | null>(null);
   const { data: results, loading, error: pairError } = usePairData(runId, pair);
   const closePanel = useCallback(() => setSelected(null), []);
+  const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
+  const report = useReport();
 
   useEffect(() => {
     if (run && !pair) setPair(defaultPair(run.trajectory));
@@ -63,6 +80,26 @@ export function Dashboard({ runId }: { runId: string }) {
   const missing = missingHazards(run.coverage, pair);
   const point = pointFor(run.trajectory, pair);
 
+  let reportBlocked: string | null = null;
+  if (loading || !results) reportBlocked = "Waiting for results…";
+  else if (mapStatus !== "ready") reportBlocked = REPORT_BLOCKED[mapStatus];
+
+  const downloadReport = () =>
+    report.generate({
+      input: {
+        label,
+        createdAt: createdAt ?? new Date().toISOString(),
+        generatedAt: new Date(),
+        pair,
+        colorBy,
+        run,
+        rows,
+        defaultType,
+      },
+      missing,
+      locale: navigator.language,
+    });
+
   return (
     <>
       <Filters
@@ -76,7 +113,13 @@ export function Dashboard({ runId }: { runId: string }) {
         hazards={scoreHazards}
         colorBy={colorBy}
         onColorByChange={setColorBy}
+        report={{ state: report.state, blocked: reportBlocked, onDownload: downloadReport }}
       />
+      {report.state.kind === "error" && (
+        <p className="notice notice-error" role="alert">
+          {report.state.message}
+        </p>
+      )}
       {pairError && (
         <p className="notice notice-error" role="alert">
           {pairError}
@@ -92,6 +135,7 @@ export function Dashboard({ runId }: { runId: string }) {
             colorBy={colorBy}
             selected={selected}
             onSelect={setSelected}
+            onStatusChange={setMapStatus}
           />
         </Suspense>
         {rows.length > 0 ? (
