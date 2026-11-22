@@ -1,10 +1,13 @@
 import pytest
 
-from engine.store import create_run, summary
+from engine.store import create_run, save_values, summary
 
 
-def make_run(tmp_path, assets, impacts=(), pairs=(), failures=()):
+def make_run(tmp_path, assets, impacts=(), pairs=(), failures=(), values=None, currency=None):
+    """values: one (value, status) per asset, in row_num order, to fill asset_values."""
     run = create_run(tmp_path, len(assets))
+    if values is not None:
+        save_values(run, [v for v, _ in values], [s for _, s in values], currency)
     with run.connect() as con:
         statements = (
             (
@@ -172,6 +175,12 @@ def test_summary_counts(tmp_path):
         "nearest_match": 1,
         "no_building": 1,
         "failed_assets": 0,
+        "valued_assets": 0,
+        "missing_values": 0,
+        "invalid_values": 0,
+        "total_value": None,
+        "currency": None,
+        "has_values": False,
     }
     assert sorted(fetch(run, "SELECT reason, assets FROM v_exclusions")) == [
         ("invalid", 1),
@@ -183,3 +192,91 @@ def test_views_work_on_an_empty_run(tmp_path):
     run = create_run(tmp_path, 0)
     assert summary(run)["total_assets"] == 0
     assert fetch(run, "SELECT * FROM v_portfolio_trajectory") == []
+
+
+# Asset 1 is worth 100 and asset 2 is worth 300, so asset 2 counts three times as much.
+VALUES = [(100.0, "given"), (300.0, "given")]
+
+
+def weighted(run):
+    rows = fetch(
+        run,
+        "SELECT scenario, valued_assets, valued_total, weighted_mean_total_aal, "
+        "weighted_mean_shared_aal, expected_loss_total, expected_loss_shared "
+        "FROM v_portfolio_trajectory",
+    )
+    return {r[0]: r[1:] for r in rows}
+
+
+def test_value_weighted_means_and_expected_losses(tmp_path):
+    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=VALUES, currency="EUR")
+    # ssp585: asset 1 totals 3% (Wind 1%, shared) and asset 2 totals 7% (Wind 3%, shared).
+    assert weighted(run)["ssp585"] == pytest.approx(
+        (
+            2,
+            400.0,
+            (0.03 * 100 + 0.07 * 300) / 400,
+            (0.01 * 100 + 0.03 * 300) / 400,
+            0.03 * 100 + 0.07 * 300,
+            0.01 * 100 + 0.03 * 300,
+        )
+    )
+    # Equal-weighted means are still there, unchanged.
+    assert trajectory(run)["ssp585"][1] == pytest.approx(0.05)
+
+
+def test_weighted_shared_figures_compare_scenarios_on_shared_hazards(tmp_path):
+    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=VALUES)
+    rows = weighted(run)
+    # ssp245 has only Wind, so its total and shared figures agree.
+    assert rows["ssp245"][3] == pytest.approx((0.05 * 100 + 0.07 * 300) / 400)
+    assert rows["ssp245"][3] == pytest.approx(rows["ssp245"][2])
+    assert rows["ssp585"][3] < rows["ssp585"][2]
+
+
+def test_assets_without_a_usable_value_are_left_out_of_weighting(tmp_path):
+    values = [(None, "missing"), (300.0, "given")]
+    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=values)
+    assert weighted(run)["ssp585"][:4] == (1, 300.0, pytest.approx(0.07), pytest.approx(0.03))
+    assert trajectory(run)["ssp585"][0] == 2  # equal weighting still counts both
+
+
+def test_failed_assets_are_left_out_of_weighting_not_counted_as_zero(tmp_path):
+    impacts = [(1, "Wind", "ssp585", 2050, 0.01)]
+    run = make_run(
+        tmp_path, ASSETS, impacts, [("ssp585", 2050)], [(2, "ssp585", 2050)], values=VALUES
+    )
+    assert weighted(run)["ssp585"][:4] == (1, 100.0, pytest.approx(0.01), pytest.approx(0.01))
+
+
+def test_a_zero_total_value_has_no_weighted_mean(tmp_path):
+    values = [(0.0, "given"), (0.0, "given")]
+    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=values)
+    assert weighted(run)["ssp585"] == (2, 0.0, None, None, 0.0, 0.0)
+
+
+def test_pairs_without_results_have_no_weighted_figures(tmp_path):
+    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=VALUES)
+    assert weighted(run)["ssp370"] == (0, None, None, None, None, None)
+
+
+def test_summary_counts_values(tmp_path):
+    assets = [asset(1), asset(2), asset(3)]
+    values = [(100.0, "given"), (None, "missing"), (None, "invalid")]
+    run = make_run(tmp_path, assets, values=values, currency="USD")
+    result = summary(run)
+    assert {k: result[k] for k in ("valued_assets", "missing_values", "invalid_values")} == {
+        "valued_assets": 1,
+        "missing_values": 1,
+        "invalid_values": 1,
+    }
+    assert (result["total_value"], result["currency"], result["has_values"]) == (
+        100.0,
+        "USD",
+        True,
+    )
+
+
+def test_a_value_column_with_no_usable_value_has_no_values(tmp_path):
+    run = make_run(tmp_path, ASSETS, values=[(None, "invalid"), (None, "missing")])
+    assert summary(run)["has_values"] is False

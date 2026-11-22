@@ -13,7 +13,7 @@ ENGINE = Path(geolocation.__file__).parent
 
 
 def test_locates_points_with_the_library(local_settings, coords_csv, tmp_path):
-    points = read_portfolio(coords_csv, 100)
+    points = read_portfolio(coords_csv, 100).points
     output = tmp_path / "out.csv"
     counts = locate(points, output, local_settings)
 
@@ -27,7 +27,7 @@ def test_locates_points_with_the_library(local_settings, coords_csv, tmp_path):
 
 
 def test_reports_progress_up_to_the_total(local_settings, coords_csv, tmp_path):
-    points = read_portfolio(coords_csv, 100)
+    points = read_portfolio(coords_csv, 100).points
     seen = []
     locate(points, tmp_path / "out.csv", local_settings, lambda done, total: seen.append(done))
     assert seen == sorted(seen)
@@ -86,7 +86,7 @@ def test_live_overture(tmp_path):
     path.write_text(
         "id,lat,lon\nempire,40.7484,-73.9857\nbigben,51.5007,-0.1246\nocean,0.0,-30.0\n"
     )
-    counts = locate(read_portfolio(path, 10), tmp_path / "out.csv", load_settings())
+    counts = locate(read_portfolio(path, 10).points, tmp_path / "out.csv", load_settings())
     assert counts["invalid"] == 0
     assert counts["none"] == 1
     assert counts["intersects"] + counts["nearest"] == 2
