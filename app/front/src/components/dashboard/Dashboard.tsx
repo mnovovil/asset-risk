@@ -3,7 +3,16 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 import { getConfig, type Pair } from "@/api/client";
 import { useRunData, usePairData } from "@/hooks/useDashboard";
 import { useReport } from "@/hooks/useReport";
-import { buildRows, defaultPair, isBaseline, missingHazards, pointFor, scenariosOf } from "@/lib/dashboard";
+import {
+  buildRows,
+  defaultPair,
+  isBaseline,
+  missingHazards,
+  pointFor,
+  scenariosOf,
+  type Weighting,
+} from "@/lib/dashboard";
+import { COLOR_BY_EXPECTED_LOSS } from "@/lib/mapFeatures";
 import { sortHazards } from "@/lib/hazards";
 
 import { AssetPanel } from "./AssetPanel";
@@ -35,6 +44,7 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
   const { data: run, error: runError } = useRunData(runId);
   const [pair, setPair] = useState<Pair | null>(null);
   const [colorBy, setColorBy] = useState(COLOR_BY_TOTAL);
+  const [weighting, setWeighting] = useState<Weighting>("equal");
   const [selected, setSelected] = useState<number | null>(null);
   const [defaultType, setDefaultType] = useState<string | null>(null);
   const { data: results, loading, error: pairError } = usePairData(runId, pair);
@@ -77,6 +87,19 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
   }
   if (!run || !pair) return <p className="muted">Loading results…</p>;
 
+  const hasValues = run.summary.has_values;
+  const currency = run.summary.currency ?? null;
+  // Only a run with values can be weighted by them; an old run never offers it.
+  const shownWeighting: Weighting = hasValues ? weighting : "equal";
+  const lossColoring = (next: Weighting) =>
+    next === "value" ? COLOR_BY_EXPECTED_LOSS : COLOR_BY_TOTAL;
+  const changeWeighting = (next: Weighting) => {
+    setWeighting(next);
+    // The map follows the weighting while it's coloured by a loss; a hazard's score stays put.
+    if (colorBy === COLOR_BY_TOTAL || colorBy === COLOR_BY_EXPECTED_LOSS) {
+      setColorBy(lossColoring(next));
+    }
+  };
   const missing = missingHazards(run.coverage, pair);
   const point = pointFor(run.trajectory, pair);
 
@@ -92,6 +115,7 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
         generatedAt: new Date(),
         pair,
         colorBy,
+        weighting: shownWeighting,
         run,
         rows,
         defaultType,
@@ -108,11 +132,14 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
         pair={pair}
         onPairChange={(next) => {
           setPair(next);
-          setColorBy(COLOR_BY_TOTAL);
+          setColorBy(lossColoring(shownWeighting));
         }}
         hazards={scoreHazards}
         colorBy={colorBy}
         onColorByChange={setColorBy}
+        hasValues={hasValues}
+        weighting={shownWeighting}
+        onWeightingChange={changeWeighting}
         report={{ state: report.state, blocked: reportBlocked, onDownload: downloadReport }}
       />
       {report.state.kind === "error" && (
@@ -126,13 +153,20 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
         </p>
       )}
       <div className="dashboard-body" aria-busy={loading}>
-        <Kpis summary={run.summary} point={point} rows={rows} baseline={baseline} />
+        <Kpis
+          summary={run.summary}
+          point={point}
+          rows={rows}
+          baseline={baseline}
+          weighting={shownWeighting}
+        />
         <Suspense fallback={<p className="muted">Loading the map…</p>}>
           <RiskMap
             assets={run.assets}
             clusters={run.clusters}
             rows={rows}
             colorBy={colorBy}
+            currency={currency}
             selected={selected}
             onSelect={setSelected}
             onStatusChange={setMapStatus}
@@ -140,9 +174,26 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
         </Suspense>
         {rows.length > 0 ? (
           <>
-            <LossBars rows={rows} missing={missing} baseline={baseline} onSelect={setSelected} />
-            <ScoreTable rows={rows} baseline={baseline} onSelect={setSelected} />
-            <Trajectory trajectory={run.trajectory} sharedHazards={run.summary.shared_hazards} />
+            <LossBars
+              rows={rows}
+              missing={missing}
+              baseline={baseline}
+              onSelect={setSelected}
+              weighting={shownWeighting}
+              currency={currency}
+            />
+            <ScoreTable
+              rows={rows}
+              baseline={baseline}
+              onSelect={setSelected}
+              hasValues={hasValues}
+              currency={currency}
+            />
+            <Trajectory
+              trajectory={run.trajectory}
+              sharedHazards={run.summary.shared_hazards}
+              weighting={shownWeighting}
+            />
           </>
         ) : (
           !loading && (
@@ -168,6 +219,7 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
           rowNum={selected}
           pair={pair}
           scenarios={scenariosOf(run.trajectory)}
+          currency={currency}
           onClose={closePanel}
         />
       )}

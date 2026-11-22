@@ -10,8 +10,8 @@ import {
   YAxis,
 } from "recharts";
 
-import { barData, TOP_ASSETS, type AssetRow } from "@/lib/dashboard";
-import { joinList, percent, percentTick, truncate } from "@/lib/format";
+import { barData, TOP_ASSETS, type AssetRow, valueRows, type Weighting } from "@/lib/dashboard";
+import { joinList, money, percent, percentTick, plural, truncate } from "@/lib/format";
 import { hazardColor, hazardLabel, sortHazards } from "@/lib/hazards";
 
 import { ChartLegend } from "./ChartLegend";
@@ -75,18 +75,40 @@ interface LossBarsProps {
   /** Showing physrisk's baseline: no historical markers, as it would be compared with itself. */
   baseline: boolean;
   onSelect: (rowNum: number) => void;
+  /** "value" draws expected loss in money (AAL x value), ranked by it. */
+  weighting?: Weighting;
+  currency?: string | null;
 }
 
-export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
+export function LossBars({
+  rows: allRows,
+  missing,
+  baseline,
+  onSelect,
+  weighting = "equal",
+  currency = null,
+}: LossBarsProps) {
+  const byValue = weighting === "value";
+  const rows = byValue ? valueRows(allRows) : allRows;
+  const withoutValue = allRows.length - rows.length;
+  const format = byValue ? (v: number | null | undefined) => money(v, currency) : percent;
+  const tick = byValue ? (v: number) => money(v, currency, true) : percentTick;
   const data = barData(rows);
   const hazards = sortHazards(rows.flatMap((row) => Object.keys(row.aal)));
 
   return (
     <section className="panel" aria-labelledby="loss-heading">
-      <h2 id="loss-heading">Annual loss by hazard</h2>
+      <h2 id="loss-heading">{byValue ? "Expected annual loss by hazard" : "Annual loss by hazard"}</h2>
       <p className="panel-note">
-        Share of asset value lost per year on average.
+        {byValue
+          ? "Expected loss per year on average: annual loss times the asset's value."
+          : "Share of asset value lost per year on average."}
         {rows.length > TOP_ASSETS && ` The ${TOP_ASSETS} highest of ${rows.length}.`}
+        {byValue &&
+          withoutValue > 0 &&
+          ` ${plural(withoutValue, "asset")} with no usable value ${
+            withoutValue === 1 ? "isn't" : "aren't"
+          } shown.`}
         {!baseline && " Diamonds show the historical loss over the same hazards."}
         {missing.length > 0 &&
           ` ${joinList(missing.map(hazardLabel))} ${
@@ -96,7 +118,9 @@ export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
       <div
         className="chart-frame"
         role="img"
-        aria-label="Stacked bars of annual loss by hazard for the highest-loss assets. The table below has the same values."
+        aria-label={`Stacked bars of ${
+          byValue ? "expected annual loss" : "annual loss"
+        } by hazard for the highest-loss assets. The table below has the same values.`}
       >
         <ResponsiveContainer width="100%" height={data.length * ROW_HEIGHT + CHART_CHROME}>
           <ComposedChart
@@ -112,7 +136,7 @@ export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
             <XAxis
               type="number"
               domain={[0, "auto"]}
-              tickFormatter={percentTick}
+              tickFormatter={tick}
               stroke="var(--axis)"
               tick={{ fill: "var(--muted)", fontSize: 12 }}
             />
@@ -137,13 +161,13 @@ export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
                       ...hazards.map((hazard) => ({
                         key: hazard,
                         label: hazardLabel(hazard),
-                        value: percent(datum[hazard as keyof Datum] as number | undefined),
+                        value: format(datum[hazard as keyof Datum] as number | undefined),
                         color: hazardColor(hazard),
                       })),
                       {
                         key: "total",
                         label: "Total",
-                        value: percent(datum.total),
+                        value: format(datum.total),
                         color: "var(--ink)",
                       },
                       ...(baseline
@@ -152,7 +176,7 @@ export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
                             {
                               key: "historical",
                               label: "Historical, same hazards",
-                              value: percent(datum.historical),
+                              value: format(datum.historical),
                               color: "var(--muted)",
                             },
                           ]),
@@ -198,7 +222,9 @@ export function LossBars({ rows, missing, baseline, onSelect }: LossBarsProps) {
                     fill="var(--ink)"
                     fontSize={12}
                   >
-                    {percent(data[Number(index)]?.total)}
+                    {byValue
+                      ? money(data[Number(index)]?.total, currency, true)
+                      : percent(data[Number(index)]?.total)}
                   </text>
                 )}
               />

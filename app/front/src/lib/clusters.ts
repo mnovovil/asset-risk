@@ -11,7 +11,13 @@ import {
   scoreColor,
   totalColor,
 } from "@/lib/mapColors";
-import { COLOR_BY_TOTAL, totalsOf } from "@/lib/mapFeatures";
+import {
+  COLOR_BY_EXPECTED_LOSS,
+  formatLoss,
+  isLossColoring,
+  lossOf,
+  totalsOf,
+} from "@/lib/mapFeatures";
 
 const MIN_RADIUS_PX = 12;
 const MAX_RADIUS_PX = 36;
@@ -49,25 +55,32 @@ export function summariseClusters(
   rows: AssetRow[],
   colorBy: string,
   dark: boolean,
+  currency: string | null = null,
 ): ClusterSummary[] {
   const byRow = new Map(rows.map((row) => [row.rowNum, row]));
   const assumed = new Set(
     assets.filter((a) => a.assessable && a.type_source === "assumed").map((a) => a.row_num),
   );
   // The points' classes, so a bubble and its assets read on one scale.
-  const breaks = lossBreaks(totalsOf(rows));
+  const breaks = lossBreaks(totalsOf(rows, colorBy));
 
   return clusters.map((cluster) => {
     const members = cluster.row_nums.map((rowNum) => byRow.get(rowNum));
     let color: string | null = null;
     let value: string;
     let withResults: number;
-    if (colorBy === COLOR_BY_TOTAL) {
-      const totals = members.flatMap((row) => (row?.total == null ? [] : [row.total]));
+    if (isLossColoring(colorBy)) {
+      const totals = members.flatMap((row) => {
+        const loss = lossOf(row, colorBy);
+        return loss === null ? [] : [loss];
+      });
       withResults = totals.length;
       const average = totals.length ? mean(totals) : null;
       if (average !== null) color = totalColor(average, breaks, dark);
-      value = `Mean total annual loss ${percent(average)}`;
+      value =
+        colorBy === COLOR_BY_EXPECTED_LOSS
+          ? `Mean expected annual loss ${formatLoss(average, colorBy, currency)}`
+          : `Mean total annual loss ${percent(average)}`;
     } else {
       const scores = members.flatMap((row) => {
         const score = row?.scores[colorBy]?.score;

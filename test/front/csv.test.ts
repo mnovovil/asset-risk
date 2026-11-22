@@ -3,9 +3,16 @@ import { describe, expect, it } from "vitest";
 import { inspectCsv, PREVIEW_ROWS } from "@/lib/csv";
 
 describe("inspectCsv", () => {
+  it("previews the optional value and currency columns when present", () => {
+    const inspection = inspectCsv("Currency,id,note,lat,lon,VALUE\nUSD,a,x,1,2,1500\n");
+    expect(inspection.columns).toEqual(["id", "lat", "lon", "value", "currency"]);
+    expect(inspection.preview).toEqual([["a", "1", "2", "1500", "USD"]]);
+  });
+
   it("reads a simple file", () => {
     expect(inspectCsv("id,lat,lon\na,1,2\nb,3,4\n")).toEqual({
       missing: [],
+      columns: ["id", "lat", "lon"],
       preview: [
         ["a", "1", "2"],
         ["b", "3", "4"],

@@ -8,12 +8,21 @@ import {
   scoreKind,
   type AssetRow,
 } from "@/lib/dashboard";
-import { joinList, percent } from "@/lib/format";
+import { joinList, money, percent } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
 
 const PAGE_SIZE = 25;
 const ASSET_COLUMN = "asset";
 const TOTAL_COLUMN = "total";
+const VALUE_COLUMN = "value";
+const EXPECTED_COLUMN = "expected";
+
+// Rows with no value sort below every value, whichever way the column is sorted.
+function compareNullable(a: number | null, b: number | null, ascending: boolean): number {
+  if ((a === null) !== (b === null)) return a === null ? 1 : -1;
+  const result = (a ?? 0) - (b ?? 0);
+  return ascending ? result : -result;
+}
 
 interface Sort {
   column: string;
@@ -26,6 +35,9 @@ function compare(a: AssetRow, b: AssetRow, { column, ascending }: Sort): number 
     result = a.label.localeCompare(b.label);
   } else if (column === TOTAL_COLUMN) {
     result = (a.total ?? -1) - (b.total ?? -1);
+  } else if (column === VALUE_COLUMN || column === EXPECTED_COLUMN) {
+    const key = column === VALUE_COLUMN ? "value" : "expectedLoss";
+    return compareNullable(a[key], b[key], ascending) || byTotalDescending(a, b);
   } else {
     // Rows with no result stay at the bottom whichever way a column is sorted.
     const sa = a.scores[column]?.score ?? -1;
@@ -68,9 +80,18 @@ interface ScoreTableProps {
   /** physrisk's baseline has no scores, so its columns show annual loss only. */
   baseline: boolean;
   onSelect: (rowNum: number) => void;
+  /** Whether the run has asset values, which adds value and expected loss columns. */
+  hasValues?: boolean;
+  currency?: string | null;
 }
 
-export function ScoreTable({ rows, baseline, onSelect }: ScoreTableProps) {
+export function ScoreTable({
+  rows,
+  baseline,
+  onSelect,
+  hasValues = false,
+  currency = null,
+}: ScoreTableProps) {
   const [sort, setSort] = useState<Sort>({ column: TOTAL_COLUMN, ascending: false });
   const [page, setPage] = useState(0);
   const columns = useMemo(
@@ -115,6 +136,8 @@ export function ScoreTable({ rows, baseline, onSelect }: ScoreTableProps) {
         {baseline
           ? "Annual loss for each hazard. physrisk scores scenarios only, so the baseline has no scores."
           : `Annual loss and physrisk's score for each hazard. "No model" and "No data" mean there's no result, which isn't the same as low risk.`}
+        {hasValues &&
+          " Expected loss is the total times the asset's value. \"No value\" means the file gave none that could be used."}
       </p>
       <div className="table-scroll">
         <table>
@@ -122,6 +145,8 @@ export function ScoreTable({ rows, baseline, onSelect }: ScoreTableProps) {
             <tr>
               {header(ASSET_COLUMN, "Asset")}
               {header(TOTAL_COLUMN, "Total")}
+              {hasValues && header(VALUE_COLUMN, "Value")}
+              {hasValues && header(EXPECTED_COLUMN, "Expected loss")}
               {columns.scored.map((hazard) => header(hazard, hazardLabel(hazard)))}
             </tr>
           </thead>
@@ -134,6 +159,16 @@ export function ScoreTable({ rows, baseline, onSelect }: ScoreTableProps) {
                   </button>
                 </th>
                 <td className="total-cell">{percent(row.total)}</td>
+                {hasValues && (
+                  <td className={row.value === null ? "score-cell score-none" : "score-cell"}>
+                    {row.value === null ? "No value" : money(row.value, currency)}
+                  </td>
+                )}
+                {hasValues && (
+                  <td className={row.value === null ? "score-cell score-none" : "total-cell"}>
+                    {row.value === null ? "No value" : money(row.expectedLoss, currency)}
+                  </td>
+                )}
                 {columns.scored.map((hazard) => (
                   <ScoreCell key={hazard} row={row} hazard={hazard} baseline={baseline} />
                 ))}

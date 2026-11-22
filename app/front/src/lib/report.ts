@@ -9,6 +9,8 @@ import {
   type AssetRow,
   isBaseline,
   type KpiItem,
+  valueCoverage,
+  type Weighting,
   kpiItems,
   pairLabel,
   pointFor,
@@ -17,7 +19,7 @@ import {
 import { count } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
 import { clusteredRowNums } from "@/lib/clusters";
-import { COLOR_BY_TOTAL, placeable } from "@/lib/mapFeatures";
+import { COLOR_BY_EXPECTED_LOSS, COLOR_BY_TOTAL, placeable } from "@/lib/mapFeatures";
 import { type LegendItem, mapLegend } from "@/lib/mapLegend";
 import { type NoteGroup, REPORT_NOTES, REPORT_SOURCE_NOTE } from "@/lib/reportText";
 
@@ -28,6 +30,8 @@ export interface ReportInput {
   generatedAt: Date;
   pair: Pair;
   colorBy: string;
+  /** How portfolio figures are averaged, as the dashboard showed them. */
+  weighting?: Weighting;
   run: RunData;
   rows: AssetRow[];
   /** The building type assumed when Overture says nothing, if known. */
@@ -57,11 +61,21 @@ export interface ReportContent {
 const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
 
 export function colorByLabel(colorBy: string): string {
-  return colorBy === COLOR_BY_TOTAL ? "Total annual loss" : `${hazardLabel(colorBy)} score`;
+  if (colorBy === COLOR_BY_TOTAL) return "Total annual loss";
+  if (colorBy === COLOR_BY_EXPECTED_LOSS) return "Expected annual loss";
+  return `${hazardLabel(colorBy)} score`;
+}
+
+export function weightingLabel(weighting: Weighting, currency: string | null): string {
+  if (weighting === "equal") return "Equal: every asset counts the same";
+  return `By value${currency ? `, in ${currency}` : ", in the file's value units"}`;
 }
 
 export function reportContent(input: ReportInput): ReportContent {
   const { run, rows, pair, colorBy } = input;
+  const weighting = run.summary.has_values ? (input.weighting ?? "equal") : "equal";
+  const currency = run.summary.currency ?? null;
+  const point = pointFor(run.trajectory, pair);
   const baseline = isBaseline(pair);
   const sources = typeSourceCounts(run.assets);
   const assumed = input.defaultType
@@ -88,8 +102,16 @@ export function reportContent(input: ReportInput): ReportContent {
       { label: "Run date", value: day(input.createdAt) },
       { label: "Assets", value: count(run.summary.total_assets) },
       { label: "Map coloured by", value: colorByLabel(colorBy) },
+      ...(run.summary.has_values
+        ? [
+            { label: "Weighting", value: weightingLabel(weighting, currency) },
+            ...(weighting === "value"
+              ? [{ label: "Value coverage", value: valueCoverage(run.summary, point) }]
+              : []),
+          ]
+        : []),
     ],
-    kpis: kpiItems(run.summary, pointFor(run.trajectory, pair), rows, baseline),
+    kpis: kpiItems(run.summary, point, rows, baseline, weighting),
     typeSource:
       `Building type of assessed assets, from Overture's class: ${count(sources.class)}, ` +
       `from its subtype: ${count(sources.subtype)}, ${assumed}.`,
@@ -98,7 +120,15 @@ export function reportContent(input: ReportInput): ReportContent {
       caption: hasClusters
         ? "The portfolio as the dashboard map opens, with nearby assets grouped into bubbles."
         : "The portfolio as the dashboard map opens.",
-      legend: mapLegend({ rows, colorBy, hasClusters, outside, dark: false, interactive: false }),
+      legend: mapLegend({
+        rows,
+        colorBy,
+        hasClusters,
+        outside,
+        dark: false,
+        interactive: false,
+        currency,
+      }),
     },
     noResults,
     notes: REPORT_NOTES,

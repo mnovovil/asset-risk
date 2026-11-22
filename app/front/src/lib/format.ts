@@ -42,3 +42,32 @@ const SCENARIO_LABELS: Record<string, string> = {
 };
 
 export const scenarioLabel = (scenario: string) => SCENARIO_LABELS[scenario] ?? scenario;
+
+/**
+ * An amount in the portfolio's currency, or in plain "value units" when its values have none, so a
+ * unitless amount never reads as money. Compact (€1.2M) for headline figures and axis ticks.
+ */
+export function money(
+  amount: number | null | undefined,
+  currency: string | null,
+  compact = false,
+): string {
+  if (amount === null || amount === undefined) return "–";
+  const notation = compact ? "compact" : "standard";
+  if (!currency) {
+    const digits = compact ? { maximumSignificantDigits: 3 } : { maximumFractionDigits: 0 };
+    return `${new Intl.NumberFormat(undefined, { notation, ...digits }).format(amount)} value units`;
+  }
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      notation,
+      // Whole units: cents on a loss estimate claim a precision it doesn't have.
+      ...(compact ? { maximumSignificantDigits: 3 } : { maximumFractionDigits: 0 }),
+    }).format(amount);
+  } catch {
+    // A code Intl doesn't know: still show the amount, with the code the file gave.
+    return `${new Intl.NumberFormat(undefined, { notation }).format(amount)} ${currency}`;
+  }
+}

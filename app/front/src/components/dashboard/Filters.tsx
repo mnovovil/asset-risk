@@ -6,12 +6,13 @@ import {
   isBaseline,
   preferredYear,
   scenariosOf,
+  type Weighting,
   yearsOf,
 } from "@/lib/dashboard";
 import { hazardLabel } from "@/lib/hazards";
 import { scenarioLabel } from "@/lib/format";
 
-import { COLOR_BY_TOTAL } from "@/lib/mapFeatures";
+import { COLOR_BY_EXPECTED_LOSS, COLOR_BY_TOTAL } from "@/lib/mapFeatures";
 import { type ReportState, STAGE_TEXT } from "@/hooks/useReport";
 
 export { COLOR_BY_TOTAL };
@@ -24,6 +25,10 @@ interface FiltersProps {
   hazards: string[];
   colorBy: string;
   onColorByChange: (value: string) => void;
+  /** Whether any asset has a usable value. Without one, there's nothing to weight by. */
+  hasValues?: boolean;
+  weighting?: Weighting;
+  onWeightingChange?: (weighting: Weighting) => void;
   report: {
     state: ReportState;
     /** Why the report can't be made yet, or null when it can. */
@@ -41,6 +46,9 @@ export function Filters({
   hazards,
   colorBy,
   onColorByChange,
+  hasValues = false,
+  weighting = "equal",
+  onWeightingChange,
   report,
 }: FiltersProps) {
   const years = yearsOf(trajectory, pair.scenario);
@@ -90,10 +98,23 @@ export function Filters({
           ))}
         </select>
       </label>
+      {hasValues && (
+        <label>
+          Weighting
+          <select
+            value={weighting}
+            onChange={(event) => onWeightingChange?.(event.target.value as Weighting)}
+          >
+            <option value="equal">Equal</option>
+            <option value="value">By value</option>
+          </select>
+        </label>
+      )}
       <label>
         Colour the map by
         <select value={colorBy} onChange={(event) => onColorByChange(event.target.value)}>
           <option value={COLOR_BY_TOTAL}>Total annual loss</option>
+          {hasValues && <option value={COLOR_BY_EXPECTED_LOSS}>Expected annual loss</option>}
           {hazards.map((hazard) => (
             <option key={hazard} value={hazard}>
               {hazardLabel(hazard)} score

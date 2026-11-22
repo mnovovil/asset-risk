@@ -44,6 +44,8 @@ interface RiskMapProps {
   clusters: Cluster[];
   rows: AssetRow[];
   colorBy: string;
+  /** The portfolio's currency, for expected loss. */
+  currency?: string | null;
   selected: number | null;
   onSelect: (rowNum: number) => void;
   /** Whether the map has drawn, so the PDF report can wait for it. */
@@ -57,6 +59,7 @@ export default function RiskMap({
   clusters,
   rows,
   colorBy,
+  currency = null,
   selected,
   onSelect,
   onStatusChange,
@@ -75,8 +78,9 @@ export default function RiskMap({
 
   const hasClusters = clusters.length > 0;
   const features = useMemo(
-    () => toFeatures(assets, rows, colorBy, selected, dark, pointRing(dark), hasClusters),
-    [assets, rows, colorBy, selected, dark, hasClusters],
+    () =>
+      toFeatures(assets, rows, colorBy, selected, dark, pointRing(dark), hasClusters, currency),
+    [assets, rows, colorBy, selected, dark, hasClusters, currency],
   );
   // Shown in the legend, so assets outside every bubble don't vanish without a word.
   const outside = useMemo(() => {
@@ -86,8 +90,8 @@ export default function RiskMap({
   const featuresRef = useRef(features);
   featuresRef.current = features;
   const summaries = useMemo(
-    () => summariseClusters(clusters, assets, rows, colorBy, dark),
-    [clusters, assets, rows, colorBy, dark],
+    () => summariseClusters(clusters, assets, rows, colorBy, dark, currency),
+    [clusters, assets, rows, colorBy, dark, currency],
   );
   const bubbles = useMemo(() => toBubbles(summaries, pointRing(dark)), [summaries, dark]);
   const bubblesRef = useRef(bubbles);
@@ -256,7 +260,15 @@ export default function RiskMap({
     (mapRef.current?.getSource(CLUSTER_SOURCE) as GeoJSONSource | undefined)?.setData(bubbles);
   }, [bubbles, ready]);
 
-  const legend = mapLegend({ rows, colorBy, hasClusters, outside, dark, interactive: true });
+  const legend = mapLegend({
+    rows,
+    colorBy,
+    hasClusters,
+    outside,
+    dark,
+    interactive: true,
+    currency,
+  });
 
   return (
     <section className="panel" aria-labelledby="map-heading">

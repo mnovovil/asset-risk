@@ -11,7 +11,7 @@ import type {
   Summary,
   TrajectoryPoint,
 } from "@/api/client";
-import { assetLabel, count, percent, plural, scenarioLabel } from "@/lib/format";
+import { assetLabel, count, money, percent, plural, scenarioLabel } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
 export type ScoreKind = "scored" | "no_model" | "no_data" | "error";
@@ -38,7 +38,17 @@ export interface AssetRow {
   historical: number | null;
   aal: Record<string, number | null>;
   scores: Record<string, Score>;
+  /** The asset's value from the portfolio, or null unless its value_status is given. */
+  value: number | null;
+  /** total x value, in the portfolio's currency; null without a value or a result. */
+  expectedLoss: number | null;
 }
+
+/**
+ * How portfolio figures are averaged. "equal" counts every asset the same, and "value" weights
+ * each by its value: sum(AAL x value) / sum(value), over assets with a usable value.
+ */
+export type Weighting = "equal" | "value";
 
 export function buildRows(
   totals: AssetTotal[],
@@ -56,6 +66,8 @@ export function buildRows(
         historical: null,
         aal: {},
         scores: {},
+        value: total.value_status === "given" ? (total.value ?? null) : null,
+        expectedLoss: total.value_status === "given" ? (total.expected_loss ?? null) : null,
       },
     ]),
   );
@@ -74,6 +86,26 @@ export function buildRows(
     }
   }
   return [...rows.values()];
+}
+
+/**
+ * The rows the value view draws: only assets with a value, with every loss turned from a share of
+ * value into an amount (AAL x value). Assets without a value are left out, never shown as zero.
+ */
+export function valueRows(rows: AssetRow[]): AssetRow[] {
+  return rows.flatMap((row) => {
+    const value = row.value;
+    if (value === null) return [];
+    const times = (aal: number | null) => (aal === null ? null : aal * value);
+    return [
+      {
+        ...row,
+        total: times(row.total),
+        historical: times(row.historical),
+        aal: Object.fromEntries(Object.entries(row.aal).map(([h, aal]) => [h, times(aal)])),
+      },
+    ];
+  });
 }
 
 export const byTotalDescending = (a: AssetRow, b: AssetRow) =>
@@ -177,19 +209,25 @@ export interface TrajectoryDatum {
 }
 
 /** Shared-hazard means by year, because only those can be compared across scenarios. */
-export function trajectorySeries(trajectory: TrajectoryPoint[]): {
+export function trajectorySeries(
+  trajectory: TrajectoryPoint[],
+  weighting: Weighting = "equal",
+): {
   scenarios: string[];
   data: TrajectoryDatum[];
 } {
-  const baseline = trajectory.find((p) => p.year === null)?.mean_shared_aal ?? null;
-  const withResults = trajectory.filter((p) => p.year !== null && p.mean_shared_aal !== null);
+  const shared = (p: TrajectoryPoint) =>
+    (weighting === "value" ? p.weighted_mean_shared_aal : p.mean_shared_aal) ?? null;
+  const baselinePoint = trajectory.find((p) => p.year === null);
+  const baseline = baselinePoint ? shared(baselinePoint) : null;
+  const withResults = trajectory.filter((p) => p.year !== null && shared(p) !== null);
   const scenarios = [...new Set(withResults.map((p) => p.scenario))];
   const years = [...new Set(withResults.map((p) => p.year as number))].sort((a, b) => a - b);
   const data = years.map((year) => {
     const datum: TrajectoryDatum = { year, historical: baseline };
     for (const scenario of scenarios) {
       const point = withResults.find((p) => p.scenario === scenario && p.year === year);
-      datum[scenario] = point?.mean_shared_aal ?? null;
+      datum[scenario] = point ? shared(point) : null;
     }
     return datum;
   });
@@ -352,23 +390,38 @@ export function kpiItems(
   point: TrajectoryPoint | undefined,
   rows: AssetRow[],
   baseline: boolean,
+  weighting: Weighting = "equal",
 ): KpiItem[] {
   const assumed = assumedShare(summary.assessable, summary.assumed_type);
-  const withHistorical = rows.filter((row) => row.historical !== null);
-  const historicalMean = withHistorical.length
-    ? withHistorical.reduce((sum, row) => sum + (row.historical as number), 0) /
-      withHistorical.length
-    : null;
+  const byValue = weighting === "value";
   const comparison = baseline
     ? "physrisk's present-day baseline, which it treats as 2025"
-    : `Historical, same hazards: ${percent(historicalMean)}`;
+    : `Historical, same hazards: ${percent(historicalMean(rows, weighting))}`;
+  const hazards = plural(point?.hazards ?? 0, "hazard");
+
+  const loss: KpiItem[] = byValue
+    ? [
+        {
+          label: "Mean annual loss, value-weighted",
+          value: percent(point?.weighted_mean_total_aal),
+          note: `of asset value, over ${hazards}. ${comparison}`,
+        },
+        {
+          label: "Expected annual loss",
+          value: money(point?.expected_loss_total, summary.currency ?? null, true),
+          note: valueCoverage(summary, point),
+        },
+      ]
+    : [
+        {
+          label: "Mean annual loss, equal-weighted",
+          value: percent(point?.mean_total_aal),
+          note: `of asset value, over ${hazards}. ${comparison}`,
+        },
+      ];
 
   return [
-    {
-      label: "Mean annual loss, equal-weighted",
-      value: percent(point?.mean_total_aal),
-      note: `of asset value, over ${plural(point?.hazards ?? 0, "hazard")}. ${comparison}`,
-    },
+    ...loss,
     {
       label: "Assets assessed",
       value: `${count(summary.assessable)} of ${count(summary.total_assets)}`,
@@ -388,6 +441,48 @@ export function kpiItems(
       note: `${plural(summary.assumed_type, "asset")} had no building type to use`,
     },
   ];
+}
+
+/** The historical loss over the same hazards, averaged the same way as the headline figure. */
+function historicalMean(rows: AssetRow[], weighting: Weighting): number | null {
+  const withHistorical = rows.filter(
+    (row) => row.historical !== null && (weighting === "equal" || row.value !== null),
+  );
+  if (weighting === "equal") {
+    if (withHistorical.length === 0) return null;
+    return withHistorical.reduce((sum, row) => sum + (row.historical as number), 0) /
+      withHistorical.length;
+  }
+  const total = withHistorical.reduce((sum, row) => sum + (row.value as number), 0);
+  if (total === 0) return null;
+  return (
+    withHistorical.reduce((sum, row) => sum + (row.historical as number) * (row.value as number), 0) /
+    total
+  );
+}
+
+/**
+ * Which assets a value-weighted figure covers, so it's never read as the whole portfolio's: those
+ * with both a result for this scenario and year and a usable value.
+ */
+export function valueCoverage(summary: Summary, point: TrajectoryPoint | undefined): string {
+  const currency = summary.currency ?? null;
+  const covered = point?.valued_assets ?? 0;
+  const parts = [
+    `From ${count(covered)} of ${plural(summary.total_assets, "asset")}, worth ${money(
+      point?.valued_total,
+      currency,
+      true,
+    )}`,
+  ];
+  const without = summary.missing_values + summary.invalid_values;
+  if (without > 0) {
+    parts.push(
+      `${plural(without, "asset")} ${without === 1 ? "has" : "have"} no usable value` +
+        (summary.invalid_values > 0 ? ` (${count(summary.invalid_values)} invalid)` : ""),
+    );
+  }
+  return `${parts.join(". ")}.`;
 }
 
 export interface TypeSourceCounts {

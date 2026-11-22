@@ -24,8 +24,29 @@ for any one year.
 
 An asset's **total** adds its hazards together.
 
-The **portfolio mean** is equal-weighted, because a list of `id, lat, lon` has no asset values. A
-small shed counts as much as a large factory. There are no currency figures for the same reason.
+The **portfolio mean** is equal-weighted by default: every asset with a result counts the same, so a
+small shed counts as much as a large factory. A list of only `id, lat, lon` can't do better, because it
+has no asset values.
+
+### Weighting by value
+
+If the CSV has a `value` column (see [Portfolio CSV](reference.md#portfolio-csv)), the dashboard
+offers **Weighting: By value** as well.
+
+- **Expected annual loss** is AAL times the asset's value, in the file's currency. An asset worth
+  €10M with an AAL of 0.5% has an expected annual loss of €50,000. Without a `currency` column the
+  amounts are plain "value units", never money.
+- **The value-weighted mean** is the sum of every asset's expected loss divided by the sum of their
+  values. A large asset moves it more than a small one.
+- **Value-weighted figures cover only assets with both a result and a usable value.** A blank,
+  negative or unreadable value leaves the asset in the run, assessed as usual, and out of these
+  figures only. Each one says how many assets and how much value it covers. If few assets have a
+  value, read the weighted figures as describing those assets, not the portfolio.
+- Equal weighting stays the default, and the Portfolios page and the map's bubbles always use it, so
+  portfolios can be compared whether or not they have values.
+- Values are taken as given. The app doesn't convert currencies, and a file can use only one.
+- Change over time compares scenarios on shared hazards in both weightings, and the historical
+  markers are weighted the same way as the figure they sit beside.
 
 **Scores** are physrisk's bands of AAL, from "Very low impact" to "Very high impact". Thresholds
 differ by hazard group.
@@ -90,11 +111,15 @@ members have results and how many assume the default building type.
 Points and bubbles share one scale, from green (lowest) to red (highest). Each step is also darker
 than the last (lighter, in dark mode), so the order reads without telling green from red.
 
-For total loss, the five colours are **quintiles**: each holds about a fifth of the assets with a
+For total loss, and for expected annual loss when the portfolio has values, the five colours are
+**quintiles**: each holds about a fifth of the assets with a
 result, for the selected scenario and year. One extreme loss then only moves the top class, instead
 of pushing every other asset into the lowest one. The legend gives the range of losses in each
 colour. The colour shows an asset's rank within this portfolio, so the same loss can be a different
 colour in another portfolio or scenario. Hazard scores keep physrisk's fixed bands.
+
+Colouring by expected annual loss draws an asset with no usable value hollow, as one with no result,
+never as a low loss. A bubble's colour is then the plain mean of its members' expected losses.
 
 A green bubble or point is not proof of low risk, for the same reasons as a low score: see
 [Limits of the model](#limits-of-the-model).
@@ -191,8 +216,9 @@ How the zone is found, and how to read it:
 
 ## PDF report
 
-**Download report as PDF** saves what the dashboard shows for the selected scenario, year and map
-colouring. It has the headline figures with where building types came from, the risk map with its
+**Download report as PDF** saves what the dashboard shows for the selected scenario, year, map
+colouring and weighting. When the portfolio has values, it says which weighting it uses and, for
+value weighting, which assets the figures cover. It has the headline figures with where building types came from, the risk map with its
 legend, annual loss by hazard and change over time, and notes taken from this page.
 
 - The map is the view the dashboard opens with, not wherever it was panned or zoomed. It's drawn
