@@ -981,3 +981,136 @@ def test_committed_openapi_is_current():
     assert module.OPENAPI_JSON.read_text() == module.schema_text(), (
         "Run `.venv/bin/python script/export_openapi.py`"
     )
+
+
+VALUED_CSV = (
+    b"id,lat,lon,value,currency\n=cmd,40.4,-3.7,100,eur\nb,29.7,-95.3,300,EUR\nbad,95,1,x,\n"
+)
+
+
+@pytest.fixture
+def valued(client):
+    run_id = upload(client, VALUED_CSV).json()["run_id"]
+    assert wait_until_finished(client, run_id)["status"] == "completed"
+    return run_id
+
+
+def test_summary_has_value_coverage_and_currency(client, valued):
+    body = client.get(f"/api/runs/{valued}/summary").json()
+    assert {
+        k: body[k]
+        for k in (
+            "has_values",
+            "valued_assets",
+            "missing_values",
+            "invalid_values",
+            "total_value",
+            "currency",
+        )
+    } == {
+        "has_values": True,
+        "valued_assets": 2,
+        "missing_values": 0,
+        "invalid_values": 1,
+        "total_value": 400.0,
+        "currency": "EUR",
+    }
+
+
+def test_a_run_without_values_says_so(client, finished):
+    body = client.get(f"/api/runs/{finished}/summary").json()
+    assert (body["has_values"], body["missing_values"], body["currency"]) == (False, 3, None)
+
+
+def test_assets_and_totals_carry_values_and_expected_loss(client, valued):
+    assets = client.get(f"/api/runs/{valued}/assets").json()
+    assert [(a["value"], a["value_status"]) for a in assets] == [
+        (100.0, "given"),
+        (300.0, "given"),
+        (None, "invalid"),
+    ]
+    assert client.get(f"/api/runs/{valued}/assets/1").json()["value"] == 100.0
+    rows = client.get(
+        f"/api/runs/{valued}/totals", params={"scenario": "ssp585", "year": 2050}
+    ).json()
+    assert [(r["value"], r["expected_loss"], r["shared_expected_loss"]) for r in rows] == [
+        (100.0, pytest.approx(1.0), pytest.approx(1.0)),
+        (300.0, pytest.approx(9.0), pytest.approx(9.0)),
+    ]
+
+
+def test_trajectory_has_value_weighted_figures(client, valued):
+    points = {p["scenario"]: p for p in client.get(f"/api/runs/{valued}/trajectory").json()}
+    ssp585 = points["ssp585"]
+    assert ssp585["mean_total_aal"] == pytest.approx(0.02)
+    assert (ssp585["valued_assets"], ssp585["valued_total"]) == (2, 400.0)
+    assert ssp585["weighted_mean_total_aal"] == pytest.approx(10 / 400)
+    assert ssp585["weighted_mean_shared_aal"] == pytest.approx(10 / 400)
+    assert ssp585["expected_loss_total"] == pytest.approx(10.0)
+    assert points["ssp370"]["valued_assets"] == 0
+    assert points["ssp370"]["weighted_mean_total_aal"] is None
+
+
+def test_export_has_values_currency_and_expected_loss(client, valued):
+    rows = list(csv.DictReader(io.StringIO(client.get(f"/api/runs/{valued}/export.csv").text)))
+    houston = [r for r in rows if r["asset_id"] == "b" and r["scenario"] == "ssp585"]
+    assert [(r["value"], r["value_status"], r["currency"]) for r in houston] == [
+        ("300.0", "given", "EUR")
+    ]
+    assert float(houston[0]["expected_loss"]) == pytest.approx(9.0)
+    excluded = rows[-1]
+    assert (excluded["value"], excluded["value_status"], excluded["expected_loss"]) == (
+        "",
+        "invalid",
+        "",
+    )
+
+
+def _make_it_a_run_from_before_values(run):
+    """Drop the value tables and put back the views a run made before them has."""
+    old_views = (ROOT / "test" / "engine" / "fixtures" / "views_before_values.sql").read_text()
+    with run.connect() as con:
+        views = con.execute(
+            "SELECT view_name FROM duckdb_views() WHERE NOT internal AND database_name = "
+            "current_database()"
+        ).fetchall()
+        for (name,) in views:
+            con.execute(f'DROP VIEW IF EXISTS "{name}" CASCADE')  # names from the catalogue
+        con.execute("DROP TABLE asset_values")
+        con.execute("DROP TABLE portfolio_values")
+        con.execute(old_views)
+
+
+def test_a_run_from_before_values_reads_as_equal_weighted_only(client, valued, settings):
+    _make_it_a_run_from_before_values(find_run(settings.data_dir, valued))
+    summary = client.get(f"/api/runs/{valued}/summary").json()
+    assert (summary["has_values"], summary["valued_assets"], summary["currency"]) == (
+        False,
+        0,
+        None,
+    )
+    assets = client.get(f"/api/runs/{valued}/assets").json()
+    assert {(a["value"], a["value_status"]) for a in assets} == {(None, "missing")}
+    assert client.get(f"/api/runs/{valued}/assets/1").json()["value_status"] == "missing"
+    [ssp585] = [
+        p for p in client.get(f"/api/runs/{valued}/trajectory").json() if p["scenario"] == "ssp585"
+    ]
+    assert ssp585["mean_total_aal"] == pytest.approx(0.02)
+    assert (ssp585["valued_assets"], ssp585["weighted_mean_total_aal"]) == (0, None)
+    totals = client.get(
+        f"/api/runs/{valued}/totals", params={"scenario": "ssp585", "year": 2050}
+    ).json()
+    assert {t["expected_loss"] for t in totals} == {None}
+    overview = client.get(f"/api/runs/{valued}/overview")
+    assert overview.status_code == 200
+    export = list(csv.DictReader(io.StringIO(client.get(f"/api/runs/{valued}/export.csv").text)))
+    assert {(r["value_status"], r["currency"], r["expected_loss"]) for r in export} == {
+        ("missing", "", "")
+    }
+
+
+def test_mixed_currencies_are_rejected_on_upload(client):
+    content = b"id,lat,lon,value,currency\na,1,2,1,USD\nb,1,2,1,EUR\n"
+    response = upload(client, content)
+    assert response.status_code == 422
+    assert "only one currency" in response.json()["detail"]

@@ -446,6 +446,13 @@ export interface components {
             subtype: string | null;
             /** Type Source */
             type_source: string | null;
+            /** Value */
+            value?: number | null;
+            /**
+             * Value Status
+             * @default missing
+             */
+            value_status: string;
         };
         /** AssetDetail */
         AssetDetail: {
@@ -523,6 +530,13 @@ export interface components {
             subtype: string | null;
             /** Type Source */
             type_source: string | null;
+            /** Value */
+            value?: number | null;
+            /**
+             * Value Status
+             * @default missing
+             */
+            value_status: string;
         };
         /** AssetImpact */
         AssetImpact: {
@@ -558,14 +572,25 @@ export interface components {
         AssetTotal: {
             /** Asset Id */
             asset_id: string | null;
+            /** Expected Loss */
+            expected_loss?: number | null;
             /** Hazards */
             hazards: number;
             /** Row Num */
             row_num: number;
             /** Shared Aal */
             shared_aal: number | null;
+            /** Shared Expected Loss */
+            shared_expected_loss?: number | null;
             /** Total Aal */
             total_aal: number | null;
+            /** Value */
+            value?: number | null;
+            /**
+             * Value Status
+             * @default missing
+             */
+            value_status: string;
         };
         /** Body_create_run_api_runs_post */
         Body_create_run_api_runs_post: {
@@ -816,6 +841,8 @@ export interface components {
             assessable: number;
             /** Assumed Type */
             assumed_type: number;
+            /** Currency */
+            currency?: string | null;
             /** Excluded */
             excluded: number;
             /** Exclusions */
@@ -824,6 +851,21 @@ export interface components {
             failed_assets: number;
             /** Global Curve */
             global_curve: number;
+            /**
+             * Has Values
+             * @default false
+             */
+            has_values: boolean;
+            /**
+             * Invalid Values
+             * @default 0
+             */
+            invalid_values: number;
+            /**
+             * Missing Values
+             * @default 0
+             */
+            missing_values: number;
             /** Nearest Match */
             nearest_match: number;
             /** No Building */
@@ -832,11 +874,22 @@ export interface components {
             shared_hazards: string[];
             /** Total Assets */
             total_assets: number;
+            /** Total Value */
+            total_value?: number | null;
+            /**
+             * Valued Assets
+             * @default 0
+             */
+            valued_assets: number;
         };
         /** TrajectoryPoint */
         TrajectoryPoint: {
             /** Assets */
             assets: number;
+            /** Expected Loss Shared */
+            expected_loss_shared?: number | null;
+            /** Expected Loss Total */
+            expected_loss_total?: number | null;
             /** Hazards */
             hazards: number;
             /** Mean Shared Aal */
@@ -845,6 +898,17 @@ export interface components {
             mean_total_aal: number | null;
             /** Scenario */
             scenario: string;
+            /**
+             * Valued Assets
+             * @default 0
+             */
+            valued_assets: number;
+            /** Valued Total */
+            valued_total?: number | null;
+            /** Weighted Mean Shared Aal */
+            weighted_mean_shared_aal?: number | null;
+            /** Weighted Mean Total Aal */
+            weighted_mean_total_aal?: number | null;
             /** Year */
             year: number | null;
         };

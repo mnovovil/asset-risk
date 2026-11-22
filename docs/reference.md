@@ -42,8 +42,29 @@ Environment variables override the settings in a container: `ASSET_RISK_CONFIG`,
 A header containing `id`, `lat` and `lon` (WGS84 degrees). Case and column order don't matter, and
 extra columns are ignored.
 
-The whole file is rejected if it has missing columns, no rows, duplicate ids, or too many rows or
-bytes. A bad row doesn't stop a run: it's kept and reported as `invalid`.
+Two optional columns give each asset a value, for value-weighted figures and losses in money:
+
+| Column | Contents |
+|---|---|
+| `value` | The asset's value, a plain number such as `1500000` or `1.5e6`. No thousands separators or currency signs |
+| `currency` | An ISO 4217 code such as `USD` or `EUR`, in any case. Optional: values without one are shown as plain amounts |
+
+```csv
+id,lat,lon,value,currency
+empire-state,40.7484,-73.9857,2300000000,USD
+big-ben,51.5007,-0.1246,,
+```
+
+- A blank value counts as `missing`. A value that isn't a plain number, or is negative or not
+  finite (such as `1,000`, `$5M`, `-5` or `inf`), counts as `invalid`. Either way, the asset is
+  still assessed and is left out of value-weighted figures only. `0` is a value.
+- A file uses one currency. Blank `currency` cells take the file's currency. Two different codes
+  reject the file, and nothing is converted.
+- A `currency` column without `value` is ignored.
+
+The whole file is rejected if it has missing columns, no rows, duplicate ids, more than one currency,
+a currency that isn't a three-letter code, or too many rows or bytes. A bad row doesn't stop a run:
+it's kept and reported as `invalid`.
 
 ## Classification
 
@@ -90,7 +111,7 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to the layer's `max_zoom` (7 for wind, 6 for the others), for the same `scenario` and `year`. 404 where there's no map, 502 when physrisk or S3 fails |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
-| `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
+| `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone, value, currency and expected loss (`aal` × `value`) |
 | `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
 | `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
 
@@ -137,13 +158,15 @@ Each run has `runs/<uuid>/run.duckdb`, which you can query directly:
 | `assets` | One row per input row: geolocate's output plus classification |
 | `asset_clusters` | The DBSCAN cluster of each clustered asset. Noise has no row, and runs made before clustering have no table |
 | `asset_flood_zones` | Each asset's FEMA flood zone and lookup status. Runs made before the lookup have no table |
+| `asset_values`, `portfolio_values` | Each asset's value and `value_status` (`given`, `missing` or `invalid`), and the portfolio's currency. Runs made before values have neither table, and read as having no values |
 | `flood_zone_source` | Which FEMA data the run used, and its date. Empty when there was none |
 | `assessment_pairs` | Each scenario and year requested |
 | `impacts`, `scores` | Results, keyed on `row_num`, `scenario` and `year`. The baseline has year NULL |
 | `assess_failures` | Failed batches |
 | `v_portfolio_summary`, `v_exclusions` | Counts |
 | `v_asset_totals`, `v_asset_hazard_aal`, `v_asset_scores` | Results per asset |
-| `v_portfolio_trajectory`, `v_portfolio_hazards` | Means, including over shared hazards |
+| `v_portfolio_trajectory`, `v_portfolio_hazards` | Means, including over shared hazards. The trajectory also has value-weighted means and expected losses |
+| `v_asset_expected_loss`, `v_portfolio_value_weighted` | AAL × value per asset, and its value-weighted sums, over assets with a `given` value |
 | `v_shared_hazards`, `v_hazard_coverage` | Which hazards each scenario has |
 
 ## Changing the Overture release

@@ -369,6 +369,22 @@
               }
             ],
             "title": "Type Source"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_status": {
+            "default": "missing",
+            "title": "Value Status",
+            "type": "string"
           }
         },
         "required": [
@@ -775,6 +791,22 @@
               }
             ],
             "title": "Type Source"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_status": {
+            "default": "missing",
+            "title": "Value Status",
+            "type": "string"
           }
         },
         "required": [
@@ -946,6 +978,17 @@
             ],
             "title": "Asset Id"
           },
+          "expected_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Loss"
+          },
           "hazards": {
             "title": "Hazards",
             "type": "integer"
@@ -965,6 +1008,17 @@
             ],
             "title": "Shared Aal"
           },
+          "shared_expected_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Expected Loss"
+          },
           "total_aal": {
             "anyOf": [
               {
@@ -975,6 +1029,22 @@
               }
             ],
             "title": "Total Aal"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_status": {
+            "default": "missing",
+            "title": "Value Status",
+            "type": "string"
           }
         },
         "required": [
@@ -1728,6 +1798,17 @@
             "title": "Assumed Type",
             "type": "integer"
           },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "excluded": {
             "title": "Excluded",
             "type": "integer"
@@ -1747,6 +1828,21 @@
             "title": "Global Curve",
             "type": "integer"
           },
+          "has_values": {
+            "default": false,
+            "title": "Has Values",
+            "type": "boolean"
+          },
+          "invalid_values": {
+            "default": 0,
+            "title": "Invalid Values",
+            "type": "integer"
+          },
+          "missing_values": {
+            "default": 0,
+            "title": "Missing Values",
+            "type": "integer"
+          },
           "nearest_match": {
             "title": "Nearest Match",
             "type": "integer"
@@ -1764,6 +1860,22 @@
           },
           "total_assets": {
             "title": "Total Assets",
+            "type": "integer"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Value"
+          },
+          "valued_assets": {
+            "default": 0,
+            "title": "Valued Assets",
             "type": "integer"
           }
         },
@@ -1787,6 +1899,28 @@
           "assets": {
             "title": "Assets",
             "type": "integer"
+          },
+          "expected_loss_shared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Loss Shared"
+          },
+          "expected_loss_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Loss Total"
           },
           "hazards": {
             "title": "Hazards",
@@ -1817,6 +1951,44 @@
           "scenario": {
             "title": "Scenario",
             "type": "string"
+          },
+          "valued_assets": {
+            "default": 0,
+            "title": "Valued Assets",
+            "type": "integer"
+          },
+          "valued_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valued Total"
+          },
+          "weighted_mean_shared_aal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weighted Mean Shared Aal"
+          },
+          "weighted_mean_total_aal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weighted Mean Total Aal"
           },
           "year": {
             "anyOf": [

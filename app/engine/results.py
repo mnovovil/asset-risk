@@ -34,6 +34,16 @@ _NO_FLOOD_ZONES = """(
     FROM assets
 )"""
 
+_VALUE_COLUMNS = """
+    v.value, coalesce(v.value_status, 'missing') AS value_status
+"""
+# What a run from before asset values existed reads as: no asset has one.
+_NO_VALUES = """(
+    SELECT row_num, NULL::DOUBLE AS value, 'missing' AS value_status FROM assets
+)"""
+_CURRENCY = "(SELECT max(currency) FROM portfolio_values)"
+_NO_CURRENCY = "NULL::VARCHAR"
+
 _EXPORT = """
 SELECT a.asset_id, a.lat, a.lon, a.match_type, a.distance_m, a.building_id, a.name, a.class,
        a.subtype, a.height, a.num_floors, a.region, a.physrisk_type, a.physrisk_location,
@@ -43,10 +53,13 @@ SELECT a.asset_id, a.lat, a.lon, a.match_type, a.distance_m, a.building_id, a.na
        f.base_flood_elevation_datum, f.fema_depth, f.fema_depth_unit, f.fema_dfirm_id,
        coalesce(f.fema_matches, 0) AS fema_matches,
        coalesce(f.fema_conflict, false) AS fema_conflict,
-       i.scenario, i.year, i.hazard, i.impact_type, i.aal, i.aal_std, s.score,
+       v.value, coalesce(v.value_status, 'missing') AS value_status, {currency} AS currency,
+       i.scenario, i.year, i.hazard, i.impact_type, i.aal, i.aal_std,
+       CASE WHEN v.value_status = 'given' THEN i.aal * v.value END AS expected_loss, s.score,
        s.label AS score_label
 FROM assets a
 LEFT JOIN {flood_zones} f USING (row_num)
+LEFT JOIN {asset_values} v USING (row_num)
 LEFT JOIN impacts i USING (row_num)
 LEFT JOIN scores s
     ON s.row_num = i.row_num AND s.hazard = i.hazard AND s.scenario = i.scenario
@@ -75,17 +88,28 @@ def _flood_zones(con: duckdb.DuckDBPyConnection) -> str:
     return "asset_flood_zones" if _has_table(con, "asset_flood_zones") else _NO_FLOOD_ZONES
 
 
+def _values(con: duckdb.DuckDBPyConnection) -> str:
+    """The relation to read asset values from: the table, or no values for an old run."""
+    return "asset_values" if _has_table(con, "asset_values") else _NO_VALUES
+
+
+def _currency(con: duckdb.DuckDBPyConnection) -> str:
+    return _CURRENCY if _has_table(con, "portfolio_values") else _NO_CURRENCY
+
+
 def _asset_rows(con: duckdb.DuckDBPyConnection, extra: str = "", where: str = "", params=None):
-    # Both pieces are constants from this module; values only ever go in params.
+    # Every piece is a constant from this module; values only ever go in params.
     return _rows(
         con,
-        f"SELECT {_ASSET_COLUMNS}, {_FLOOD_COLUMNS}{extra} FROM assets "
-        f"LEFT JOIN {_flood_zones(con)} f USING (row_num) {where} ORDER BY row_num",
+        f"SELECT {_ASSET_COLUMNS}, {_FLOOD_COLUMNS}, {_VALUE_COLUMNS}{extra} FROM assets "
+        f"LEFT JOIN {_flood_zones(con)} f USING (row_num) "
+        f"LEFT JOIN {_values(con)} v USING (row_num) {where} ORDER BY row_num",
         params,
     )
 
 
 def summary(run: Run) -> dict:
+    """The run's counts. An old run's view has no value columns, and schemas.Summary fills them."""
     with run.connect() as con:
         result = _rows(con, "SELECT * FROM v_portfolio_summary")[0]
         result["exclusions"] = _rows(con, "SELECT * FROM v_exclusions ORDER BY reason")
@@ -155,8 +179,13 @@ def totals(run: Run, scenario: str, year: int | None) -> list[dict]:
     with run.connect() as con:
         return _rows(
             con,
-            "SELECT row_num, asset_id, total_aal, shared_aal, hazards FROM v_asset_totals "
-            "WHERE scenario = ? AND year IS NOT DISTINCT FROM ? ORDER BY row_num",
+            "SELECT t.row_num, t.asset_id, t.total_aal, t.shared_aal, t.hazards, "
+            f"{_VALUE_COLUMNS}, "
+            "CASE WHEN v.value_status = 'given' THEN t.total_aal * v.value END AS expected_loss, "
+            "CASE WHEN v.value_status = 'given' THEN t.shared_aal * v.value END "
+            "AS shared_expected_loss "
+            f"FROM v_asset_totals t LEFT JOIN {_values(con)} v USING (row_num) "
+            "WHERE t.scenario = ? AND t.year IS NOT DISTINCT FROM ? ORDER BY t.row_num",
             [scenario, year],
         )
 
@@ -172,6 +201,7 @@ def scores(run: Run, scenario: str, year: int | None) -> list[dict]:
 
 
 def trajectory(run: Run) -> list[dict]:
+    """An old run's view has no value-weighted columns, and schemas.TrajectoryPoint fills them."""
     with run.connect() as con:
         return _rows(
             con, "SELECT * FROM v_portfolio_trajectory ORDER BY scenario, year NULLS FIRST"
@@ -242,5 +272,8 @@ def _cluster(cluster_id: int, points: list[tuple[int, float, float]]) -> dict:
 def export_rows(run: Run) -> tuple[list[str], list[tuple]]:
     """One row per asset, scenario, year and hazard; an asset with no results appears once."""
     with run.connect() as con:
-        cursor = con.execute(_EXPORT.format(flood_zones=_flood_zones(con)))
+        sql = _EXPORT.format(
+            flood_zones=_flood_zones(con), asset_values=_values(con), currency=_currency(con)
+        )
+        cursor = con.execute(sql)
         return [d[0] for d in cursor.description], cursor.fetchall()

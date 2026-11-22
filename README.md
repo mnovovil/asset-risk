@@ -35,6 +35,10 @@ empire-state,40.7484,-73.9857
 big-ben,51.5007,-0.1246
 ```
 
+You can add a `value` column, and a `currency` such as `USD`, for value-weighted results and
+expected losses in money. The API and the CSV export have these figures. See
+[Portfolio CSV](docs/reference.md#portfolio-csv) for the rules.
+
 A finished portfolio's page has two downloads beside its filters: **Download results as CSV**, with
 every figure, and **Download report as PDF**, the map, loss bars and change over time for the
 selected scenario, year and map colouring. The browser builds the PDF itself, so it needs the map

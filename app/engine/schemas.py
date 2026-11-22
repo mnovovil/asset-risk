@@ -37,6 +37,13 @@ class Summary(BaseModel):
     nearest_match: int
     no_building: int
     failed_assets: int
+    # From the portfolio's optional value column. Runs made before values existed read as none.
+    has_values: bool = False  # at least one asset has a usable value
+    valued_assets: int = 0  # value_status given
+    missing_values: int = 0  # blank, or no value column
+    invalid_values: int = 0  # not a number, negative or not finite: the asset is still assessed
+    total_value: float | None = None
+    currency: str | None = None  # ISO 4217; None when the values have no currency
     exclusions: list[Exclusion]
     shared_hazards: list[str]
 
@@ -77,6 +84,8 @@ class Asset(BaseModel):
     fema_dfirm_id: str | None
     fema_matches: int  # FEMA polygons covering the point; the highest-risk zone is shown
     fema_conflict: bool  # those polygons disagree on the zone
+    value: float | None = None  # in the portfolio's currency; None unless value_status is given
+    value_status: str = "missing"  # given | missing | invalid
 
 
 class Cluster(BaseModel):
@@ -149,6 +158,10 @@ class AssetTotal(BaseModel):
     total_aal: float | None
     shared_aal: float | None  # over hazards in every scenario: use this to compare scenarios
     hazards: int
+    value: float | None = None
+    value_status: str = "missing"  # given | missing | invalid
+    expected_loss: float | None = None  # total_aal x value, in the portfolio's currency
+    shared_expected_loss: float | None = None  # shared_aal x value
 
 
 class Score(BaseModel):
@@ -166,6 +179,13 @@ class TrajectoryPoint(BaseModel):
     mean_total_aal: float | None
     mean_shared_aal: float | None
     hazards: int
+    # Over assets with results and a given value; None or 0 for a run without values.
+    valued_assets: int = 0
+    valued_total: float | None = None  # sum of their values
+    weighted_mean_total_aal: float | None = None  # sum(total_aal x value) / sum(value)
+    weighted_mean_shared_aal: float | None = None  # use this to compare scenarios
+    expected_loss_total: float | None = None  # sum(total_aal x value), in the currency
+    expected_loss_shared: float | None = None
 
 
 class Coverage(BaseModel):
