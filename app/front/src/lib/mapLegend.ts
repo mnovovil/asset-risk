@@ -1,9 +1,14 @@
 /** What the risk map's legend says, shared by the dashboard map and the PDF report. */
 
 import type { AssetRow } from "@/lib/dashboard";
-import { count, percent } from "@/lib/format";
+import { count } from "@/lib/format";
 import { lossBreaks, lossLegend, ramp, SCORE_LABELS } from "@/lib/mapColors";
-import { COLOR_BY_TOTAL, totalsOf } from "@/lib/mapFeatures";
+import {
+  COLOR_BY_EXPECTED_LOSS,
+  formatLoss,
+  isLossColoring,
+  totalsOf,
+} from "@/lib/mapFeatures";
 
 export type LegendItem =
   | { kind: "heading"; label: string }
@@ -21,6 +26,8 @@ interface LegendOptions {
   dark: boolean;
   /** The live map can be zoomed and clicked; a picture of it can't. */
   interactive: boolean;
+  /** The portfolio's currency, for expected loss. */
+  currency?: string | null;
 }
 
 export function mapLegend({
@@ -30,24 +37,32 @@ export function mapLegend({
   outside,
   dark,
   interactive,
+  currency = null,
 }: LegendOptions): LegendItem[] {
   const items: LegendItem[] = [];
-  if (colorBy === COLOR_BY_TOTAL) {
-    const totals = totalsOf(rows);
-    items.push({ kind: "heading", label: "Total annual loss, about a fifth of assets per colour:" });
+  const expected = colorBy === COLOR_BY_EXPECTED_LOSS;
+  if (isLossColoring(colorBy)) {
+    const totals = totalsOf(rows, colorBy);
+    const format = (loss: number) => formatLoss(loss, colorBy, currency);
+    items.push({
+      kind: "heading",
+      label: `${expected ? "Expected" : "Total"} annual loss, about a fifth of assets per colour:`,
+    });
     for (const item of lossLegend(totals, lossBreaks(totals), dark)) {
       items.push({
         kind: "dot",
         color: item.color,
-        label:
-          item.min === item.max ? percent(item.min) : `${percent(item.min)} to ${percent(item.max)}`,
+        label: item.min === item.max ? format(item.min) : `${format(item.min)} to ${format(item.max)}`,
       });
     }
   } else {
     const colors = ramp(dark);
     SCORE_LABELS.forEach((label, index) => items.push({ kind: "dot", color: colors[index], label }));
   }
-  items.push({ kind: "hollow", label: "No result or excluded" });
+  items.push({
+    kind: "hollow",
+    label: expected ? "No result, no usable value, or excluded" : "No result or excluded",
+  });
   if (hasClusters) {
     const bubble = "Bubbles: groups of nearby assets, sized by count and coloured by their mean";
     items.push({

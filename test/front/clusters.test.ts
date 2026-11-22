@@ -22,6 +22,8 @@ const row = (rowNum: number, total: number | null, scores: Record<string, number
   total,
   historical: null,
   aal: {},
+  value: null,
+  expectedLoss: null,
   scores: Object.fromEntries(
     Object.entries(scores).map(([hazard, score]) => [
       hazard,

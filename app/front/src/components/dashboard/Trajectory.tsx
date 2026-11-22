@@ -9,7 +9,7 @@ import {
 } from "recharts";
 
 import type { TrajectoryPoint } from "@/api/client";
-import { trajectorySeries } from "@/lib/dashboard";
+import { trajectorySeries, type Weighting } from "@/lib/dashboard";
 import { joinList, percent, percentTick, scenarioLabel } from "@/lib/format";
 import { hazardLabel } from "@/lib/hazards";
 import { BASELINE_COLOR, scenarioColor } from "@/lib/scenarios";
@@ -20,10 +20,12 @@ import { ChartTooltip } from "./ChartTooltip";
 interface TrajectoryProps {
   trajectory: TrajectoryPoint[];
   sharedHazards: string[];
+  weighting?: Weighting;
 }
 
-export function Trajectory({ trajectory, sharedHazards }: TrajectoryProps) {
-  const { scenarios, data } = trajectorySeries(trajectory);
+export function Trajectory({ trajectory, sharedHazards, weighting = "equal" }: TrajectoryProps) {
+  const { scenarios, data } = trajectorySeries(trajectory, weighting);
+  const mean = weighting === "value" ? "Value-weighted mean annual loss" : "Mean annual loss";
 
   if (sharedHazards.length === 0 || data.length === 0) {
     return (
@@ -40,13 +42,13 @@ export function Trajectory({ trajectory, sharedHazards }: TrajectoryProps) {
     <section className="panel" aria-labelledby="trajectory-heading">
       <h2 id="trajectory-heading">Change over time</h2>
       <p className="panel-note">
-        Mean annual loss over the hazards every scenario has, so the lines can be compared:{" "}
+        {mean} over the hazards every scenario has, so the lines can be compared:{" "}
         {joinList(sharedHazards.map(hazardLabel))}. This can differ from the total above.
       </p>
       <div
         className="chart-frame"
         role="img"
-        aria-label="Lines of mean annual loss by year for each scenario. The table below has the same values."
+        aria-label={`Lines of ${mean.toLowerCase()} by year for each scenario. The table below has the same values.`}
       >
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>

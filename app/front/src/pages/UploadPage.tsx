@@ -76,7 +76,9 @@ export function UploadPage() {
         <h1 id="upload-heading">Assess a portfolio</h1>
         <p className="lede">
           Upload a list of sites to estimate their physical climate risk. Each point is matched to a
-          building, which sets the damage model used for it.
+          building, which sets the damage model used for it. The file needs <code>id</code>,{" "}
+          <code>lat</code> and <code>lon</code> columns. Add <code>value</code>, and a{" "}
+          <code>currency</code> such as USD, to weight results by value and see losses in money.
         </p>
         <DropZone onFile={(chosen) => void chooseFile(chosen)} />
         <p className="muted">
@@ -92,7 +94,11 @@ export function UploadPage() {
         {file && inspection && (
           <div className="card">
             <h2>{file.name}</h2>
-            <CsvPreview preview={inspection.preview} rowCount={inspection.rowCount} />
+            <CsvPreview
+              columns={inspection.columns}
+              preview={inspection.preview}
+              rowCount={inspection.rowCount}
+            />
             <button
               type="button"
               className="button button-primary"

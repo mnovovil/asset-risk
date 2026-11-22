@@ -4,13 +4,17 @@
  */
 
 export const REQUIRED_COLUMNS = ["id", "lat", "lon"] as const;
+/** Read when present, for value-weighted results. Any other column is ignored. */
+export const OPTIONAL_COLUMNS = ["value", "currency"] as const;
 const DELIMITERS = [",", ";", "\t", "|"];
 export const PREVIEW_ROWS = 5;
 
 export interface CsvInspection {
   /** Required columns the header doesn't have. */
   missing: string[];
-  /** The first rows, as [id, lat, lon]. */
+  /** The columns the preview shows: the required ones, then any optional ones present. */
+  columns: string[];
+  /** The first rows, one cell per column. */
   preview: string[][];
   rowCount: number;
 }
@@ -67,7 +71,11 @@ export function inspectCsv(raw: string): CsvInspection {
   const first = rows.next();
   const header = first.done ? [] : first.value.map((name) => name.trim().toLowerCase());
   const missing = REQUIRED_COLUMNS.filter((name) => !header.includes(name));
-  const positions = REQUIRED_COLUMNS.map((name) => header.indexOf(name));
+  const columns = [
+    ...REQUIRED_COLUMNS,
+    ...OPTIONAL_COLUMNS.filter((name) => header.includes(name)),
+  ];
+  const positions = columns.map((name) => header.indexOf(name));
 
   const preview: string[][] = [];
   let rowCount = 0;
@@ -78,5 +86,5 @@ export function inspectCsv(raw: string): CsvInspection {
       preview.push(positions.map((position) => row[position] ?? ""));
     }
   }
-  return { missing, preview, rowCount };
+  return { missing, columns, preview, rowCount };
 }

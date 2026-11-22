@@ -16,6 +16,8 @@ const row = (rowNum: number, total: number | null, overrides: Partial<AssetRow> 
   historical: null,
   aal: {},
   scores: {},
+  value: null,
+  expectedLoss: null,
   ...overrides,
 });
 

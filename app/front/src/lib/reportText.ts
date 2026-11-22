@@ -14,7 +14,8 @@ export const REPORT_NOTES: NoteGroup[] = [
     sentences: [
       "Average annual loss (AAL) is the expected damage per year, as a share of asset value.",
       "It isn't a forecast for any one year.",
-      "The portfolio mean is equal-weighted, because a list of id, lat, lon has no asset values.",
+      "The portfolio mean is equal-weighted by default: every asset with a result counts the same, so a small shed counts as much as a large factory.",
+      "Value-weighted figures cover only assets with both a result and a usable value.",
     ],
   },
   {

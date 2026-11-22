@@ -24,6 +24,8 @@ const row = (rowNum: number, total: number | null): AssetRow => ({
   historical: total,
   aal: { Wind: total },
   scores: {},
+  value: null,
+  expectedLoss: null,
 });
 
 const input = (overrides = {}) => ({

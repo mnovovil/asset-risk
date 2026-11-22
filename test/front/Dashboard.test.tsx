@@ -92,6 +92,67 @@ describe("Dashboard", () => {
     buildReport.mockReset();
   });
 
+  describe("weighting by value", () => {
+    const weighting = () =>
+      screen.queryByRole("combobox", { name: "Weighting" }) as HTMLSelectElement | null;
+    const valued = (rowNum: number, total: number, shared: number, value: number) => ({
+      row_num: rowNum,
+      asset_id: `asset-${rowNum}`,
+      total_aal: total,
+      shared_aal: shared,
+      hazards: 2,
+      value,
+      value_status: "given",
+      expected_loss: total * value,
+      shared_expected_loss: shared * value,
+    });
+    const stubValued = () =>
+      stub({
+        summary: { ...SUMMARY, has_values: true, valued_assets: 2, missing_values: 1, total_value: 400, currency: "EUR" },
+        trajectory: TRAJECTORY.map((point) => ({
+          ...point,
+          valued_assets: point.assets,
+          valued_total: point.assets ? 400 : null,
+          weighted_mean_total_aal: point.mean_total_aal === null ? null : point.mean_total_aal * 1.5,
+          weighted_mean_shared_aal: point.mean_shared_aal,
+          expected_loss_total: point.mean_total_aal === null ? null : point.mean_total_aal * 600,
+          expected_loss_shared: null,
+        })),
+        totals: [valued(1, 0.012, 0.002, 100), valued(2, 0.028, 0.008, 300)],
+      });
+
+    it("isn't offered for a run without values", async () => {
+      await renderDashboard();
+      expect(weighting()).toBeNull();
+      expect(screen.queryByRole("option", { name: "Expected annual loss" })).toBeNull();
+      expect(scoreTable().queryByRole("button", { name: "Value" })).toBeNull();
+    });
+
+    it("starts equal-weighted, and switches the figures, bars and map to value", async () => {
+      stubValued();
+      await renderDashboard();
+      expect(weighting()?.value).toBe("equal");
+      expect(screen.getByText("Mean annual loss, equal-weighted")).toBeInTheDocument();
+      expect(scoreTable().getByRole("button", { name: "Value" })).toBeInTheDocument();
+
+      await userEvent.setup().selectOptions(weighting() as HTMLSelectElement, "value");
+      expect(screen.getByText("Mean annual loss, value-weighted")).toBeInTheDocument();
+      expect(screen.getByText("Expected annual loss", { selector: "dt" })).toBeInTheDocument();
+      expect(screen.getByText(/^From 2 of 3 assets, worth/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Expected annual loss by hazard" })).toBeInTheDocument();
+      expect(screen.getByText(/by expected_loss$/)).toBeInTheDocument();
+    });
+
+    it("keeps a hazard score colouring when the weighting changes", async () => {
+      stubValued();
+      await renderDashboard();
+      const user = userEvent.setup();
+      await user.selectOptions(screen.getByRole("combobox", { name: "Colour the map by" }), "Fire");
+      await user.selectOptions(weighting() as HTMLSelectElement, "value");
+      expect(screen.getByText(/by Fire$/)).toBeInTheDocument();
+    });
+  });
+
   describe("PDF report", () => {
     const reportButton = () => screen.getByRole("button", { name: /report/i });
 
