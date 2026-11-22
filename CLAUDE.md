@@ -11,7 +11,8 @@ The README covers setup, `docs/reference.md` the details, and `docs/methodology.
 - FastAPI for the API, TypeScript (Vite + React) for the front end
 - Terraform or OpenTofu (`infra/`) owns the run settings and writes a git-ignored `.asset-risk.json`
 - Docker (`docker/`): one image and a compose stack. Settings are mounted at run time, and run data
-  lives on the `asset-risk_data` volume, separate from `data/` on the host.
+  lives on the `asset-risk_data` volume, separate from `data/` on the host. With `analyst_enabled`,
+  `script/start.sh` adds the `ollama` service (the `analyst` profile), which publishes no ports.
 
 ## Architecture
 ```
@@ -122,8 +123,8 @@ script/              ad-hoc CLIs
   top-level modules with those names, and don't put `app/engine` itself on the path.
 - No `__init__.py` under `test/`: `test/engine` as a package would shadow the `engine` package, and
   `test` would shadow the standard library's. Test file names must therefore be unique.
-- Unit tests never touch the network. Live tests are marked `s3`, `live`, `e2e` or `fema` and are
-  excluded by default.
+- Unit tests never touch the network. Live tests are marked `s3`, `live`, `e2e`, `fema` or `ollama`
+  and are excluded by default.
 - physrisk accepts unknown types and locations without error and returns a fallback result. Only send
   values checked against its embedded vulnerability config.
 - Never treat a low score as proof of low risk: a mid-ocean point scores `Very low` for flood, and
@@ -153,7 +154,7 @@ script/              ad-hoc CLIs
 - Lint: `.venv/bin/ruff check --fix .` · Format: `.venv/bin/ruff format .`
 - Docker: `script/start.sh` (add `--detach` to run in the background)
 - Serve: `.venv/bin/python script/serve.py` · API docs at `/docs`
-- Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live`, `-m e2e` or
-  `-m fema`
+- Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live`, `-m e2e`,
+  `-m fema` or `-m ollama`
 - FEMA flood zones: `.venv/bin/python script/build_flood_zones.py <S_FLD_HAZ_AR.parquet> --as-of YYYY-MM-DD`
 - Infra: `terraform -chdir=infra init && terraform -chdir=infra apply` (or `tofu`)
