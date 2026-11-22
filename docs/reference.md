@@ -31,11 +31,16 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `hazard_map_legend_stops` | `9` | Colours in the wildfire, wind, hail and drought legends, 2 to 33 |
 | `hazard_map_array_cache` | `4` | Arrays kept per layer: about 4 MB each for wildfire, hail and drought, 17 MB for wind |
 | `hazard_map_tile_cache` | `256` | Tiles kept per layer |
+| `analyst_enabled` | `false` | Turns on the portfolio analyst chat. The model needs about 5 GB of free memory. Docker runs it in its own `ollama` service |
+| `analyst_url` | `http://localhost:11434` | The Ollama server `script/serve.py` uses, with no path. Docker uses its own service instead |
+| `analyst_model` | `deepseek-r1:7b` | The Ollama model the analyst asks. `script/start.sh` pulls it when the analyst is on |
+| `analyst_max_calls` | `4` | Tool calls the analyst may make for one question, 1 to 10 |
+| `analyst_timeout_s` | `600` | Seconds one call to the model may take, 30 to 1800. A 7B model on a CPU can take minutes |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
 Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`,
-`ASSET_RISK_DATA_DIR` and `FLOOD_ZONES_DB`.
+`ASSET_RISK_DATA_DIR`, `FLOOD_ZONES_DB` and `ASSET_RISK_ANALYST_URL`.
 
 ## Portfolio CSV
 

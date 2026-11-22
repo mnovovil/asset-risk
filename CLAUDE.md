@@ -35,7 +35,8 @@ script/              ad-hoc CLIs
   `hazard_map_layers`, `hazard_map_bucket`, `fire_map_path`, `wind_map_path`, `hail_map_path`,
   `drought_map_path`, `fire_map_max_zoom`, `wind_map_max_zoom`, `hail_map_max_zoom`,
   `drought_map_max_zoom`, `hazard_map_alpha`, `hazard_map_legend_stops`, `hazard_map_array_cache`,
-  `hazard_map_tile_cache`. Change both sides together, including the allowed values, which are
+  `hazard_map_tile_cache`, `analyst_enabled`, `analyst_url`, `analyst_model`, `analyst_max_calls`,
+  `analyst_timeout_s`. Change both sides together, including the allowed values, which are
   checked in both places so a hand-edited file fails too. Relative paths are relative to the repo
   root.
 - **`.geolocate.json`**: written to `vendor/geolocate/` by geolocate's own stack, which `infra/` calls

@@ -15,6 +15,7 @@ ENV_VAR = "ASSET_RISK_CONFIG"
 GEOLOCATE_ENV_VAR = "GEOLOCATE_CONFIG"
 DATA_DIR_ENV_VAR = "ASSET_RISK_DATA_DIR"
 FLOOD_ZONES_ENV_VAR = "FLOOD_ZONES_DB"
+ANALYST_URL_ENV_VAR = "ASSET_RISK_ANALYST_URL"
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PATH = ROOT / ".asset-risk.json"
 KEYS = (
@@ -46,6 +47,11 @@ KEYS = (
     "hazard_map_legend_stops",
     "hazard_map_array_cache",
     "hazard_map_tile_cache",
+    "analyst_enabled",
+    "analyst_url",
+    "analyst_model",
+    "analyst_max_calls",
+    "analyst_timeout_s",
 )
 SCENARIOS = ("ssp126", "ssp245", "ssp370", "ssp585")
 BUILDING_TYPES = ("Buildings/Commercial", "Buildings/Industrial", "Buildings/Residential")
@@ -62,6 +68,12 @@ _MAP_PATH = re.compile(r"[A-Za-z0-9_.\-/]*")
 _BUCKET = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*(/[A-Za-z0-9_.\-]+)*")
 MAX_CLUSTER_EPS_KM = 1000
 MIN_CLUSTER_SAMPLES = 2
+# The analyst's model server (Ollama). A run's chat makes at most this many tool calls per question,
+# and one call to the model may take this long on a CPU.
+_ANALYST_URL = re.compile(r"https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?/?")
+MAX_ANALYST_CALLS = 10
+MIN_ANALYST_TIMEOUT_S = 30
+MAX_ANALYST_TIMEOUT_S = 1800
 _APPLY_HINT = "run `terraform -chdir=infra apply` to generate it"
 
 
@@ -103,6 +115,13 @@ class Settings:
     hazard_map_legend_stops: int = 9
     hazard_map_array_cache: int = 4
     hazard_map_tile_cache: int = 256
+    # The portfolio analyst chat, off unless asked for. The defaults are the code's, so a test can
+    # leave them out.
+    analyst_enabled: bool = False
+    analyst_url: str = "http://localhost:11434"
+    analyst_model: str = "deepseek-r1:7b"
+    analyst_max_calls: int = 4
+    analyst_timeout_s: int = 600
 
 
 def settings_path(path: str | os.PathLike[str] | None = None) -> Path:
@@ -214,6 +233,32 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         if not _is_int(raw[key]) or raw[key] < 1:
             raise bad(key, "a whole number of at least 1")
 
+    if not isinstance(raw["analyst_enabled"], bool):
+        raise bad("analyst_enabled", "true or false")
+
+    # A container reaches the model server by its service name. An empty variable leaves the file's.
+    analyst_url = os.environ.get(ANALYST_URL_ENV_VAR) or raw["analyst_url"]
+    if not isinstance(analyst_url, str) or not _ANALYST_URL.fullmatch(analyst_url):
+        raise bad(
+            "analyst_url",
+            "an http:// or https:// address with no path, like http://localhost:11434",
+        )
+
+    model = raw["analyst_model"]
+    if not isinstance(model, str) or not model.strip():
+        raise bad("analyst_model", "a non-empty string")
+
+    calls = raw["analyst_max_calls"]
+    if not _is_int(calls) or not 1 <= calls <= MAX_ANALYST_CALLS:
+        raise bad("analyst_max_calls", f"a whole number from 1 to {MAX_ANALYST_CALLS}")
+
+    timeout = raw["analyst_timeout_s"]
+    if not _is_int(timeout) or not MIN_ANALYST_TIMEOUT_S <= timeout <= MAX_ANALYST_TIMEOUT_S:
+        raise bad(
+            "analyst_timeout_s",
+            f"a whole number from {MIN_ANALYST_TIMEOUT_S} to {MAX_ANALYST_TIMEOUT_S}",
+        )
+
     return Settings(
         scenarios=tuple(scenarios),
         years=tuple(years),
@@ -245,6 +290,11 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         hazard_map_legend_stops=stops,
         hazard_map_array_cache=raw["hazard_map_array_cache"],
         hazard_map_tile_cache=raw["hazard_map_tile_cache"],
+        analyst_enabled=raw["analyst_enabled"],
+        analyst_url=analyst_url.rstrip("/"),
+        analyst_model=model,
+        analyst_max_calls=calls,
+        analyst_timeout_s=timeout,
     )
 
 
