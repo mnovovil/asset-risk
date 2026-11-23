@@ -177,6 +177,44 @@ These come from physrisk's default data, and most were found while building
 - **Zero:** river flood at zero means the exact point is dry in the data, not that the area has no
   flood risk.
 
+## The analyst
+
+When it's turned on, a finished portfolio's page has an **Ask the analyst** chat. A local model
+(`deepseek-r1:7b`) answers questions about that run by calling read-only tools, which return the
+same figures the dashboard shows. It can't see the database, other runs or the internet.
+
+**It can tell you** what the run's results say:
+- portfolio means for a scenario and year, overall or by hazard
+- which assets have the highest loss
+- one asset's building, type, FEMA zone, value and results
+- how two scenarios compare on the hazards they share
+- which assets were excluded or failed, and why
+
+**It can't tell you** anything the results don't hold:
+- risk at a place the run didn't assess
+- hazards physrisk doesn't model, such as European windstorms
+- what a loss means for a decision
+
+It has the model's limits, listed above, and adds a small model's own. It can misread a question,
+pick the wrong scenario or reason badly. Read its sources, not just its answer.
+
+**"Verified" means the numbers match, not that the reasoning is right.** Every number in an answer
+is checked in code against the tool results the answer cites. A number passes if one of those
+results rounds to it at the precision shown, with a fraction shown as a percentage. An answer with a
+number that doesn't match is marked **Unverified figures**, and lists them. A verified answer can
+still compare the wrong things, or draw a conclusion the figures don't support.
+
+Its instructions say:
+- Figures are percentages of asset value per year.
+- Portfolio figures are equal-weighted unless it says "value-weighted".
+- A low score, "No model" and "No data" aren't low risk.
+- Excluded and failed assets have no result, not zero loss.
+- Scenarios are compared only on the hazards they share.
+- It should say when a building type was assumed.
+- A FEMA status without information isn't Zone X.
+
+The checks above hold whether or not it follows these.
+
 ## FEMA flood zones
 
 For a point in the US or one of its territories, the asset panel and the CSV export show the FEMA

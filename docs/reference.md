@@ -116,9 +116,10 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to the layer's `max_zoom` (7 for wind, 6 for the others), for the same `scenario` and `year`. 404 where there's no map, 502 when physrisk or S3 fails |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
+| `POST /api/runs/{id}/chat` | Ask the analyst a question about a completed run. See [Analyst](#analyst) |
 | `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone, value, currency and expected loss (`aal` × `value`) |
 | `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
-| `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
+| `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, whether the analyst is on (`analyst_enabled`), and a health check |
 
 Flood tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
 while another run is assessing. Only river and coastal flood have public map images, and `pytest -m
@@ -152,6 +153,87 @@ read as `unavailable`.
 Results return 409 until a run is `completed`. Assets are addressed by `row_num`, because an invalid
 row can have no id. Runs that were queued or running when the app stopped are marked `interrupted`,
 and need uploading again.
+
+## Analyst
+
+`POST /api/runs/{id}/chat` takes `{"question": "...", "history": [...]}`:
+- `question` is 1 to 2,000 characters.
+- `history` holds up to 20 earlier messages, oldest first, each `{"role": "user" | "assistant",
+  "content": "..."}`. The prompt keeps the last 6.
+
+It returns:
+
+| Field | Contents |
+|---|---|
+| `answer` | The model's answer |
+| `verified` | Every number in `answer` matched a result it cites |
+| `unverified_numbers` | The numbers that didn't, as written |
+| `sources` | The cited tool calls, each with `n`, `tool`, `args` and `result` |
+| `tool_calls` | Every tool call made for the question, cited or not |
+
+A question takes minutes on a CPU. The route is synchronous, so the wait runs in FastAPI's thread
+pool, and only one question is answered at a time.
+
+| Status | When |
+|---|---|
+| 404, 409 | The run doesn't exist, or isn't `completed` |
+| 422 | The question is empty or too long, or the history is too long or has another role |
+| 429 | The analyst is answering another question, including one whose request was cancelled |
+| 502 | The model's replies couldn't be used after a correction, or it didn't answer within `analyst_max_calls` tool calls |
+| 503 | The analyst is off, a portfolio run is queued or in progress, the model server can't be reached, or it doesn't have the model |
+| 504 | One call to the model took longer than `analyst_timeout_s` |
+
+### How it works
+
+`app/engine/analyst.py` runs the loop, and `app/engine/data/analyst_prompt.md` is the only text it
+gives the model. The prompt is filled in with:
+- the run's label, scenario and year pairs, and shared hazards
+- the tool list, generated from the registry
+- the call limit, the history and the question
+- the transcript so far
+
+The model (`deepseek-r1:7b`, temperature 0.6, thinking on, one user message per call) replies with
+one JSON object: either `{"tool": ..., "args": ...}` or `{"answer": ..., "sources": [n, ...]}`. The
+app takes the outermost object from the reply:
+- A malformed reply or an unknown tool gets one correction, and a second bad reply in a row is a
+  502.
+- Each tool result goes back as `TOOL RESULT #n (tool): {json}`.
+- After `analyst_max_calls` results, the model is told to answer.
+
+The grounding check compares every number in the answer with the numeric values in the results it
+cites. A number matches if a value rounds to it at the precision shown. It allows:
+- a fraction shown as a percentage (0.0123 as "1.23%")
+- thousands separators and the scales k, M and bn
+- either sign
+
+Some numbers are never checked as figures:
+- numbers inside words and zone names (`A99`)
+- scenario names (`SSP5-8.5`)
+- `#n` citations and list markers
+- text that appears as a string in a result, such as an `asset_id`
+
+The run's years and any number in the question need no result. An answer that doesn't match gets
+one retry, then comes back with `verified: false`. Questions are serialised by the analyst's own
+lock, never physrisk's.
+
+### Tools
+
+`app/engine/analyst_tools.py` is the one source of the tools' names, argument schemas and
+descriptions. Every tool is read-only and passes values to SQL as parameters. An argument that
+doesn't fit the run returns `{"error": "..."}` naming the valid options, which the model reads as a
+tool result.
+
+| Tool | Returns |
+|---|---|
+| `query_portfolio(scenario, year, hazard=null)` | Equal-weighted means, overall and per hazard. A hazard with no results is `mean_aal: null, covered: false`. With asset values, adds `value_weighted` |
+| `get_asset(row_num)` | One asset's detail without its footprint, plus `failed_assessments` |
+| `top_assets(scenario, year, hazard=null, n=10)` | The highest-AAL assets, with `asset_id` and `type_source`. `n` is capped at 25 |
+| `compare_scenarios(a, b, year)` | Each scenario's `mean_shared_aal`, `difference_b_minus_a`, the shared hazards, and the hazards left out of the comparison. The historical side always has year null |
+| `list_exclusions()` | Exclusion counts and reasons, and up to 25 excluded rows and failed batches, with complete totals |
+
+The live test, `.venv/bin/pytest -m ollama`, asks a real model three questions on a fixture run. It
+needs a model server at `$ASSET_RISK_ANALYST_URL` (default `http://localhost:11434`) with
+`deepseek-r1:7b` pulled.
 
 ## Run database
 
