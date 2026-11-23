@@ -31,11 +31,11 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `hazard_map_legend_stops` | `9` | Colours in the wildfire, wind, hail and drought legends, 2 to 33 |
 | `hazard_map_array_cache` | `4` | Arrays kept per layer: about 4 MB each for wildfire, hail and drought, 17 MB for wind |
 | `hazard_map_tile_cache` | `256` | Tiles kept per layer |
-| `analyst_enabled` | `false` | Turns on the portfolio analyst chat. The model needs about 5 GB of free memory. Docker runs it in its own `ollama` service |
+| `analyst_enabled` | `false` | Turns on the portfolio analyst chat. The default model needs about 2 GB of free memory. Docker runs it in its own `ollama` service |
 | `analyst_url` | `http://localhost:11434` | The Ollama server `script/serve.py` uses, with no path. Docker uses its own service instead |
-| `analyst_model` | `deepseek-r1:7b` | The Ollama model the analyst asks. `script/start.sh` pulls it when the analyst is on |
+| `analyst_model` | `deepseek-r1:1.5b` | The Ollama model the analyst asks. `script/start.sh` pulls it when the analyst is on. See [the model](#the-model) |
 | `analyst_max_calls` | `4` | Tool calls the analyst may make for one question, 1 to 10 |
-| `analyst_timeout_s` | `600` | Seconds one call to the model may take, 30 to 1800. A 7B model on a CPU can take minutes |
+| `analyst_timeout_s` | `600` | Seconds one call to the model may take, 30 to 1800. A model on a CPU can take minutes |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
@@ -192,7 +192,7 @@ gives the model. The prompt is filled in with:
 - the call limit, the history and the question
 - the transcript so far
 
-The model (`deepseek-r1:7b`, temperature 0.6, thinking on, one user message per call) replies with
+The model (`deepseek-r1:1.5b` by default, temperature 0.6, thinking on, one user message per call) replies with
 one JSON object: either `{"tool": ..., "args": ...}` or `{"answer": ..., "sources": [n, ...]}`. The
 app takes the outermost object from the reply:
 - A malformed reply or an unknown tool gets one correction, and a second bad reply in a row is a
@@ -233,7 +233,18 @@ tool result.
 
 The live test, `.venv/bin/pytest -m ollama`, asks a real model three questions on a fixture run. It
 needs a model server at `$ASSET_RISK_ANALYST_URL` (default `http://localhost:11434`) with
-`deepseek-r1:7b` pulled.
+`$ASSET_RISK_ANALYST_MODEL` (default `deepseek-r1:1.5b`) pulled.
+
+### The model
+
+The default is `deepseek-r1:1.5b`, about 1.1 GB to download and about 2 GB of memory, so it fits
+alongside the app on a machine with 6 GB. `deepseek-r1:7b` needs about 5 GB, which on such a
+machine means swapping and very slow answers. The smaller model is faster, but it follows the JSON
+reply format less reliably, so expect more correction retries, more answers marked
+`verified: false`, and more 502s after two bad replies in a row. The grounding check is the same
+for every model, so a smaller model gives less useful answers, not wrong ones marked verified. On
+a machine with about 8 GB free, set `analyst_model = "deepseek-r1:7b"`. Neither model's time per
+answer has been measured yet.
 
 ## Run database
 

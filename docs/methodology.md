@@ -180,7 +180,7 @@ These come from physrisk's default data, and most were found while building
 ## The analyst
 
 When it's turned on, a finished portfolio's page has an **Ask the analyst** chat. A local model
-(`deepseek-r1:7b`) answers questions about that run by calling read-only tools, which return the
+(`deepseek-r1:1.5b` by default) answers questions about that run by calling read-only tools, which return the
 same figures the dashboard shows. It can't see the database, other runs or the internet.
 
 **It can tell you** what the run's results say:
