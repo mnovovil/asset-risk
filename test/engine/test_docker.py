@@ -225,20 +225,20 @@ def _start_with_settings(tmp_path, settings: dict):
 
 def test_start_script_pulls_the_analyst_model_when_it_is_on(tmp_path):
     result, calls = _start_with_settings(
-        tmp_path, {"analyst_enabled": True, "analyst_model": "deepseek-r1:1.5b"}
+        tmp_path, {"analyst_enabled": True, "analyst_model": "qwen3:1.7b"}
     )
     assert result.returncode == 0, result.stderr
     compose = "analyst compose -f docker/compose.yml"
     assert calls == [
         f"{compose} up --detach --wait ollama",
-        f"{compose} exec ollama ollama pull deepseek-r1:1.5b",
+        f"{compose} exec ollama ollama pull qwen3:1.7b",
         f"{compose} up --build",
     ]
 
 
 def test_start_script_leaves_the_analyst_off_by_default(tmp_path):
     result, calls = _start_with_settings(
-        tmp_path, {"analyst_enabled": False, "analyst_model": "deepseek-r1:1.5b"}
+        tmp_path, {"analyst_enabled": False, "analyst_model": "qwen3:1.7b"}
     )
     assert result.returncode == 0, result.stderr
     assert calls == ["none compose -f docker/compose.yml up --build"]

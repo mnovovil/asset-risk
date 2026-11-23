@@ -63,7 +63,7 @@ VALID = {
     "hazard_map_tile_cache": 256,
     "analyst_enabled": False,
     "analyst_url": "http://localhost:11434",
-    "analyst_model": "deepseek-r1:1.5b",
+    "analyst_model": "qwen3:1.7b",
     "analyst_max_calls": 2,
     "analyst_timeout_s": 600,
 }
