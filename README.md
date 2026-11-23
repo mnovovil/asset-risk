@@ -2,7 +2,9 @@
 
 Upload a CSV of `id, lat, lon` and get a physical climate risk view of the portfolio. Each point is
 matched to a building with [geolocate](https://github.com/mnovovil/geolocate), assessed with
-[physrisk](https://github.com/os-climate/physrisk), and shown in a web dashboard.
+[physrisk](https://github.com/os-climate/physrisk), and shown in a web dashboard. Give each asset
+a value and the results can also be weighted by it, and an optional analyst running on your own
+machine answers questions about a finished portfolio, with every number it quotes checked.
 
 This is a screening tool, not a site-level assessment. Results are a share of asset value, and
 [most buildings have no known type](docs/methodology.md#building-type), so read
@@ -27,25 +29,27 @@ zones as unavailable.
 
 Open the address to see every portfolio assessed so far, each as a card with its mean annual loss,
 its counts and a picture of its risk map. **Delete** removes a finished one. Choose
-**New portfolio** and drop in a CSV. The upload page has a sample to download, and your file needs a header with these columns:
+**New portfolio** and drop in a CSV. The upload page has a sample to download, and your file needs
+a header with at least id, lat, lon columns. You can add a `value` column, and a `currency` such as `USD`, for value-weighted results and
+expected losses in money:
 
 ```csv
-id,lat,lon
-empire-state,40.7484,-73.9857
-big-ben,51.5007,-0.1246
+id,lat,lon,value,currency
+empire-state,40.7484,-73.9857,2300000000,USD
+big-ben,51.5007,-0.1246,,
 ```
 
-You can add a `value` column, and a `currency` such as `USD`, for value-weighted results and
-expected losses in money: the dashboard then offers **Weighting: By value**. See
-[Portfolio CSV](docs/reference.md#portfolio-csv) for the rules and
+A missing or unreadable value never drops an asset: it's still assessed, flagged, and left out of
+the weighting. The dashboard then offers **Weighting: By value** beside the default equal weighting.
+See [Portfolio CSV](docs/reference.md#portfolio-csv) for the rules and
 [the methodology](docs/methodology.md#weighting-by-value) for how to read them.
 
 A finished portfolio's page has two downloads beside its filters: **Download results as CSV**, with
 every figure, and **Download report as PDF**, the map, loss bars and change over time for the
-selected scenario, year and map colouring. The browser builds the PDF itself, so it needs the map
-tiles to load.
+selected scenario, year and map colouring. With values, the CSV adds each asset's value and expected
+loss, and the PDF follows the selected weighting. The browser builds the PDF itself, so it needs the map tiles to load.
 
-### Asking the analyst (optional)
+### Asking the analyst (optiona)
 
 A finished portfolio's page can have an **Ask the analyst** chat, where a model running on your own
 machine answers questions about the run, such as "Which assets have the highest flood loss under
@@ -75,11 +79,11 @@ The app has no login, so it only listens on localhost. Don't expose it as it sta
 
 ```mermaid
 flowchart TB
-    csv["CSV of id, lat, lon"] --> front["Website<br/>app/front"]
+    csv["CSV of id, lat, lon<br/>optional value, currency"] --> front["Website<br/>app/front"]
     front --> api["API and run queue<br/>app/engine/api.py"]
 
     subgraph run["Each run: app/engine/pipeline.py"]
-        ingest["Check the CSV"] --> locate["Find each point's building<br/>geolocate"]
+        ingest["Check the CSV and its values<br/>ingest.py"] --> locate["Find each point's building<br/>geolocate"]
         locate --> classify["Choose the physrisk type and region<br/>classify.py"]
         classify --> flood["Find each US point's FEMA flood zone<br/>flood_zones.py"]
         flood --> assess["Calculate risk per scenario and year<br/>physrisk"]
@@ -89,10 +93,23 @@ flowchart TB
     overture[("Overture buildings<br/>on S3")] --> locate
     hazards[("physrisk hazard data<br/>on S3")] --> assess
     fema[("FEMA flood zones<br/>data/fema")] --> flood
-    assess --> db[("One DuckDB file per run")]
+    assess --> db[("One DuckDB file per run<br/>equal- and value-weighted views")]
+    ingest -->|"asset values"| db
     db --> api
+
+    subgraph analyst["Portfolio analyst, optional: analyst_enabled"]
+        chat["Chat endpoint<br/>POST /api/runs/{id}/chat"] --> loop["Model loop and grounding check<br/>analyst.py"]
+        loop <-->|"one JSON reply at a time"| ollama["Local model<br/>ollama service, no published ports"]
+        loop <-->|"tool calls and results"| tools["Read-only tools<br/>analyst_tools.py"]
+    end
+
+    front -->|"Ask the analyst"| chat
+    tools --> db
+    loop -->|"answer, verified or not"| front
+
     tf["Terraform variables<br/>infra/"] --> settings[".asset-risk.json"]
     settings --> api
+    settings --> loop
 ```
 
 ## Project layout
