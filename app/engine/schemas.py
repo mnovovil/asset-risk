@@ -5,6 +5,7 @@ and /sync-generated.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -264,6 +265,41 @@ class AppConfig(BaseModel):
     default_building_type: str
     max_portfolio_rows: int
     max_upload_mb: float
+    analyst_enabled: bool  # whether runs have a chat with the portfolio analyst
+
+
+# A question and its history are bounded, so one request can't fill the model's context.
+MAX_QUESTION_CHARS = 2000
+MAX_CHAT_HISTORY = 20
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=10 * MAX_QUESTION_CHARS)
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    # Earlier turns of this chat, oldest first. The analyst keeps only the last few.
+    history: list[ChatMessage] = Field(default_factory=list, max_length=MAX_CHAT_HISTORY)
+
+
+class ChatSource(BaseModel):
+    """One tool call the analyst made: what it asked for and what the run returned."""
+
+    n: int  # the answer cites it as TOOL RESULT #n
+    tool: str
+    args: dict[str, Any]
+    result: dict[str, Any]  # {"error": ...} when the arguments didn't fit the run
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    # Every number in the answer matched a cited tool result. It says nothing of the reasoning.
+    verified: bool
+    unverified_numbers: list[str]  # as written in the answer
+    sources: list[ChatSource]  # the tool results the answer cites
+    tool_calls: list[ChatSource]  # every tool call made for the question, cited or not
 
 
 class Health(BaseModel):

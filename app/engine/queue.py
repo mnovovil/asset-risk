@@ -28,6 +28,7 @@ class RunQueue:
         self._waiting: deque[tuple[Run, Points, Settings]] = deque()
         self._condition = threading.Condition()
         self._stopped = False
+        self._current: Run | None = None
         self._thread = threading.Thread(target=self._work, name="run-queue", daemon=True)
 
     def start(self) -> None:
@@ -53,6 +54,11 @@ class RunQueue:
                     return place
         return None
 
+    def busy(self) -> bool:
+        """Whether a run is executing or waiting to."""
+        with self._condition:
+            return self._current is not None or bool(self._waiting)
+
     def _work(self) -> None:
         while True:
             with self._condition:
@@ -61,7 +67,11 @@ class RunQueue:
                 if self._stopped:
                     return
                 run, points, settings = self._waiting.popleft()
+                self._current = run
             try:
                 self._execute(run, points, settings)
             except Exception:  # execute records failures itself; this keeps the queue alive
                 logger.exception("Run %s failed unexpectedly", run.run_id)
+            finally:
+                with self._condition:
+                    self._current = None
