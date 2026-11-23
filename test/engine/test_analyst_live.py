@@ -1,7 +1,7 @@
 """Ask a real model three questions about a fixture run (opt-in: pytest -m ollama).
 
 Needs an Ollama server at $ASSET_RISK_ANALYST_URL (default http://localhost:11434) with
-$ASSET_RISK_ANALYST_MODEL (default deepseek-r1:7b) pulled. Each answer must be verified by the
+$ASSET_RISK_ANALYST_MODEL (default deepseek-r1:1.5b) pulled. Each answer must be verified by the
 grounding check as it stands: if a model can't pass, that's the finding, not a reason to loosen it.
 Run with -s to see each question's time and answer.
 """
@@ -16,7 +16,7 @@ from engine.analyst import OllamaClient, ask
 pytestmark = pytest.mark.ollama
 
 URL = os.environ.get("ASSET_RISK_ANALYST_URL") or "http://localhost:11434"
-MODEL = os.environ.get("ASSET_RISK_ANALYST_MODEL") or "deepseek-r1:7b"
+MODEL = os.environ.get("ASSET_RISK_ANALYST_MODEL") or "deepseek-r1:1.5b"
 TIMEOUT_S = 600
 MAX_CALLS = 4
 

@@ -40,10 +40,10 @@
 # hazard_map_array_cache  = 4   # per layer: wind arrays are about 17 MB each
 # hazard_map_tile_cache   = 256
 
-# The portfolio analyst chat, off by default. The model needs about 5 GB of free memory.
+# The portfolio analyst chat, off by default. The model needs about 2 GB of free memory.
 # analyst_enabled   = true
 # analyst_url       = "http://localhost:11434"   # for script/serve.py; Docker uses its own service
-# analyst_model     = "deepseek-r1:7b"
+# analyst_model     = "deepseek-r1:1.5b"
 # analyst_max_calls = 4
 # analyst_timeout_s = 600
 

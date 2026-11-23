@@ -44,7 +44,7 @@ fi
 export API_PORT HOST_UID HOST_GID FLOOD_ZONES_FILE FLOOD_ZONES_DB
 
 # The analyst is optional. When it's on, start its model server first and pull the model, which
-# downloads about 5 GB the first time and is quick after that.
+# downloads about 1.1 GB the first time and is quick after that.
 if grep -q '"analyst_enabled":[[:space:]]*true' .asset-risk.json; then
   model=$(sed -n 's/.*"analyst_model":[[:space:]]*"\([^"]*\)".*/\1/p' .asset-risk.json)
   [ -n "$model" ] || fail "analyst_enabled is true but analyst_model is empty. $apply_hint"
