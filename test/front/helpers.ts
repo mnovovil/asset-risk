@@ -41,6 +41,7 @@ export const CONFIG = {
   default_building_type: "Buildings/Commercial",
   max_portfolio_rows: 3,
   max_upload_mb: 1,
+  analyst_enabled: false,
 };
 
 export const SUMMARY = {

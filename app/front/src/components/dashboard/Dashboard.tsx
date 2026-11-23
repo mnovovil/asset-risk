@@ -16,6 +16,7 @@ import { COLOR_BY_EXPECTED_LOSS } from "@/lib/mapFeatures";
 import { sortHazards } from "@/lib/hazards";
 
 import { AssetPanel } from "./AssetPanel";
+import { ChatPanel } from "./ChatPanel";
 import { DataQuality } from "./DataQuality";
 import { COLOR_BY_TOTAL, Filters } from "./Filters";
 import { Kpis } from "./Kpis";
@@ -47,6 +48,7 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
   const [weighting, setWeighting] = useState<Weighting>("equal");
   const [selected, setSelected] = useState<number | null>(null);
   const [defaultType, setDefaultType] = useState<string | null>(null);
+  const [analystEnabled, setAnalystEnabled] = useState(false);
   const { data: results, loading, error: pairError } = usePairData(runId, pair);
   const closePanel = useCallback(() => setSelected(null), []);
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
@@ -59,8 +61,11 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
   useEffect(() => {
     const controller = new AbortController();
     getConfig(controller.signal)
-      .then((config) => setDefaultType(config.default_building_type))
-      .catch(() => undefined); // only used to name the assumption
+      .then((config) => {
+        setDefaultType(config.default_building_type);
+        setAnalystEnabled(config.analyst_enabled);
+      })
+      .catch(() => undefined); // names the assumption and turns the analyst on, nothing else
     return () => controller.abort();
   }, []);
 
@@ -73,6 +78,7 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
         : [],
     [results, run, baseline],
   );
+  const rowNums = useMemo(() => new Set((run?.assets ?? []).map((a) => a.row_num)), [run]);
   const scoreHazards = useMemo(
     () => sortHazards((results?.scores ?? []).filter((s) => s.score >= 0).map((s) => s.hazard)),
     [results],
@@ -210,6 +216,12 @@ export function Dashboard({ runId, label = null, createdAt }: DashboardProps) {
           trajectory={run.trajectory}
           missing={missing}
           defaultType={defaultType}
+          onSelect={setSelected}
+        />
+        <ChatPanel
+          runId={runId}
+          enabled={analystEnabled}
+          rowNums={rowNums}
           onSelect={setSelected}
         />
       </div>
