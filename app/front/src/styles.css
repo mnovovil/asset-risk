@@ -1053,3 +1053,84 @@ th[scope="row"] {
   height: 10px;
   border-radius: 2px;
 }
+
+/* The analyst's chat: existing tokens only. */
+.chat-turns {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-turn,
+.chat-pending {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.chat-pending {
+  margin-bottom: 16px;
+}
+
+.chat-question,
+.chat-answer {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-verified {
+  margin: 0 0 8px;
+  color: var(--success);
+  font-size: 0.875rem;
+}
+
+.chat-sources ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.chat-sources summary,
+.chat-sources li summary {
+  cursor: pointer;
+}
+
+.chat-json {
+  max-height: 320px;
+  margin: 4px 0 8px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.chat-form {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-form textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.chat-form textarea:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
