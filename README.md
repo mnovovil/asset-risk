@@ -35,10 +35,39 @@ empire-state,40.7484,-73.9857
 big-ben,51.5007,-0.1246
 ```
 
+You can add a `value` column, and a `currency` such as `USD`, for value-weighted results and
+expected losses in money: the dashboard then offers **Weighting: By value**. See
+[Portfolio CSV](docs/reference.md#portfolio-csv) for the rules and
+[the methodology](docs/methodology.md#weighting-by-value) for how to read them.
+
 A finished portfolio's page has two downloads beside its filters: **Download results as CSV**, with
 every figure, and **Download report as PDF**, the map, loss bars and change over time for the
 selected scenario, year and map colouring. The browser builds the PDF itself, so it needs the map
 tiles to load.
+
+### Asking the analyst (optional)
+
+A finished portfolio's page can have an **Ask the analyst** chat, where a model running on your own
+machine answers questions about the run, such as "Which assets have the highest flood loss under
+ssp585 in 2050?". It reads the results only through read-only tools, and every number in its answer
+is checked against what those tools returned. An answer whose numbers don't all match is marked
+**Unverified figures**. Nothing leaves the machine: the model runs in the compose stack's own
+`ollama` service, which publishes no ports.
+
+It's off by default. To turn it on, set `analyst_enabled = true` in `infra/terraform.tfvars`, run
+`terraform -chdir=infra apply`, and start with `script/start.sh`, which pulls the model
+(`qwen3:1.7b`, about 1.4 GB to download) the first time. The model needs about 2 GB of free
+memory on top of the app's, and it runs on the CPU with thinking off, so an answer can take a
+while. On a machine with about 8 GB free, `analyst_model = "qwen3:4b"` follows the instructions
+more reliably. It doesn't answer while a portfolio is being assessed. See
+[the methodology](docs/methodology.md#the-analyst) for what it can and can't tell you.
+
+On a small machine, the number of tool calls sets the wait. Each tool call is another full model
+call, with its own reasoning, so `analyst_max_calls` (2 by default) is a trade: fewer calls answer
+sooner, but a question that needs more lookups fails with a 502. With more CPU to spare, raise it
+in `infra/terraform.tfvars`, up to 10. If the chat is still too slow, `analyst_enabled = false`
+frees the 1.3 GB or so the model takes while loaded, and the rest of the dashboard works the same
+without it.
 
 The app has no login, so it only listens on localhost. Don't expose it as it stands.
 

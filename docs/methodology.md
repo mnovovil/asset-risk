@@ -24,8 +24,29 @@ for any one year.
 
 An asset's **total** adds its hazards together.
 
-The **portfolio mean** is equal-weighted, because a list of `id, lat, lon` has no asset values. A
-small shed counts as much as a large factory. There are no currency figures for the same reason.
+The **portfolio mean** is equal-weighted by default: every asset with a result counts the same, so a
+small shed counts as much as a large factory. A list of only `id, lat, lon` can't do better, because it
+has no asset values.
+
+### Weighting by value
+
+If the CSV has a `value` column (see [Portfolio CSV](reference.md#portfolio-csv)), the dashboard
+offers **Weighting: By value** as well.
+
+- **Expected annual loss** is AAL times the asset's value, in the file's currency. An asset worth
+  €10M with an AAL of 0.5% has an expected annual loss of €50,000. Without a `currency` column the
+  amounts are plain "value units", never money.
+- **The value-weighted mean** is the sum of every asset's expected loss divided by the sum of their
+  values. A large asset moves it more than a small one.
+- **Value-weighted figures cover only assets with both a result and a usable value.** A blank,
+  negative or unreadable value leaves the asset in the run, assessed as usual, and out of these
+  figures only. Each one says how many assets and how much value it covers. If few assets have a
+  value, read the weighted figures as describing those assets, not the portfolio.
+- Equal weighting stays the default, and the Portfolios page and the map's bubbles always use it, so
+  portfolios can be compared whether or not they have values.
+- Values are taken as given. The app doesn't convert currencies, and a file can use only one.
+- Change over time compares scenarios on shared hazards in both weightings, and the historical
+  markers are weighted the same way as the figure they sit beside.
 
 **Scores** are physrisk's bands of AAL, from "Very low impact" to "Very high impact". Thresholds
 differ by hazard group.
@@ -90,11 +111,15 @@ members have results and how many assume the default building type.
 Points and bubbles share one scale, from green (lowest) to red (highest). Each step is also darker
 than the last (lighter, in dark mode), so the order reads without telling green from red.
 
-For total loss, the five colours are **quintiles**: each holds about a fifth of the assets with a
+For total loss, and for expected annual loss when the portfolio has values, the five colours are
+**quintiles**: each holds about a fifth of the assets with a
 result, for the selected scenario and year. One extreme loss then only moves the top class, instead
 of pushing every other asset into the lowest one. The legend gives the range of losses in each
 colour. The colour shows an asset's rank within this portfolio, so the same loss can be a different
 colour in another portfolio or scenario. Hazard scores keep physrisk's fixed bands.
+
+Colouring by expected annual loss draws an asset with no usable value hollow, as one with no result,
+never as a low loss. A bubble's colour is then the plain mean of its members' expected losses.
 
 A green bubble or point is not proof of low risk, for the same reasons as a low score: see
 [Limits of the model](#limits-of-the-model).
@@ -152,6 +177,44 @@ These come from physrisk's default data, and most were found while building
 - **Zero:** river flood at zero means the exact point is dry in the data, not that the area has no
   flood risk.
 
+## The analyst
+
+When it's turned on, a finished portfolio's page has an **Ask the analyst** chat. A local model
+(`qwen3:1.7b` by default) answers questions about that run by calling read-only tools, which return the
+same figures the dashboard shows. It can't see the database, other runs or the internet.
+
+**It can tell you** what the run's results say:
+- portfolio means for a scenario and year, overall or by hazard
+- which assets have the highest loss
+- one asset's building, type, FEMA zone, value and results
+- how two scenarios compare on the hazards they share
+- which assets were excluded or failed, and why
+
+**It can't tell you** anything the results don't hold:
+- risk at a place the run didn't assess
+- hazards physrisk doesn't model, such as European windstorms
+- what a loss means for a decision
+
+It has the model's limits, listed above, and adds a small model's own. It can misread a question,
+pick the wrong scenario or reason badly. Read its sources, not just its answer.
+
+**"Verified" means the numbers match, not that the reasoning is right.** Every number in an answer
+is checked in code against the tool results the answer cites. A number passes if one of those
+results rounds to it at the precision shown, with a fraction shown as a percentage. An answer with a
+number that doesn't match is marked **Unverified figures**, and lists them. A verified answer can
+still compare the wrong things, or draw a conclusion the figures don't support.
+
+Its instructions say:
+- Figures are percentages of asset value per year.
+- Portfolio figures are equal-weighted unless it says "value-weighted".
+- A low score, "No model" and "No data" aren't low risk.
+- Excluded and failed assets have no result, not zero loss.
+- Scenarios are compared only on the hazards they share.
+- It should say when a building type was assumed.
+- A FEMA status without information isn't Zone X.
+
+The checks above hold whether or not it follows these.
+
 ## FEMA flood zones
 
 For a point in the US or one of its territories, the asset panel and the CSV export show the FEMA
@@ -191,8 +254,9 @@ How the zone is found, and how to read it:
 
 ## PDF report
 
-**Download report as PDF** saves what the dashboard shows for the selected scenario, year and map
-colouring. It has the headline figures with where building types came from, the risk map with its
+**Download report as PDF** saves what the dashboard shows for the selected scenario, year, map
+colouring and weighting. When the portfolio has values, it says which weighting it uses and, for
+value weighting, which assets the figures cover. It has the headline figures with where building types came from, the risk map with its
 legend, annual loss by hazard and change over time, and notes taken from this page.
 
 - The map is the view the dashboard opens with, not wherever it was panned or zoomed. It's drawn

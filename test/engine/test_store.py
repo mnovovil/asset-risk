@@ -7,7 +7,7 @@ import pytest
 
 from engine.geolocation import locate
 from engine.ingest import read_portfolio
-from engine.store import create_run, load_assets, set_progress, status
+from engine.store import create_run, load_assets, save_values, set_progress, status
 
 COLUMNS = (
     "id,lat,lon,match_type,distance_m,building_id,name,class,subtype,height,num_floors,geometry_wkt"
@@ -126,7 +126,7 @@ def test_row_count_mismatch_is_an_error(tmp_path):
 
 
 def test_end_to_end_from_csv_to_table(local_settings, coords_csv):
-    points = read_portfolio(coords_csv, 100)
+    points = read_portfolio(coords_csv, 100).points
     run = create_run(local_settings.data_dir, len(points), Path(coords_csv).name)
     locate(points, run.geolocated_csv, local_settings)
     assert load_assets(run) == len(points)
@@ -170,3 +170,21 @@ def test_a_run_can_be_opened_again_after_closing(tmp_path):
         con.execute("UPDATE runs SET total_rows = 5")
     with run.connect() as con:
         assert con.execute("SELECT total_rows FROM runs").fetchone() == (5,)
+
+
+def test_values_are_saved_by_input_position(tmp_path):
+    run = create_run(tmp_path, 3)
+    save_values(run, [5.0, None, 0.0], ["given", "invalid", "given"], "JPY")
+    with run.connect() as con:
+        assert con.execute("SELECT * FROM asset_values ORDER BY row_num").fetchall() == [
+            (1, 5.0, "given"),
+            (2, None, "invalid"),
+            (3, 0.0, "given"),
+        ]
+        assert con.execute("SELECT currency FROM portfolio_values").fetchall() == [("JPY",)]
+
+
+def test_values_must_cover_every_row(tmp_path):
+    run = create_run(tmp_path, 3)
+    with pytest.raises(ValueError, match="2 values for 3 rows"):
+        save_values(run, [1.0, 2.0], ["given", "given"], None)

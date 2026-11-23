@@ -85,6 +85,30 @@ def test_compose_mounts_only_the_flood_zone_database_read_only():
     assert "FLOOD_ZONES_DB: ${FLOOD_ZONES_DB:-}" in compose
 
 
+def _service(compose: str, name: str) -> str:
+    """The lines of one top-level service in compose.yml, up to the next one."""
+    block = re.search(rf"^  {name}:\n(.*?)(?=^  \w|^\S)", compose, re.MULTILINE | re.DOTALL)
+    assert block, name
+    return block.group(1)
+
+
+def test_ollama_publishes_nothing_and_runs_only_for_the_analyst():
+    compose = (DOCKER / "compose.yml").read_text()
+    ollama = _service(compose, "ollama")
+    assert "ports:" not in ollama and "expose:" not in ollama
+    assert "network_mode" not in ollama
+    assert "profiles: [analyst]" in ollama
+    # A pinned release, never latest.
+    image = re.search(r"image: ollama/ollama:(\S+)", ollama).group(1)
+    assert re.fullmatch(r"\d+\.\d+\.\d+", image)
+    assert "ollama_models:/root/.ollama" in ollama
+
+
+def test_the_app_reaches_the_analyst_over_the_stack_network():
+    app = _service((DOCKER / "compose.yml").read_text(), "app")
+    assert "ASSET_RISK_ANALYST_URL: http://ollama:11434" in app
+
+
 def _fake_repo(tmp_path, settings: dict):
     """A repo with what start.sh checks for, and a docker that records its environment."""
     root = tmp_path / "repo"
@@ -170,6 +194,61 @@ def test_start_script_explains_what_is_missing(tmp_path):
     called = (tmp_path / "called").read_text()
     assert called.startswith(f"{os.getuid()} 9123 compose")
     assert "up --build" in called
+
+
+def _start_with_settings(tmp_path, settings: dict):
+    """Run start.sh against a fake repo, with a docker that logs every call and its profile."""
+    root = tmp_path / "repo"
+    (root / "script").mkdir(parents=True)
+    shutil.copy(ROOT / "script" / "start.sh", root / "script" / "start.sh")
+    (root / "vendor/geolocate/src").mkdir(parents=True)
+    (root / "vendor/geolocate/src/geolocate.py").touch()
+    (root / "vendor/geolocate/.geolocate.json").touch()
+    (root / ".asset-risk.json").write_text(json.dumps(settings, separators=(",", ":")))
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        "#!/bin/sh\n"
+        '[ "$1" = compose ] && [ "$2" = version ] && exit 0\n'
+        f'echo "${{COMPOSE_PROFILES:-none}} $*" >> {tmp_path}/calls\n'
+    )
+    fake_docker.chmod(0o755)
+    env = os.environ | {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    env.pop("COMPOSE_PROFILES", None)
+    result = subprocess.run(
+        ["bash", "script/start.sh"], cwd=root, env=env, capture_output=True, text=True
+    )
+    calls = (tmp_path / "calls").read_text().splitlines() if result.returncode == 0 else []
+    return result, calls
+
+
+def test_start_script_pulls_the_analyst_model_when_it_is_on(tmp_path):
+    result, calls = _start_with_settings(
+        tmp_path, {"analyst_enabled": True, "analyst_model": "qwen3:1.7b"}
+    )
+    assert result.returncode == 0, result.stderr
+    compose = "analyst compose -f docker/compose.yml"
+    assert calls == [
+        f"{compose} up --detach --wait ollama",
+        f"{compose} exec ollama ollama pull qwen3:1.7b",
+        f"{compose} up --build",
+    ]
+
+
+def test_start_script_leaves_the_analyst_off_by_default(tmp_path):
+    result, calls = _start_with_settings(
+        tmp_path, {"analyst_enabled": False, "analyst_model": "qwen3:1.7b"}
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls == ["none compose -f docker/compose.yml up --build"]
+    assert "ollama" not in result.stdout
+
+
+def test_start_script_needs_a_model_for_the_analyst(tmp_path):
+    result, _ = _start_with_settings(tmp_path, {"analyst_enabled": True, "analyst_model": ""})
+    assert result.returncode != 0
+    assert "analyst_model is empty" in result.stderr
 
 
 def _compose(*args, **kwargs):

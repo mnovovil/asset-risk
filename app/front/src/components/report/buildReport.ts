@@ -448,6 +448,9 @@ export async function buildReport(request: ReportRequest): Promise<Report> {
       baseline: isBaseline(input.pair),
       trajectory: input.run.trajectory,
       sharedHazards: input.run.summary.shared_hazards,
+      // As the report's own figures: only a run with values is weighted by them.
+      weighting: input.run.summary.has_values ? (input.weighting ?? "equal") : "equal",
+      currency: input.run.summary.currency ?? null,
     });
     checkCancelled();
     onStage?.("pdf");

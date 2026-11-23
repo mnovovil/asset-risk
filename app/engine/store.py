@@ -112,6 +112,22 @@ def load_assets(run: Run) -> int:
     return loaded
 
 
+def save_values(
+    run: Run, values: list[float | None], statuses: list[str], currency: str | None
+) -> None:
+    """Store each asset's value by row_num, which is its position in the input, from 1."""
+    with run.connect() as con:
+        expected = con.execute("SELECT total_rows FROM runs").fetchone()[0]
+        if len(values) != expected or len(statuses) != expected:
+            raise ValueError(f"Got {len(values)} values for {expected} rows")
+        con.execute(
+            "INSERT INTO asset_values "
+            "SELECT unnest(range(1, ? + 1))::INTEGER, unnest(?::DOUBLE[]), unnest(?::VARCHAR[])",
+            [expected, values, statuses],
+        )
+        con.execute("INSERT INTO portfolio_values VALUES (?)", [currency])
+
+
 def find_run(data_dir: str | os.PathLike[str], run_id: str) -> Run | None:
     """Return the run with this id, or None. Only a canonical UUID ever becomes a path."""
     try:

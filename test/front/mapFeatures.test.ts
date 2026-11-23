@@ -21,6 +21,8 @@ const row = (rowNum: number, total: number | null): AssetRow => ({
   historical: null,
   aal: {},
   scores: {},
+  value: null,
+  expectedLoss: null,
 });
 
 const ROWS = [row(1, 0.01), row(2, 0.02), row(4, null)];

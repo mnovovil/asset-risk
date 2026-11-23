@@ -24,6 +24,8 @@ services:
     environment:
       # Empty when flood_zones_db is null, which leaves the lookup off.
       FLOOD_ZONES_DB: ${FLOOD_ZONES_DB:-}
+      # The analyst's model server is the ollama service below, whatever analyst_url says.
+      ASSET_RISK_ANALYST_URL: http://ollama:11434
     healthcheck:
       test:
         - CMD
@@ -35,5 +37,29 @@ services:
       retries: 3
       start_period: 20s
 
+  # The portfolio analyst's model server. It runs only with the analyst profile, which
+  # script/start.sh turns on when analyst_enabled is true. It publishes no ports: Ollama has no
+  # login, so only the app reaches it, over the stack's own network.
+  ollama:
+    image: ollama/ollama:0.40.14
+    profiles: [analyst]
+    init: true
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      # One model and one request at a time: the machine this targets has about 8 GB of memory.
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      # Unload the model after 5 idle minutes, to give its memory back to runs.
+      OLLAMA_KEEP_ALIVE: 5m
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 volumes:
   data:
+  # The analyst's model weights, about 1.4 GB for qwen3:1.7b, kept across restarts.
+  ollama_models:

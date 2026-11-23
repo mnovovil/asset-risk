@@ -346,3 +346,53 @@ variable "hazard_map_tile_cache" {
     error_message = "hazard_map_tile_cache must be a whole number of at least 1."
   }
 }
+
+variable "analyst_enabled" {
+  description = "Turn on the portfolio analyst chat. It needs a model server: the compose stack runs one, and script/serve.py uses analyst_url."
+  type        = bool
+  default     = false
+}
+
+variable "analyst_url" {
+  description = "The analyst's Ollama server, with no path. In Docker, $ASSET_RISK_ANALYST_URL points the app at the stack's own service instead."
+  type        = string
+  default     = "http://localhost:11434"
+
+  validation {
+    condition     = can(regex("^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$", var.analyst_url))
+    error_message = "analyst_url must be an http:// or https:// address with no path, like http://localhost:11434."
+  }
+}
+
+variable "analyst_model" {
+  description = "The Ollama model the analyst asks, pulled by script/start.sh when the analyst is on."
+  type        = string
+  default     = "qwen3:1.7b"
+
+  validation {
+    condition     = trimspace(var.analyst_model) != ""
+    error_message = "analyst_model must be a non-empty string."
+  }
+}
+
+variable "analyst_max_calls" {
+  description = "Tool calls the analyst may make for one question, 1 to 10."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.analyst_max_calls >= 1 && var.analyst_max_calls <= 10 && var.analyst_max_calls == floor(var.analyst_max_calls)
+    error_message = "analyst_max_calls must be a whole number from 1 to 10."
+  }
+}
+
+variable "analyst_timeout_s" {
+  description = "Seconds one call to the model may take, 30 to 1800. A 7B model on a CPU can take minutes."
+  type        = number
+  default     = 600
+
+  validation {
+    condition     = var.analyst_timeout_s >= 30 && var.analyst_timeout_s <= 1800 && var.analyst_timeout_s == floor(var.analyst_timeout_s)
+    error_message = "analyst_timeout_s must be a whole number from 30 to 1800."
+  }
+}

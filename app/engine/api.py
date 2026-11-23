@@ -8,7 +8,7 @@ from __future__ import annotations
 import csv
 import io
 import tempfile
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from engine import hazard_maps, results, schemas, store
+from engine import analyst, hazard_maps, results, schemas, store
 from engine.assess import HISTORICAL, hazard_curve
 from engine.flood_zone_data import definitions
 from engine.geolocation import GeolocationError
@@ -37,6 +37,14 @@ MAX_SOURCE_NAME_LENGTH = 255
 INTERRUPTED_MESSAGE = "The app restarted before this run finished. Upload the portfolio again."
 # A spreadsheet runs a cell that starts with one of these as a formula.
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+ANALYST_OFF_MESSAGE = (
+    "The analyst is turned off. Set analyst_enabled = true in infra/terraform.tfvars, run "
+    "terraform apply, and restart."
+)
+ANALYST_RUN_IN_PROGRESS_MESSAGE = (
+    "A portfolio run is in progress, and the analyst's model needs the memory it's using. "
+    "Ask again when the run finishes."
+)
 # Tiles only change with the physrisk pin, but a run can be deleted, so not "immutable".
 TILE_CACHE_CONTROL = "private, max-age=86400"
 
@@ -47,6 +55,15 @@ def _settings(request: Request) -> Settings:
 
 def _queue(request: Request) -> RunQueue:
     return request.app.state.queue
+
+
+AnalystClientFactory = Callable[[Settings], analyst.ModelClient]
+
+
+def _ollama_client(settings: Settings) -> analyst.ModelClient:
+    return analyst.OllamaClient(
+        settings.analyst_url, settings.analyst_model, settings.analyst_timeout_s
+    )
 
 
 SettingsDep = Annotated[Settings, Depends(_settings)]
@@ -101,6 +118,7 @@ def config(settings: SettingsDep) -> schemas.AppConfig:
         default_building_type=settings.default_building_type,
         max_portfolio_rows=settings.max_portfolio_rows,
         max_upload_mb=settings.max_upload_mb,
+        analyst_enabled=settings.analyst_enabled,
     )
 
 
@@ -342,6 +360,48 @@ def _csv_lines(columns: list[str], rows: list[tuple]) -> Iterator[str]:
         buffer.truncate()
 
 
+def _source(call: analyst.ToolCall) -> schemas.ChatSource:
+    return schemas.ChatSource(n=call.number, tool=call.tool, args=call.args, result=call.result)
+
+
+@router.post("/runs/{run_id}/chat")
+def chat(
+    run: FinishedRunDep,
+    body: schemas.ChatRequest,
+    request: Request,
+    settings: SettingsDep,
+    queue: QueueDep,
+) -> schemas.ChatResponse:
+    """Ask the portfolio analyst about a completed run. It can take minutes on a CPU.
+
+    A sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one
+    question is answered at a time, and none while a portfolio run is in progress.
+    """
+    if not settings.analyst_enabled:
+        raise HTTPException(503, ANALYST_OFF_MESSAGE)
+    if queue.busy():
+        raise HTTPException(503, ANALYST_RUN_IN_PROGRESS_MESSAGE)
+    client = request.app.state.analyst_client(settings)
+    history = [message.model_dump() for message in body.history]
+    try:
+        answer = analyst.ask(run, body.question, client, settings.analyst_max_calls, history)
+    except analyst.AnalystBusy as e:
+        raise HTTPException(429, str(e)) from None
+    except analyst.AnalystUnavailable as e:
+        raise HTTPException(503, str(e)) from None
+    except analyst.AnalystTimeout as e:
+        raise HTTPException(504, str(e)) from None
+    except analyst.AnalystOutputError as e:
+        raise HTTPException(502, str(e)) from None
+    return schemas.ChatResponse(
+        answer=answer.text,
+        verified=answer.verified,
+        unverified_numbers=answer.unmatched,
+        sources=[_source(call) for call in answer.sources],
+        tool_calls=[_source(call) for call in answer.tool_calls],
+    )
+
+
 @router.get("/runs/{run_id}/export.csv")
 def export_csv(run: FinishedRunDep) -> StreamingResponse:
     columns, rows = results.export_rows(run)
@@ -384,12 +444,17 @@ def create_app(
     settings: Settings | None = None,
     execute: Execute = run_pipeline,
     front_dist: Path = FRONT_DIST,
+    analyst_client: AnalystClientFactory = _ollama_client,
 ) -> FastAPI:
-    """Build the app. Settings load at startup, so the schema can be exported without them."""
+    """Build the app. Settings load at startup, so the schema can be exported without them.
+
+    analyst_client makes the analyst's model client from the settings, for each question.
+    """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings or load_settings()
+        app.state.analyst_client = analyst_client
         hazard_maps.configure(app.state.settings)
         _mark_interrupted(app.state.settings.data_dir)
         app.state.queue = RunQueue(execute)

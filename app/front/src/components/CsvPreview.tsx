@@ -1,6 +1,10 @@
-import { REQUIRED_COLUMNS, type CsvInspection } from "@/lib/csv";
+import type { CsvInspection } from "@/lib/csv";
 
-export function CsvPreview({ preview, rowCount }: Pick<CsvInspection, "preview" | "rowCount">) {
+export function CsvPreview({
+  columns,
+  preview,
+  rowCount,
+}: Pick<CsvInspection, "columns" | "preview" | "rowCount">) {
   return (
     <div className="table-scroll">
       <table>
@@ -11,7 +15,7 @@ export function CsvPreview({ preview, rowCount }: Pick<CsvInspection, "preview" 
         </caption>
         <thead>
           <tr>
-            {REQUIRED_COLUMNS.map((name) => (
+            {columns.map((name) => (
               <th key={name} scope="col">
                 {name}
               </th>

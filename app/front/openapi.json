@@ -3,6 +3,10 @@
     "schemas": {
       "AppConfig": {
         "properties": {
+          "analyst_enabled": {
+            "title": "Analyst Enabled",
+            "type": "boolean"
+          },
           "default_building_type": {
             "title": "Default Building Type",
             "type": "string"
@@ -35,7 +39,8 @@
           "years",
           "default_building_type",
           "max_portfolio_rows",
-          "max_upload_mb"
+          "max_upload_mb",
+          "analyst_enabled"
         ],
         "title": "AppConfig",
         "type": "object"
@@ -369,6 +374,22 @@
               }
             ],
             "title": "Type Source"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_status": {
+            "default": "missing",
+            "title": "Value Status",
+            "type": "string"
           }
         },
         "required": [
@@ -775,6 +796,22 @@
               }
             ],
             "title": "Type Source"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_status": {
+            "default": "missing",
+            "title": "Value Status",
+            "type": "string"
           }
         },
         "required": [
@@ -946,6 +983,17 @@
             ],
             "title": "Asset Id"
           },
+          "expected_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Loss"
+          },
           "hazards": {
             "title": "Hazards",
             "type": "integer"
@@ -965,6 +1013,17 @@
             ],
             "title": "Shared Aal"
           },
+          "shared_expected_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Expected Loss"
+          },
           "total_aal": {
             "anyOf": [
               {
@@ -975,6 +1034,22 @@
               }
             ],
             "title": "Total Aal"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "value_status": {
+            "default": "missing",
+            "title": "Value Status",
+            "type": "string"
           }
         },
         "required": [
@@ -999,6 +1074,125 @@
           "file"
         ],
         "title": "Body_create_run_api_runs_post",
+        "type": "object"
+      },
+      "ChatMessage": {
+        "properties": {
+          "content": {
+            "maxLength": 20000,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "maxItems": 20,
+            "title": "History",
+            "type": "array"
+          },
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ChatResponse": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "tool_calls": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSource"
+            },
+            "title": "Tool Calls",
+            "type": "array"
+          },
+          "unverified_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unverified Numbers",
+            "type": "array"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "answer",
+          "verified",
+          "unverified_numbers",
+          "sources",
+          "tool_calls"
+        ],
+        "title": "ChatResponse",
+        "type": "object"
+      },
+      "ChatSource": {
+        "description": "One tool call the analyst made: what it asked for and what the run returned.",
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "n",
+          "tool",
+          "args",
+          "result"
+        ],
+        "title": "ChatSource",
         "type": "object"
       },
       "Cluster": {
@@ -1728,6 +1922,17 @@
             "title": "Assumed Type",
             "type": "integer"
           },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "excluded": {
             "title": "Excluded",
             "type": "integer"
@@ -1747,6 +1952,21 @@
             "title": "Global Curve",
             "type": "integer"
           },
+          "has_values": {
+            "default": false,
+            "title": "Has Values",
+            "type": "boolean"
+          },
+          "invalid_values": {
+            "default": 0,
+            "title": "Invalid Values",
+            "type": "integer"
+          },
+          "missing_values": {
+            "default": 0,
+            "title": "Missing Values",
+            "type": "integer"
+          },
           "nearest_match": {
             "title": "Nearest Match",
             "type": "integer"
@@ -1764,6 +1984,22 @@
           },
           "total_assets": {
             "title": "Total Assets",
+            "type": "integer"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Value"
+          },
+          "valued_assets": {
+            "default": 0,
+            "title": "Valued Assets",
             "type": "integer"
           }
         },
@@ -1787,6 +2023,28 @@
           "assets": {
             "title": "Assets",
             "type": "integer"
+          },
+          "expected_loss_shared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Loss Shared"
+          },
+          "expected_loss_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Loss Total"
           },
           "hazards": {
             "title": "Hazards",
@@ -1817,6 +2075,44 @@
           "scenario": {
             "title": "Scenario",
             "type": "string"
+          },
+          "valued_assets": {
+            "default": 0,
+            "title": "Valued Assets",
+            "type": "integer"
+          },
+          "valued_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valued Total"
+          },
+          "weighted_mean_shared_aal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weighted Mean Shared Aal"
+          },
+          "weighted_mean_total_aal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weighted Mean Total Aal"
           },
           "year": {
             "anyOf": [
@@ -2238,6 +2534,56 @@
           }
         },
         "summary": "Get Hazard Curve"
+      }
+    },
+    "/api/runs/{run_id}/chat": {
+      "post": {
+        "description": "Ask the portfolio analyst about a completed run. It can take minutes on a CPU.\n\nA sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one\nquestion is answered at a time, and none while a portfolio run is in progress.",
+        "operationId": "chat_api_runs__run_id__chat_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat"
       }
     },
     "/api/runs/{run_id}/clusters": {

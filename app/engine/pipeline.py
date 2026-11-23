@@ -14,13 +14,13 @@ from engine.classify import classify
 from engine.cluster import cluster
 from engine.flood_zones import map_flood_zones
 from engine.geolocation import locate
-from engine.ingest import read_portfolio
+from engine.ingest import Points, read_portfolio
 from engine.settings import Settings
-from engine.store import Run, create_run, load_assets, set_progress, set_status
+from engine.store import Run, create_run, load_assets, save_values, set_progress, set_status
 
 logger = logging.getLogger(__name__)
 
-Points = list[tuple[str | None, ...]]
+__all__ = ["Points", "execute", "start"]
 
 
 class AssessmentFailed(Exception):
@@ -31,8 +31,10 @@ def start(
     csv_path: str | os.PathLike[str], settings: Settings, source_name: str | None = None
 ) -> tuple[Run, Points]:
     """Check the portfolio and create its run. Raises PortfolioError if it's unusable."""
-    points = read_portfolio(csv_path, settings.max_portfolio_rows)
-    return create_run(settings.data_dir, len(points), source_name), points
+    portfolio = read_portfolio(csv_path, settings.max_portfolio_rows)
+    run = create_run(settings.data_dir, len(portfolio.points), source_name)
+    save_values(run, portfolio.values, portfolio.value_statuses, portfolio.currency)
+    return run, portfolio.points
 
 
 def execute(run: Run, points: Points, settings: Settings) -> bool:

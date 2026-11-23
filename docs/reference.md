@@ -31,19 +31,45 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `hazard_map_legend_stops` | `9` | Colours in the wildfire, wind, hail and drought legends, 2 to 33 |
 | `hazard_map_array_cache` | `4` | Arrays kept per layer: about 4 MB each for wildfire, hail and drought, 17 MB for wind |
 | `hazard_map_tile_cache` | `256` | Tiles kept per layer |
+| `analyst_enabled` | `false` | Turns on the portfolio analyst chat. The default model needs about 2 GB of free memory. Docker runs it in its own `ollama` service |
+| `analyst_url` | `http://localhost:11434` | The Ollama server `script/serve.py` uses, with no path. Docker uses its own service instead |
+| `analyst_model` | `qwen3:1.7b` | The Ollama model the analyst asks. `script/start.sh` pulls it when the analyst is on. See [the model](#the-model) |
+| `analyst_max_calls` | `2` | Tool calls the analyst may make for one question, 1 to 10 |
+| `analyst_timeout_s` | `600` | Seconds one call to the model may take, 30 to 1800. A model on a CPU can take minutes |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
 Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`,
-`ASSET_RISK_DATA_DIR` and `FLOOD_ZONES_DB`.
+`ASSET_RISK_DATA_DIR`, `FLOOD_ZONES_DB` and `ASSET_RISK_ANALYST_URL`.
 
 ## Portfolio CSV
 
 A header containing `id`, `lat` and `lon` (WGS84 degrees). Case and column order don't matter, and
 extra columns are ignored.
 
-The whole file is rejected if it has missing columns, no rows, duplicate ids, or too many rows or
-bytes. A bad row doesn't stop a run: it's kept and reported as `invalid`.
+Two optional columns give each asset a value, for value-weighted figures and losses in money:
+
+| Column | Contents |
+|---|---|
+| `value` | The asset's value, a plain number such as `1500000` or `1.5e6`. No thousands separators or currency signs |
+| `currency` | An ISO 4217 code such as `USD` or `EUR`, in any case. Optional: values without one are shown as plain amounts |
+
+```csv
+id,lat,lon,value,currency
+empire-state,40.7484,-73.9857,2300000000,USD
+big-ben,51.5007,-0.1246,,
+```
+
+- A blank value counts as `missing`. A value that isn't a plain number, or is negative or not
+  finite (such as `1,000`, `$5M`, `-5` or `inf`), counts as `invalid`. Either way, the asset is
+  still assessed and is left out of value-weighted figures only. `0` is a value.
+- A file uses one currency. Blank `currency` cells take the file's currency. Two different codes
+  reject the file, and nothing is converted.
+- A `currency` column without `value` is ignored.
+
+The whole file is rejected if it has missing columns, no rows, duplicate ids, more than one currency,
+a currency that isn't a three-letter code, or too many rows or bytes. A bad row doesn't stop a run:
+it's kept and reported as `invalid`.
 
 ## Classification
 
@@ -90,9 +116,10 @@ Interactive docs are at `/docs` on the running app. Errors are always
 | `GET /api/runs/{id}/hazard-maps/{hazard}/{z}/{x}/{y}.png` | One 512 px map tile, zoom 0 to the layer's `max_zoom` (7 for wind, 6 for the others), for the same `scenario` and `year`. 404 where there's no map, 502 when physrisk or S3 fails |
 | `GET /api/runs/{id}/impacts`, `.../totals`, `.../scores` | Results for one `scenario` and `year`. For the baseline, use `scenario=historical` with no year |
 | `GET /api/runs/{id}/trajectory`, `.../coverage` | Means by scenario and year, and which hazards each has |
-| `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone |
+| `POST /api/runs/{id}/chat` | Ask the analyst a question about a completed run. See [Analyst](#analyst) |
+| `GET /api/runs/{id}/export.csv` | Everything, one row per asset, scenario, year and hazard, with each asset's FEMA flood zone, value, currency and expected loss (`aal` × `value`) |
 | `GET /api/flood-zone-definitions` | What each FEMA flood zone, insurance rule and lookup status means, with sources |
-| `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, and a health check |
+| `GET /api/config`, `GET /api/health` | Allowed scenarios and limits, whether the analyst is on (`analyst_enabled`), and a health check |
 
 Flood tiles are drawn by physrisk on request, through the same lock as a run, so they can be slow
 while another run is assessing. Only river and coastal flood have public map images, and `pytest -m
@@ -127,6 +154,112 @@ Results return 409 until a run is `completed`. Assets are addressed by `row_num`
 row can have no id. Runs that were queued or running when the app stopped are marked `interrupted`,
 and need uploading again.
 
+## Analyst
+
+`POST /api/runs/{id}/chat` takes `{"question": "...", "history": [...]}`:
+- `question` is 1 to 2,000 characters.
+- `history` holds up to 20 earlier messages, oldest first, each `{"role": "user" | "assistant",
+  "content": "..."}`. The prompt keeps the last 6.
+
+It returns:
+
+| Field | Contents |
+|---|---|
+| `answer` | The model's answer |
+| `verified` | Every number in `answer` matched a result it cites |
+| `unverified_numbers` | The numbers that didn't, as written |
+| `sources` | The cited tool calls, each with `n`, `tool`, `args` and `result` |
+| `tool_calls` | Every tool call made for the question, cited or not |
+
+A question takes minutes on a CPU. The route is synchronous, so the wait runs in FastAPI's thread
+pool, and only one question is answered at a time.
+
+| Status | When |
+|---|---|
+| 404, 409 | The run doesn't exist, or isn't `completed` |
+| 422 | The question is empty or too long, or the history is too long or has another role |
+| 429 | The analyst is answering another question, including one whose request was cancelled |
+| 502 | The model's replies couldn't be used after a correction, or it didn't answer within `analyst_max_calls` tool calls |
+| 503 | The analyst is off, a portfolio run is queued or in progress, the model server can't be reached, or it doesn't have the model |
+| 504 | One call to the model took longer than `analyst_timeout_s` |
+
+### How it works
+
+`app/engine/analyst.py` runs the loop, and `app/engine/data/analyst_prompt.md` is the only text it
+gives the model. The prompt is filled in with:
+- the run's label, scenario and year pairs, and shared hazards
+- the tool list, generated from the registry
+- the call limit, the history and the question
+- the transcript so far
+
+The model (`qwen3:1.7b` by default, thinking off, one user message per call) replies with one JSON
+object: either `{"tool": ..., "args": ...}` or `{"answer": ..., "sources": [n, ...]}`. The
+app takes the outermost object from the reply:
+- A malformed reply or an unknown tool gets one correction, and a second bad reply in a row is a
+  502.
+- Each tool result goes back as `TOOL RESULT #n (tool): {json}`.
+- After `analyst_max_calls` results, the model is told to answer.
+
+The grounding check compares every number in the answer with the numeric values in the results it
+cites. A number matches if a value rounds to it at the precision shown. It allows:
+- a fraction shown as a percentage (0.0123 as "1.23%")
+- thousands separators and the scales k, M and bn
+- either sign
+
+Some numbers are never checked as figures:
+- numbers inside words and zone names (`A99`)
+- scenario names (`SSP5-8.5`)
+- `#n` citations and list markers
+- text that appears as a string in a result, such as an `asset_id`
+
+The run's years and any number in the question need no result. An answer that doesn't match gets
+one retry, then comes back with `verified: false`. Questions are serialised by the analyst's own
+lock, never physrisk's.
+
+### Tools
+
+`app/engine/analyst_tools.py` is the one source of the tools' names, argument schemas and
+descriptions. Every tool is read-only and passes values to SQL as parameters. An argument that
+doesn't fit the run returns `{"error": "..."}` naming the valid options, which the model reads as a
+tool result.
+
+| Tool | Returns |
+|---|---|
+| `query_portfolio(scenario, year, hazard=null)` | Equal-weighted means, overall and per hazard. A hazard with no results is `mean_aal: null, covered: false`. With asset values, adds `value_weighted` |
+| `get_asset(row_num)` | One asset's detail without its footprint, plus `failed_assessments` |
+| `top_assets(scenario, year, hazard=null, n=10)` | The highest-AAL assets, with `asset_id` and `type_source`. `n` is capped at 25 |
+| `compare_scenarios(a, b, year)` | Each scenario's `mean_shared_aal`, `difference_b_minus_a`, the shared hazards, and the hazards left out of the comparison. The historical side always has year null |
+| `list_exclusions()` | Exclusion counts and reasons, and up to 25 excluded rows and failed batches, with complete totals |
+
+The live test, `.venv/bin/pytest -m ollama`, asks a real model three questions on a fixture run. It
+needs a model server at `$ASSET_RISK_ANALYST_URL` (default `http://localhost:11434`) with
+`$ASSET_RISK_ANALYST_MODEL` (default `qwen3:1.7b`) pulled.
+
+### The model
+
+The default is `qwen3:1.7b`, about 1.4 GB to download and about 2 GB of memory, so it fits
+alongside the app on a machine with 6 GB. `qwen3:4b` needs about 4 GB, which on such a machine
+means swapping and very slow answers. On a machine with about 8 GB free, set
+`analyst_model = "qwen3:4b"`: it follows the JSON reply format more reliably, so expect fewer
+correction retries, fewer answers marked `verified: false`, and fewer 502s after two bad replies in
+a row. The grounding check is the same for every model, so a smaller model gives less useful
+answers, not wrong ones marked verified.
+
+Every call is made with thinking off, whatever the model. On a CPU, writing tokens is almost all
+of an answer's time, and a reasoning model writes hundreds of them per call before it replies:
+`deepseek-r1:1.5b` took 366 seconds over 7 calls for "hello" and still didn't answer. Ollama also
+rejects thinking for a model that can't think. A model that writes a `<think>` block anyway has it
+dropped before the reply is read. Each call also passes Ollama a JSON schema that allows one tool
+call or one answer, so the model stops at the end of its object: without it, `qwen3:1.7b` went on
+to write more calls and made-up tool results, about a minute per call instead of 4 to 20 seconds.
+The app still checks every reply as described above. Sampling follows Qwen's advice for thinking off (temperature
+0.7, top_p 0.8, top_k 20).
+
+Each call asks for as many threads as the app's machine has CPUs, because Ollama's own default
+leaves half of them idle (about 15% slower). In Docker, the app and the model server share the
+host, so the count is right. With `script/serve.py` and an `analyst_url` on a different machine,
+the count is the app's, not the server's.
+
 ## Run database
 
 Each run has `runs/<uuid>/run.duckdb`, which you can query directly:
@@ -137,13 +270,15 @@ Each run has `runs/<uuid>/run.duckdb`, which you can query directly:
 | `assets` | One row per input row: geolocate's output plus classification |
 | `asset_clusters` | The DBSCAN cluster of each clustered asset. Noise has no row, and runs made before clustering have no table |
 | `asset_flood_zones` | Each asset's FEMA flood zone and lookup status. Runs made before the lookup have no table |
+| `asset_values`, `portfolio_values` | Each asset's value and `value_status` (`given`, `missing` or `invalid`), and the portfolio's currency. Runs made before values have neither table, and read as having no values |
 | `flood_zone_source` | Which FEMA data the run used, and its date. Empty when there was none |
 | `assessment_pairs` | Each scenario and year requested |
 | `impacts`, `scores` | Results, keyed on `row_num`, `scenario` and `year`. The baseline has year NULL |
 | `assess_failures` | Failed batches |
 | `v_portfolio_summary`, `v_exclusions` | Counts |
 | `v_asset_totals`, `v_asset_hazard_aal`, `v_asset_scores` | Results per asset |
-| `v_portfolio_trajectory`, `v_portfolio_hazards` | Means, including over shared hazards |
+| `v_portfolio_trajectory`, `v_portfolio_hazards` | Means, including over shared hazards. The trajectory also has value-weighted means and expected losses |
+| `v_asset_expected_loss`, `v_portfolio_value_weighted` | AAL × value per asset, and its value-weighted sums, over assets with a `given` value |
 | `v_shared_hazards`, `v_hazard_coverage` | Which hazards each scenario has |
 
 ## Changing the Overture release

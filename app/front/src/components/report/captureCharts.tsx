@@ -9,7 +9,7 @@ import { createRoot } from "react-dom/client";
 import type { TrajectoryPoint } from "@/api/client";
 import { LossBars } from "@/components/dashboard/LossBars";
 import { Trajectory } from "@/components/dashboard/Trajectory";
-import type { AssetRow } from "@/lib/dashboard";
+import type { AssetRow, Weighting } from "@/lib/dashboard";
 
 /**
  * CSS pixels: the PDF scales the vectors to its 180 mm column, so 12 px chart text prints at about
@@ -38,6 +38,8 @@ export interface ChartInput {
   baseline: boolean;
   trajectory: TrajectoryPoint[];
   sharedHazards: string[];
+  weighting?: Weighting;
+  currency?: string | null;
 }
 
 const VAR = /var\((--[\w-]+)\)/g;
@@ -133,8 +135,14 @@ export async function captureCharts(input: ChartInput): Promise<CapturedChart[]>
             missing={input.missing}
             baseline={input.baseline}
             onSelect={() => undefined}
+            weighting={input.weighting}
+            currency={input.currency}
           />
-          <Trajectory trajectory={input.trajectory} sharedHazards={input.sharedHazards} />
+          <Trajectory
+            trajectory={input.trajectory}
+            sharedHazards={input.sharedHazards}
+            weighting={input.weighting}
+          />
         </>,
       ),
     );

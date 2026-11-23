@@ -17,6 +17,10 @@ export type Score = components["schemas"]["Score"];
 export type TrajectoryPoint = components["schemas"]["TrajectoryPoint"];
 export type MapPoint = components["schemas"]["MapPoint"];
 export type RunOverview = components["schemas"]["RunOverview"];
+export type ChatMessage = components["schemas"]["ChatMessage"];
+export type ChatRequest = components["schemas"]["ChatRequest"];
+export type ChatSource = components["schemas"]["ChatSource"];
+export type ChatResponse = components["schemas"]["ChatResponse"];
 
 /** A scenario and year that were assessed. The historical baseline has year null. */
 export interface Pair {
@@ -131,6 +135,15 @@ export const getHazardCurve = (runId: string, rowNum: number, pair: Pair, signal
 
 export const getHazardMaps = (runId: string, pair: Pair, signal?: AbortSignal) =>
   request<HazardMapLayer[]>(`${runPath(runId)}/hazard-maps?${pairQuery(pair)}`, { signal });
+
+/** Ask the portfolio analyst about a completed run. An answer can take minutes on a CPU. */
+export const askAnalyst = (runId: string, body: ChatRequest, signal?: AbortSignal) =>
+  request<ChatResponse>(`${runPath(runId)}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
 
 /** MapLibre loads tiles off the page, so it needs a full URL. The {z}/{x}/{y} braces must stay. */
 export const absoluteTileUrl = (tileUrl: string) => `${window.location.origin}${tileUrl}`;

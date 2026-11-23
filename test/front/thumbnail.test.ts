@@ -16,6 +16,7 @@ const total = (row_num: number, total_aal: number | null): AssetTotal => ({
   total_aal,
   shared_aal: total_aal,
   hazards: 3,
+  value_status: "missing",
 });
 
 const TOTALS = [total(1, 0.01), total(2, 0.03), total(4, null)];

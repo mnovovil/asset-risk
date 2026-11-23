@@ -31,6 +31,7 @@ const total = (row_num: number, total_aal: number | null) => ({
   total_aal,
   shared_aal: total_aal,
   hazards: 1,
+  value_status: "missing",
 });
 const impact = (row_num: number, hazard: string, aal: number | null) => ({
   row_num,
@@ -209,7 +210,7 @@ describe("the selected scenario", () => {
 
   it("takes the baseline's columns from its losses, as it has no scores", () => {
     const rows = buildRows(
-      [{ row_num: 1, asset_id: "a", total_aal: 0.01, shared_aal: 0.01, hazards: 2 }],
+      [{ row_num: 1, asset_id: "a", total_aal: 0.01, shared_aal: 0.01, hazards: 2, value_status: "missing" }],
       [
         { row_num: 1, asset_id: "a", lat: 0, lon: 0, hazard: "Wind", impact_type: "damage", aal: 0.004, aal_std: null },
         { row_num: 1, asset_id: "a", lat: 0, lon: 0, hazard: "Fire", impact_type: "damage", aal: 0.006, aal_std: null },

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ApiError, getAsset, type AssetDetail, type Pair } from "@/api/client";
 import { isBaseline, pairLabel, SCORE_NOTES, scoreKind } from "@/lib/dashboard";
-import { assetLabel, percent } from "@/lib/format";
+import { assetLabel, money, percent } from "@/lib/format";
 import { hazardLabel, sortHazards } from "@/lib/hazards";
 
 import { AssetChart } from "./AssetChart";
@@ -35,6 +35,21 @@ function typeText(asset: AssetDetail): string {
   }
 }
 
+/** The asset's value from the file, and why there's none: never shown as zero. */
+export function valueText(
+  asset: Pick<AssetDetail, "value" | "value_status">,
+  currency: string | null,
+): string {
+  switch (asset.value_status) {
+    case "given":
+      return money(asset.value, currency);
+    case "invalid":
+      return "The file's value isn't a usable number, so value-weighted figures leave it out";
+    default:
+      return "None given";
+  }
+}
+
 const EXCLUSIONS: Record<string, string> = {
   invalid: "Excluded: the id, latitude or longitude is missing or invalid.",
   off_land: "Excluded: no building found, and not near any country.",
@@ -47,10 +62,19 @@ interface AssetPanelProps {
   pair: Pair;
   /** The run's scenarios, so the chart can name one with no results for a hazard. */
   scenarios: string[];
+  /** The portfolio's currency, for the asset's value. */
+  currency?: string | null;
   onClose: () => void;
 }
 
-export function AssetPanel({ runId, rowNum, pair, scenarios, onClose }: AssetPanelProps) {
+export function AssetPanel({
+  runId,
+  rowNum,
+  pair,
+  scenarios,
+  currency = null,
+  onClose,
+}: AssetPanelProps) {
   const [asset, setAsset] = useState<AssetDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -124,6 +148,8 @@ export function AssetPanel({ runId, rowNum, pair, scenarios, onClose }: AssetPan
             <dd>
               {asset.lat ?? "–"}, {asset.lon ?? "–"}
             </dd>
+            <dt>Value</dt>
+            <dd>{valueText(asset, currency)}</dd>
           </dl>
           <p className="panel-note">Height and floors are shown for context. They don't affect the results.</p>
           <h3>How it was modelled</h3>

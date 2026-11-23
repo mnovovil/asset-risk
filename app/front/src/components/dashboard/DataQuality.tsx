@@ -113,7 +113,11 @@ export function DataQuality({
               Wind means tropical cyclones only. Zero wind doesn't mean no wind risk, for example
               from European windstorms.
             </li>
-            <li>Results are a share of asset value, as asset values aren't known here.</li>
+            <li>
+              {summary.has_values
+                ? "Expected losses use the values in the file as given: they aren't checked or converted between currencies."
+                : "Results are a share of asset value, as asset values aren't known here."}
+            </li>
           </ul>
         </div>
       </div>

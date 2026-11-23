@@ -41,6 +41,7 @@ export const CONFIG = {
   default_building_type: "Buildings/Commercial",
   max_portfolio_rows: 3,
   max_upload_mb: 1,
+  analyst_enabled: false,
 };
 
 export const SUMMARY = {
@@ -52,6 +53,10 @@ export const SUMMARY = {
   nearest_match: 1,
   no_building: 0,
   failed_assets: 0,
+  has_values: false,
+  valued_assets: 0,
+  missing_values: 3,
+  invalid_values: 0,
   exclusions: [{ reason: "off_land", assets: 1 }],
   shared_hazards: ["Wind"],
 };
@@ -77,6 +82,7 @@ export const asset = (row_num: number, overrides: object = {}) => ({
   type_source: "class",
   assessable: true,
   exclusion_reason: null,
+  value_status: "missing",
   fema_status: "not_us",
   fema_zone: null,
   fema_zone_subtype: null,
@@ -100,11 +106,11 @@ export const ASSETS = [
 ];
 
 export const TRAJECTORY = [
-  { scenario: "historical", year: null, assets: 2, mean_total_aal: 0.003, mean_shared_aal: 0.002, hazards: 2 },
-  { scenario: "ssp245", year: 2050, assets: 2, mean_total_aal: 0.006, mean_shared_aal: 0.006, hazards: 1 },
-  { scenario: "ssp370", year: 2050, assets: 0, mean_total_aal: null, mean_shared_aal: null, hazards: 0 },
-  { scenario: "ssp585", year: 2030, assets: 2, mean_total_aal: 0.01, mean_shared_aal: 0.004, hazards: 2 },
-  { scenario: "ssp585", year: 2050, assets: 2, mean_total_aal: 0.02, mean_shared_aal: 0.005, hazards: 2 },
+  { scenario: "historical", year: null, assets: 2, mean_total_aal: 0.003, mean_shared_aal: 0.002, hazards: 2, valued_assets: 0 },
+  { scenario: "ssp245", year: 2050, assets: 2, mean_total_aal: 0.006, mean_shared_aal: 0.006, hazards: 1, valued_assets: 0 },
+  { scenario: "ssp370", year: 2050, assets: 0, mean_total_aal: null, mean_shared_aal: null, hazards: 0, valued_assets: 0 },
+  { scenario: "ssp585", year: 2030, assets: 2, mean_total_aal: 0.01, mean_shared_aal: 0.004, hazards: 2, valued_assets: 0 },
+  { scenario: "ssp585", year: 2050, assets: 2, mean_total_aal: 0.02, mean_shared_aal: 0.005, hazards: 2, valued_assets: 0 },
 ];
 
 export const COVERAGE = [
@@ -139,6 +145,7 @@ const total = (row_num: number, total_aal: number, shared_aal: number, hazards: 
   total_aal,
   shared_aal,
   hazards,
+  value_status: "missing",
 });
 
 /** Results that differ by scenario, as the real ones do: ssp245 has no fire. */

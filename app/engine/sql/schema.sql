@@ -121,3 +121,19 @@ CREATE TABLE flood_zone_source (
     as_of       DATE,
     built_at    TIMESTAMPTZ
 );
+
+-- Each asset's value from the portfolio's optional value column, one row per asset (ingest.py).
+-- value is NULL unless value_status is 'given'. A 'missing' or 'invalid' value leaves the asset in
+-- the run and out of value-weighted figures only. Runs made before this table existed don't have
+-- it, and read as having no values.
+CREATE TABLE asset_values (
+    row_num      INTEGER PRIMARY KEY,
+    value        DOUBLE CHECK (value >= 0),
+    value_status VARCHAR NOT NULL CHECK (value_status IN ('given', 'missing', 'invalid')),
+    CHECK ((value IS NOT NULL) = (value_status = 'given'))
+);
+
+-- One row: the portfolio's currency, an ISO 4217 code, or NULL when its values have none.
+CREATE TABLE portfolio_values (
+    currency VARCHAR CHECK (currency IS NULL OR regexp_full_match(currency, '[A-Z]{3}'))
+);

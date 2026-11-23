@@ -157,6 +157,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat
+         * @description Ask the portfolio analyst about a completed run. It can take minutes on a CPU.
+         *
+         *     A sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one
+         *     question is answered at a time, and none while a portfolio run is in progress.
+         */
+        post: operations["chat_api_runs__run_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/clusters": {
         parameters: {
             query?: never;
@@ -367,6 +390,8 @@ export interface components {
     schemas: {
         /** AppConfig */
         AppConfig: {
+            /** Analyst Enabled */
+            analyst_enabled: boolean;
             /** Default Building Type */
             default_building_type: string;
             /** Max Portfolio Rows */
@@ -446,6 +471,13 @@ export interface components {
             subtype: string | null;
             /** Type Source */
             type_source: string | null;
+            /** Value */
+            value?: number | null;
+            /**
+             * Value Status
+             * @default missing
+             */
+            value_status: string;
         };
         /** AssetDetail */
         AssetDetail: {
@@ -523,6 +555,13 @@ export interface components {
             subtype: string | null;
             /** Type Source */
             type_source: string | null;
+            /** Value */
+            value?: number | null;
+            /**
+             * Value Status
+             * @default missing
+             */
+            value_status: string;
         };
         /** AssetImpact */
         AssetImpact: {
@@ -558,19 +597,78 @@ export interface components {
         AssetTotal: {
             /** Asset Id */
             asset_id: string | null;
+            /** Expected Loss */
+            expected_loss?: number | null;
             /** Hazards */
             hazards: number;
             /** Row Num */
             row_num: number;
             /** Shared Aal */
             shared_aal: number | null;
+            /** Shared Expected Loss */
+            shared_expected_loss?: number | null;
             /** Total Aal */
             total_aal: number | null;
+            /** Value */
+            value?: number | null;
+            /**
+             * Value Status
+             * @default missing
+             */
+            value_status: string;
         };
         /** Body_create_run_api_runs_post */
         Body_create_run_api_runs_post: {
             /** File */
             file: string;
+        };
+        /** ChatMessage */
+        ChatMessage: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /** History */
+            history?: components["schemas"]["ChatMessage"][];
+            /** Question */
+            question: string;
+        };
+        /** ChatResponse */
+        ChatResponse: {
+            /** Answer */
+            answer: string;
+            /** Sources */
+            sources: components["schemas"]["ChatSource"][];
+            /** Tool Calls */
+            tool_calls: components["schemas"]["ChatSource"][];
+            /** Unverified Numbers */
+            unverified_numbers: string[];
+            /** Verified */
+            verified: boolean;
+        };
+        /**
+         * ChatSource
+         * @description One tool call the analyst made: what it asked for and what the run returned.
+         */
+        ChatSource: {
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /** N */
+            n: number;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Tool */
+            tool: string;
         };
         /**
          * Cluster
@@ -816,6 +914,8 @@ export interface components {
             assessable: number;
             /** Assumed Type */
             assumed_type: number;
+            /** Currency */
+            currency?: string | null;
             /** Excluded */
             excluded: number;
             /** Exclusions */
@@ -824,6 +924,21 @@ export interface components {
             failed_assets: number;
             /** Global Curve */
             global_curve: number;
+            /**
+             * Has Values
+             * @default false
+             */
+            has_values: boolean;
+            /**
+             * Invalid Values
+             * @default 0
+             */
+            invalid_values: number;
+            /**
+             * Missing Values
+             * @default 0
+             */
+            missing_values: number;
             /** Nearest Match */
             nearest_match: number;
             /** No Building */
@@ -832,11 +947,22 @@ export interface components {
             shared_hazards: string[];
             /** Total Assets */
             total_assets: number;
+            /** Total Value */
+            total_value?: number | null;
+            /**
+             * Valued Assets
+             * @default 0
+             */
+            valued_assets: number;
         };
         /** TrajectoryPoint */
         TrajectoryPoint: {
             /** Assets */
             assets: number;
+            /** Expected Loss Shared */
+            expected_loss_shared?: number | null;
+            /** Expected Loss Total */
+            expected_loss_total?: number | null;
             /** Hazards */
             hazards: number;
             /** Mean Shared Aal */
@@ -845,6 +971,17 @@ export interface components {
             mean_total_aal: number | null;
             /** Scenario */
             scenario: string;
+            /**
+             * Valued Assets
+             * @default 0
+             */
+            valued_assets: number;
+            /** Valued Total */
+            valued_total?: number | null;
+            /** Weighted Mean Shared Aal */
+            weighted_mean_shared_aal?: number | null;
+            /** Weighted Mean Total Aal */
+            weighted_mean_total_aal?: number | null;
             /** Year */
             year: number | null;
         };
@@ -1128,6 +1265,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HazardCurve"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_api_runs__run_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */

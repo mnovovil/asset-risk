@@ -60,5 +60,11 @@ resource "local_file" "asset_risk_config" {
     hazard_map_legend_stops = var.hazard_map_legend_stops
     hazard_map_array_cache  = var.hazard_map_array_cache
     hazard_map_tile_cache   = var.hazard_map_tile_cache
+
+    analyst_enabled   = var.analyst_enabled
+    analyst_url       = var.analyst_url
+    analyst_model     = var.analyst_model
+    analyst_max_calls = var.analyst_max_calls
+    analyst_timeout_s = var.analyst_timeout_s
   })
 }
