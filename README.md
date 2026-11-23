@@ -30,15 +30,7 @@ zones as unavailable.
 Open the address to see every portfolio assessed so far, each as a card with its mean annual loss,
 its counts and a picture of its risk map. **Delete** removes a finished one. Choose
 **New portfolio** and drop in a CSV. The upload page has a sample to download, and your file needs
-a header with at least these columns:
-
-```csv
-id,lat,lon
-empire-state,40.7484,-73.9857
-big-ben,51.5007,-0.1246
-```
-
-You can add a `value` column, and a `currency` such as `USD`, for value-weighted results and
+a header with at least id, lat, lon columns. You can add a `value` column, and a `currency` such as `USD`, for value-weighted results and
 expected losses in money:
 
 ```csv
@@ -57,7 +49,7 @@ every figure, and **Download report as PDF**, the map, loss bars and change over
 selected scenario, year and map colouring. With values, the CSV adds each asset's value and expected
 loss, and the PDF follows the selected weighting. The browser builds the PDF itself, so it needs the map tiles to load.
 
-### Asking the analyst (optional)
+### Asking the analyst (optiona)
 
 A finished portfolio's page can have an **Ask the analyst** chat, where a model running on your own
 machine answers questions about the run, such as "Which assets have the highest flood loss under
