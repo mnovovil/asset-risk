@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 
 import httpx
@@ -287,7 +288,8 @@ class _Response:
     message = _Message()
 
 
-def test_ollama_client_sends_one_user_message_with_thinking(monkeypatch):
+@pytest.mark.parametrize(("cpus", "threads"), [(4, 4), (None, 1)])
+def test_ollama_client_sends_one_user_message_without_thinking(monkeypatch, cpus, threads):
     sent = {}
 
     def chat(self, **kwargs):
@@ -295,13 +297,14 @@ def test_ollama_client_sends_one_user_message_with_thinking(monkeypatch):
         return _Response()
 
     monkeypatch.setattr(ollama.Client, "chat", chat)
-    client = OllamaClient("http://ollama:11434", "deepseek-r1:1.5b", 600)
+    monkeypatch.setattr(os, "cpu_count", lambda: cpus)
+    client = OllamaClient("http://ollama:11434", "qwen3:1.7b", 600)
     assert client.chat("the prompt") == '{"answer": "ok", "sources": []}'
     assert sent == {
-        "model": "deepseek-r1:1.5b",
+        "model": "qwen3:1.7b",
         "messages": [{"role": "user", "content": "the prompt"}],
-        "think": True,
-        "options": {"temperature": 0.6},
+        "think": False,
+        "options": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "num_thread": threads},
     }
 
 
@@ -320,4 +323,4 @@ def test_ollama_client_errors_are_readable(monkeypatch, error, kind, message):
 
     monkeypatch.setattr(ollama.Client, "chat", chat)
     with pytest.raises(kind, match=message):
-        OllamaClient("http://ollama:11434", "deepseek-r1:1.5b", 600).chat("p")
+        OllamaClient("http://ollama:11434", "qwen3:1.7b", 600).chat("p")
