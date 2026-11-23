@@ -38,6 +38,28 @@ MAX_QUOTED_REPLY = 500
 
 _lock = threading.Lock()
 
+# What a reply may be, for Ollama to hold the model to: one tool call or one answer, so it stops at
+# the object's end instead of writing more. Without it, a small model goes on to write further
+# calls and made-up TOOL RESULTs, which cost a minute per call on a CPU. _parse still checks each
+# reply, so this only shapes the output and never decides what's valid.
+REPLY_FORMAT = {
+    "anyOf": [
+        {
+            "type": "object",
+            "properties": {"tool": {"enum": list(analyst_tools.TOOLS)}, "args": {"type": "object"}},
+            "required": ["tool", "args"],
+        },
+        {
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "sources": {"type": "array", "items": {"type": "integer"}},
+            },
+            "required": ["answer", "sources"],
+        },
+    ]
+}
+
 
 class AnalystError(Exception):
     """A question the analyst couldn't answer. The message is readable, for the API's detail."""
@@ -65,7 +87,7 @@ class ModelClient(Protocol):
 
 
 class OllamaClient:
-    """A model on Ollama, with thinking off and every CPU thread.
+    """A model on Ollama, with thinking off, every CPU thread, and one JSON object per reply.
 
     Thinking is off for every model: on a CPU, reasoning costs hundreds of tokens per call, and
     Ollama rejects think=True for a model that can't think. A reasoning model that writes a
@@ -85,6 +107,7 @@ class OllamaClient:
                 # Everything in one user message, which every model handles, R1 included.
                 messages=[{"role": "user", "content": prompt}],
                 think=False,
+                format=REPLY_FORMAT,
                 options={**SAMPLING, "num_thread": os.cpu_count() or 1},
             )
         except httpx.TimeoutException as e:

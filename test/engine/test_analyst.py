@@ -304,8 +304,16 @@ def test_ollama_client_sends_one_user_message_without_thinking(monkeypatch, cpus
         "model": "qwen3:1.7b",
         "messages": [{"role": "user", "content": "the prompt"}],
         "think": False,
+        "format": analyst.REPLY_FORMAT,
         "options": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "num_thread": threads},
     }
+
+
+def test_reply_format_names_every_tool():
+    tool_call, answer = analyst.REPLY_FORMAT["anyOf"]
+    assert tool_call["properties"]["tool"]["enum"] == list(analyst_tools.TOOLS)
+    assert tool_call["required"] == ["tool", "args"]
+    assert answer["required"] == ["answer", "sources"]
 
 
 @pytest.mark.parametrize(

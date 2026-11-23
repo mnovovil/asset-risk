@@ -249,7 +249,10 @@ Every call is made with thinking off, whatever the model. On a CPU, writing toke
 of an answer's time, and a reasoning model writes hundreds of them per call before it replies:
 `deepseek-r1:1.5b` took 366 seconds over 7 calls for "hello" and still didn't answer. Ollama also
 rejects thinking for a model that can't think. A model that writes a `<think>` block anyway has it
-dropped before the reply is read. Sampling follows Qwen's advice for thinking off (temperature
+dropped before the reply is read. Each call also passes Ollama a JSON schema that allows one tool
+call or one answer, so the model stops at the end of its object: without it, `qwen3:1.7b` went on
+to write more calls and made-up tool results, about a minute per call instead of 4 to 20 seconds.
+The app still checks every reply as described above. Sampling follows Qwen's advice for thinking off (temperature
 0.7, top_p 0.8, top_k 20).
 
 Each call asks for as many threads as the app's machine has CPUs, because Ollama's own default
