@@ -62,6 +62,13 @@ with about 8 GB free, `analyst_model = "deepseek-r1:7b"` follows the instruction
 doesn't answer while a portfolio is being assessed. See
 [the methodology](docs/methodology.md#the-analyst) for what it can and can't tell you.
 
+On a small machine, the number of tool calls sets the wait. Each tool call is another full model
+call, with its own reasoning, so `analyst_max_calls` (2 by default) is a trade: fewer calls answer
+sooner, but a question that needs more lookups fails with a 502. With more CPU to spare, raise it
+in `infra/terraform.tfvars`, up to 10. If the chat is still too slow, `analyst_enabled = false`
+frees the 1.3 GB or so the model takes while loaded, and the rest of the dashboard works the same
+without it.
+
 The app has no login, so it only listens on localhost. Don't expose it as it stands.
 
 ## How it works
