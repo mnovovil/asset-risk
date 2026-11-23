@@ -157,6 +157,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat
+         * @description Ask the portfolio analyst about a completed run. It can take minutes on a CPU.
+         *
+         *     A sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one
+         *     question is answered at a time, and none while a portfolio run is in progress.
+         */
+        post: operations["chat_api_runs__run_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/clusters": {
         parameters: {
             query?: never;
@@ -367,6 +390,8 @@ export interface components {
     schemas: {
         /** AppConfig */
         AppConfig: {
+            /** Analyst Enabled */
+            analyst_enabled: boolean;
             /** Default Building Type */
             default_building_type: string;
             /** Max Portfolio Rows */
@@ -596,6 +621,54 @@ export interface components {
         Body_create_run_api_runs_post: {
             /** File */
             file: string;
+        };
+        /** ChatMessage */
+        ChatMessage: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /** History */
+            history?: components["schemas"]["ChatMessage"][];
+            /** Question */
+            question: string;
+        };
+        /** ChatResponse */
+        ChatResponse: {
+            /** Answer */
+            answer: string;
+            /** Sources */
+            sources: components["schemas"]["ChatSource"][];
+            /** Tool Calls */
+            tool_calls: components["schemas"]["ChatSource"][];
+            /** Unverified Numbers */
+            unverified_numbers: string[];
+            /** Verified */
+            verified: boolean;
+        };
+        /**
+         * ChatSource
+         * @description One tool call the analyst made: what it asked for and what the run returned.
+         */
+        ChatSource: {
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /** N */
+            n: number;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Tool */
+            tool: string;
         };
         /**
          * Cluster
@@ -1192,6 +1265,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HazardCurve"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_api_runs__run_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatResponse"];
                 };
             };
             /** @description Validation Error */
