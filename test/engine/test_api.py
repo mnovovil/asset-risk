@@ -1066,23 +1066,10 @@ def test_export_has_values_currency_and_expected_loss(client, valued):
     )
 
 
-def _make_it_a_run_from_before_values(run):
-    """Drop the value tables and put back the views a run made before them has."""
-    old_views = (ROOT / "test" / "engine" / "fixtures" / "views_before_values.sql").read_text()
-    with run.connect() as con:
-        views = con.execute(
-            "SELECT view_name FROM duckdb_views() WHERE NOT internal AND database_name = "
-            "current_database()"
-        ).fetchall()
-        for (name,) in views:
-            con.execute(f'DROP VIEW IF EXISTS "{name}" CASCADE')  # names from the catalogue
-        con.execute("DROP TABLE asset_values")
-        con.execute("DROP TABLE portfolio_values")
-        con.execute(old_views)
-
-
-def test_a_run_from_before_values_reads_as_equal_weighted_only(client, valued, settings):
-    _make_it_a_run_from_before_values(find_run(settings.data_dir, valued))
+def test_a_run_from_before_values_reads_as_equal_weighted_only(
+    client, valued, settings, make_run_from_before_values
+):
+    make_run_from_before_values(find_run(settings.data_dir, valued))
     summary = client.get(f"/api/runs/{valued}/summary").json()
     assert (summary["has_values"], summary["valued_assets"], summary["currency"]) == (
         False,

@@ -8,6 +8,7 @@ import pytest
 
 from engine.flood_zone_data import connect as connect_flood_zones
 from engine.settings import Settings
+from engine.store import create_run, save_values
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "vendor" / "geolocate" / "tests" / "fixtures"
@@ -21,6 +22,86 @@ def _geolocate_fixtures():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture
+def make_run(tmp_path):
+    """Build a run database from rows, for tests of the views and what reads them.
+
+    assets: (row_num, asset_id, match_type, physrisk_type, type_source, location_fallback,
+    assessable, exclusion_reason), as made by asset_row. impacts: (row_num, hazard, scenario, year,
+    aal), all of impact type damage. pairs: (scenario, year). failures: (row_num, scenario, year).
+    values: one (value, status) per asset, in row_num order, to fill asset_values.
+    """
+
+    def make(assets, impacts=(), pairs=(), failures=(), values=None, currency=None):
+        run = create_run(tmp_path, len(assets))
+        if values is not None:
+            save_values(run, [v for v, _ in values], [s for _, s in values], currency)
+        with run.connect() as con:
+            statements = (
+                (
+                    "INSERT INTO assets (row_num, asset_id, match_type, physrisk_type, "
+                    "type_source, location_fallback, assessable, exclusion_reason) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    assets,
+                ),
+                (
+                    "INSERT INTO impacts (row_num, hazard, impact_type, scenario, year, aal) "
+                    "VALUES (?, ?, 'damage', ?, ?, ?)",
+                    impacts,
+                ),
+                ("INSERT INTO assessment_pairs VALUES (?, ?)", pairs),
+                ("INSERT INTO assess_failures VALUES (?, ?, ?, 'boom')", failures),
+            )
+            for sql, rows in statements:
+                if rows:
+                    con.executemany(sql, rows)
+        return run
+
+    return make
+
+
+@pytest.fixture
+def asset_row():
+    """One assets row for make_run, assessable by default, with asset_id a<row_num>."""
+
+    def row(
+        row_num, assessable=True, match="intersects", source="class", fallback=False, reason=None
+    ):
+        return (
+            row_num,
+            f"a{row_num}",
+            match,
+            "Buildings/Commercial" if assessable else None,
+            source if assessable else None,
+            fallback if assessable else None,
+            assessable,
+            reason,
+        )
+
+    return row
+
+
+@pytest.fixture
+def make_run_from_before_values():
+    """Drop a run's value tables and put back the views a run made before them has."""
+
+    def make_old(run):
+        old_views = (ROOT / "test" / "engine" / "fixtures" / "views_before_values.sql").read_text()
+        with run.connect() as con:
+            views = con.execute(
+                "SELECT view_name FROM duckdb_views() WHERE NOT internal AND database_name = "
+                "current_database()"
+            ).fetchall()
+            for (name,) in views:
+                con.execute(f'DROP VIEW IF EXISTS "{name}" CASCADE')  # names from the catalogue
+            con.execute("DROP TABLE asset_values")
+            con.execute("DROP TABLE portfolio_values")
+            con.execute(old_views)
+        return run
+
+    return make_old
 
 
 @pytest.fixture(scope="session")
