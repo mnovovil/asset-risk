@@ -378,7 +378,7 @@ variable "analyst_model" {
 variable "analyst_max_calls" {
   description = "Tool calls the analyst may make for one question, 1 to 10."
   type        = number
-  default     = 4
+  default     = 2
 
   validation {
     condition     = var.analyst_max_calls >= 1 && var.analyst_max_calls <= 10 && var.analyst_max_calls == floor(var.analyst_max_calls)

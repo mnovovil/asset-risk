@@ -44,7 +44,7 @@
 # analyst_enabled   = true
 # analyst_url       = "http://localhost:11434"   # for script/serve.py; Docker uses its own service
 # analyst_model     = "deepseek-r1:1.5b"
-# analyst_max_calls = 4
+# analyst_max_calls = 2
 # analyst_timeout_s = 600
 
 # Credentials are optional — the Overture bucket is public. Prefer passing them as

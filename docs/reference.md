@@ -34,7 +34,7 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `analyst_enabled` | `false` | Turns on the portfolio analyst chat. The default model needs about 2 GB of free memory. Docker runs it in its own `ollama` service |
 | `analyst_url` | `http://localhost:11434` | The Ollama server `script/serve.py` uses, with no path. Docker uses its own service instead |
 | `analyst_model` | `deepseek-r1:1.5b` | The Ollama model the analyst asks. `script/start.sh` pulls it when the analyst is on. See [the model](#the-model) |
-| `analyst_max_calls` | `4` | Tool calls the analyst may make for one question, 1 to 10 |
+| `analyst_max_calls` | `2` | Tool calls the analyst may make for one question, 1 to 10 |
 | `analyst_timeout_s` | `600` | Seconds one call to the model may take, 30 to 1800. A model on a CPU can take minutes |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |

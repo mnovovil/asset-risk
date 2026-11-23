@@ -120,7 +120,7 @@ class Settings:
     analyst_enabled: bool = False
     analyst_url: str = "http://localhost:11434"
     analyst_model: str = "deepseek-r1:1.5b"
-    analyst_max_calls: int = 4
+    analyst_max_calls: int = 2
     analyst_timeout_s: int = 600
 
 
