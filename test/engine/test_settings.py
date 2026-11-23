@@ -8,7 +8,10 @@ from engine.settings import (
     BUILDING_TYPES,
     HAZARD_MAP_LAYERS,
     KEYS,
+    MAX_ANALYST_CALLS,
+    MAX_ANALYST_TIMEOUT_S,
     MAX_CLUSTER_EPS_KM,
+    MIN_ANALYST_TIMEOUT_S,
     MIN_CLUSTER_SAMPLES,
     ROOT,
     SCENARIOS,
@@ -58,6 +61,11 @@ VALID = {
     "hazard_map_legend_stops": 9,
     "hazard_map_array_cache": 4,
     "hazard_map_tile_cache": 256,
+    "analyst_enabled": False,
+    "analyst_url": "http://localhost:11434",
+    "analyst_model": "deepseek-r1:7b",
+    "analyst_max_calls": 4,
+    "analyst_timeout_s": 600,
 }
 
 
@@ -67,6 +75,7 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("GEOLOCATE_CONFIG", raising=False)
     monkeypatch.delenv("ASSET_RISK_DATA_DIR", raising=False)
     monkeypatch.delenv("FLOOD_ZONES_DB", raising=False)
+    monkeypatch.delenv("ASSET_RISK_ANALYST_URL", raising=False)
 
 
 def write(tmp_path, **overrides):
@@ -218,6 +227,25 @@ def test_missing_key(tmp_path, key):
         ("hazard_map_legend_stops", 34),
         ("hazard_map_array_cache", 0),
         ("hazard_map_tile_cache", "256"),
+        ("analyst_enabled", "true"),
+        ("analyst_enabled", 1),
+        ("analyst_enabled", None),
+        ("analyst_url", ""),
+        ("analyst_url", "localhost:11434"),
+        ("analyst_url", "ftp://localhost:11434"),
+        ("analyst_url", "http://localhost:11434/api/chat"),
+        ("analyst_url", "http://user:pass@localhost:11434"),
+        ("analyst_url", 11434),
+        ("analyst_model", ""),
+        ("analyst_model", "  "),
+        ("analyst_model", None),
+        ("analyst_max_calls", 0),
+        ("analyst_max_calls", 11),
+        ("analyst_max_calls", 2.5),
+        ("analyst_max_calls", True),
+        ("analyst_timeout_s", 29),
+        ("analyst_timeout_s", 1801),
+        ("analyst_timeout_s", "600"),
     ],
 )
 def test_invalid_values(tmp_path, key, value):
@@ -321,3 +349,51 @@ def test_hazard_map_defaults_match_the_layers():
     assert defaults["hazard_map_legend_stops"].default == fire_map.LEGEND_STOPS
     assert defaults["hazard_map_array_cache"].default == fire_map.CACHE_ARRAYS
     assert defaults["hazard_map_tile_cache"].default == fire_map.CACHE_TILES
+
+
+def test_analyst_is_off_by_default_and_loaded(tmp_path):
+    assert load_settings(write(tmp_path)).analyst_enabled is False
+    settings = load_settings(
+        write(
+            tmp_path,
+            analyst_enabled=True,
+            analyst_url="http://ollama:11434/",
+            analyst_model="qwen3:4b",
+            analyst_max_calls=MAX_ANALYST_CALLS,
+            analyst_timeout_s=MIN_ANALYST_TIMEOUT_S,
+        )
+    )
+    assert settings.analyst_enabled is True
+    assert settings.analyst_url == "http://ollama:11434"
+    assert settings.analyst_model == "qwen3:4b"
+    assert settings.analyst_max_calls == MAX_ANALYST_CALLS
+    assert settings.analyst_timeout_s == MIN_ANALYST_TIMEOUT_S
+
+
+def test_analyst_url_env_overrides_the_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("ASSET_RISK_ANALYST_URL", "http://ollama:11434")
+    assert load_settings(write(tmp_path)).analyst_url == "http://ollama:11434"
+    # An empty variable leaves the file's value, as compose passes one when nothing is set.
+    monkeypatch.setenv("ASSET_RISK_ANALYST_URL", "")
+    assert load_settings(write(tmp_path)).analyst_url == "http://localhost:11434"
+
+
+def test_analyst_url_env_is_validated(tmp_path, monkeypatch):
+    monkeypatch.setenv("ASSET_RISK_ANALYST_URL", "ollama:11434")
+    with pytest.raises(SettingsError, match="analyst_url"):
+        load_settings(write(tmp_path))
+
+
+def test_analyst_defaults_match_terraform_and_the_code():
+    defaults = Settings.__dataclass_fields__
+    for key in [k for k in KEYS if k.startswith("analyst_")]:
+        value = json.loads(_terraform_default(key))
+        assert value == defaults[key].default, key
+        assert VALID[key] == value, key
+
+
+def test_analyst_limits_match_terraform():
+    text = (INFRA / "variables.tf").read_text()
+    assert f"var.analyst_max_calls <= {MAX_ANALYST_CALLS}" in text
+    assert f"var.analyst_timeout_s >= {MIN_ANALYST_TIMEOUT_S}" in text
+    assert f"var.analyst_timeout_s <= {MAX_ANALYST_TIMEOUT_S}" in text

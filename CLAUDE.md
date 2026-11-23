@@ -11,7 +11,8 @@ The README covers setup, `docs/reference.md` the details, and `docs/methodology.
 - FastAPI for the API, TypeScript (Vite + React) for the front end
 - Terraform or OpenTofu (`infra/`) owns the run settings and writes a git-ignored `.asset-risk.json`
 - Docker (`docker/`): one image and a compose stack. Settings are mounted at run time, and run data
-  lives on the `asset-risk_data` volume, separate from `data/` on the host.
+  lives on the `asset-risk_data` volume, separate from `data/` on the host. With `analyst_enabled`,
+  `script/start.sh` adds the `ollama` service (the `analyst` profile), which publishes no ports.
 
 ## Architecture
 ```
@@ -35,7 +36,8 @@ script/              ad-hoc CLIs
   `hazard_map_layers`, `hazard_map_bucket`, `fire_map_path`, `wind_map_path`, `hail_map_path`,
   `drought_map_path`, `fire_map_max_zoom`, `wind_map_max_zoom`, `hail_map_max_zoom`,
   `drought_map_max_zoom`, `hazard_map_alpha`, `hazard_map_legend_stops`, `hazard_map_array_cache`,
-  `hazard_map_tile_cache`. Change both sides together, including the allowed values, which are
+  `hazard_map_tile_cache`, `analyst_enabled`, `analyst_url`, `analyst_model`, `analyst_max_calls`,
+  `analyst_timeout_s`. Change both sides together, including the allowed values, which are
   checked in both places so a hand-edited file fails too. Relative paths are relative to the repo
   root.
 - **`.geolocate.json`**: written to `vendor/geolocate/` by geolocate's own stack, which `infra/` calls
@@ -121,8 +123,8 @@ script/              ad-hoc CLIs
   top-level modules with those names, and don't put `app/engine` itself on the path.
 - No `__init__.py` under `test/`: `test/engine` as a package would shadow the `engine` package, and
   `test` would shadow the standard library's. Test file names must therefore be unique.
-- Unit tests never touch the network. Live tests are marked `s3`, `live`, `e2e` or `fema` and are
-  excluded by default.
+- Unit tests never touch the network. Live tests are marked `s3`, `live`, `e2e`, `fema` or `ollama`
+  and are excluded by default.
 - physrisk accepts unknown types and locations without error and returns a fallback result. Only send
   values checked against its embedded vulnerability config.
 - Never treat a low score as proof of low risk: a mid-ocean point scores `Very low` for flood, and
@@ -152,7 +154,7 @@ script/              ad-hoc CLIs
 - Lint: `.venv/bin/ruff check --fix .` · Format: `.venv/bin/ruff format .`
 - Docker: `script/start.sh` (add `--detach` to run in the background)
 - Serve: `.venv/bin/python script/serve.py` · API docs at `/docs`
-- Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live`, `-m e2e` or
-  `-m fema`
+- Tests: `.venv/bin/pytest` (no network) · Live: `.venv/bin/pytest -m s3`, `-m live`, `-m e2e`,
+  `-m fema` or `-m ollama`
 - FEMA flood zones: `.venv/bin/python script/build_flood_zones.py <S_FLD_HAZ_AR.parquet> --as-of YYYY-MM-DD`
 - Infra: `terraform -chdir=infra init && terraform -chdir=infra apply` (or `tofu`)
