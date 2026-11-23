@@ -367,7 +367,7 @@ variable "analyst_url" {
 variable "analyst_model" {
   description = "The Ollama model the analyst asks, pulled by script/start.sh when the analyst is on."
   type        = string
-  default     = "deepseek-r1:1.5b"
+  default     = "qwen3:1.7b"
 
   validation {
     condition     = trimspace(var.analyst_model) != ""

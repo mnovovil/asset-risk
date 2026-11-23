@@ -56,10 +56,10 @@ is checked against what those tools returned. An answer whose numbers don't all 
 
 It's off by default. To turn it on, set `analyst_enabled = true` in `infra/terraform.tfvars`, run
 `terraform -chdir=infra apply`, and start with `script/start.sh`, which pulls the model
-(`deepseek-r1:1.5b`, about 1.1 GB to download) the first time. The model needs about 2 GB of free
-memory on top of the app's, and it runs on the CPU, so an answer can take a while. On a machine
-with about 8 GB free, `analyst_model = "deepseek-r1:7b"` follows the instructions more reliably. It
-doesn't answer while a portfolio is being assessed. See
+(`qwen3:1.7b`, about 1.4 GB to download) the first time. The model needs about 2 GB of free
+memory on top of the app's, and it runs on the CPU with thinking off, so an answer can take a
+while. On a machine with about 8 GB free, `analyst_model = "qwen3:4b"` follows the instructions
+more reliably. It doesn't answer while a portfolio is being assessed. See
 [the methodology](docs/methodology.md#the-analyst) for what it can and can't tell you.
 
 On a small machine, the number of tool calls sets the wait. Each tool call is another full model

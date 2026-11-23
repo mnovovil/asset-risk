@@ -61,5 +61,5 @@ services:
 
 volumes:
   data:
-  # The analyst's model weights, about 1.1 GB for deepseek-r1:1.5b, kept across restarts.
+  # The analyst's model weights, about 1.4 GB for qwen3:1.7b, kept across restarts.
   ollama_models:

@@ -43,7 +43,7 @@
 # The portfolio analyst chat, off by default. The model needs about 2 GB of free memory.
 # analyst_enabled   = true
 # analyst_url       = "http://localhost:11434"   # for script/serve.py; Docker uses its own service
-# analyst_model     = "deepseek-r1:1.5b"
+# analyst_model     = "qwen3:1.7b"
 # analyst_max_calls = 2
 # analyst_timeout_s = 600
 

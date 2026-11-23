@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import threading
 from dataclasses import dataclass, field
@@ -27,7 +28,8 @@ from engine import analyst_tools
 from engine.store import Run
 
 PROMPT_PATH = Path(__file__).parent / "data" / "analyst_prompt.md"
-TEMPERATURE = 0.6  # DeepSeek's advice for R1; lower makes it repeat itself
+# Qwen's advice for qwen3 with thinking off, the default model. Lower makes it repeat itself.
+SAMPLING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20}
 # Earlier turns kept in the prompt, and how much of each, so a long chat can't crowd out the rules.
 MAX_HISTORY = 6
 MAX_HISTORY_CHARS = 2000
@@ -35,6 +37,28 @@ MAX_HISTORY_CHARS = 2000
 MAX_QUOTED_REPLY = 500
 
 _lock = threading.Lock()
+
+# What a reply may be, for Ollama to hold the model to: one tool call or one answer, so it stops at
+# the object's end instead of writing more. Without it, a small model goes on to write further
+# calls and made-up TOOL RESULTs, which cost a minute per call on a CPU. _parse still checks each
+# reply, so this only shapes the output and never decides what's valid.
+REPLY_FORMAT = {
+    "anyOf": [
+        {
+            "type": "object",
+            "properties": {"tool": {"enum": list(analyst_tools.TOOLS)}, "args": {"type": "object"}},
+            "required": ["tool", "args"],
+        },
+        {
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string"},
+                "sources": {"type": "array", "items": {"type": "integer"}},
+            },
+            "required": ["answer", "sources"],
+        },
+    ]
+}
 
 
 class AnalystError(Exception):
@@ -63,7 +87,13 @@ class ModelClient(Protocol):
 
 
 class OllamaClient:
-    """deepseek-r1 on Ollama, with thinking kept out of the reply's content."""
+    """A model on Ollama, with thinking off, every CPU thread, and one JSON object per reply.
+
+    Thinking is off for every model: on a CPU, reasoning costs hundreds of tokens per call, and
+    Ollama rejects think=True for a model that can't think. A reasoning model that writes a
+    <think> block anyway has it dropped by extract_json. The thread count is this machine's, which
+    is the model server's in the compose stack: Ollama's own default leaves half the cores idle.
+    """
 
     def __init__(self, url: str, model: str, timeout_s: float):
         self.model = model
@@ -74,10 +104,11 @@ class OllamaClient:
         try:
             response = self._client.chat(
                 model=self.model,
-                # R1 is meant to get everything in one user message, with no system prompt.
+                # Everything in one user message, which every model handles, R1 included.
                 messages=[{"role": "user", "content": prompt}],
-                think=True,
-                options={"temperature": TEMPERATURE},
+                think=False,
+                format=REPLY_FORMAT,
+                options={**SAMPLING, "num_thread": os.cpu_count() or 1},
             )
         except httpx.TimeoutException as e:
             raise AnalystTimeout(
