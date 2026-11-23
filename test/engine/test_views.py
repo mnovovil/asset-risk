@@ -1,51 +1,12 @@
 import pytest
 
-from engine.store import create_run, save_values, summary
-
-
-def make_run(tmp_path, assets, impacts=(), pairs=(), failures=(), values=None, currency=None):
-    """values: one (value, status) per asset, in row_num order, to fill asset_values."""
-    run = create_run(tmp_path, len(assets))
-    if values is not None:
-        save_values(run, [v for v, _ in values], [s for _, s in values], currency)
-    with run.connect() as con:
-        statements = (
-            (
-                "INSERT INTO assets (row_num, asset_id, match_type, physrisk_type, type_source, "
-                "location_fallback, assessable, exclusion_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                assets,
-            ),
-            (
-                "INSERT INTO impacts (row_num, hazard, impact_type, scenario, year, aal) "
-                "VALUES (?, ?, 'damage', ?, ?, ?)",
-                impacts,
-            ),
-            ("INSERT INTO assessment_pairs VALUES (?, ?)", pairs),
-            ("INSERT INTO assess_failures VALUES (?, ?, ?, 'boom')", failures),
-        )
-        for sql, rows in statements:
-            if rows:
-                con.executemany(sql, rows)
-    return run
-
-
-def asset(
-    row_num, assessable=True, match="intersects", source="class", fallback=False, reason=None
-):
-    return (
-        row_num,
-        f"a{row_num}",
-        match,
-        "Buildings/Commercial" if assessable else None,
-        source if assessable else None,
-        fallback if assessable else None,
-        assessable,
-        reason,
-    )
-
+from engine.store import create_run, summary
 
 # Asset 1 has 1% + 2% and asset 2 has 3% + 4% under ssp585. ssp245 has no fire, as in the real data.
-ASSETS = [asset(1), asset(2)]
+ASSETS = [
+    (1, "a1", "intersects", "Buildings/Commercial", "class", False, True, None),
+    (2, "a2", "intersects", "Buildings/Commercial", "class", False, True, None),
+]
 IMPACTS = [
     (1, "Wind", "ssp585", 2050, 0.01),
     (1, "Fire", "ssp585", 2050, 0.02),
@@ -62,8 +23,8 @@ PAIRS = [("ssp245", 2050), ("ssp585", 2050), ("ssp370", 2050), ("historical", No
 
 
 @pytest.fixture
-def run(tmp_path):
-    return make_run(tmp_path, ASSETS, IMPACTS, PAIRS)
+def run(make_run):
+    return make_run(ASSETS, IMPACTS, PAIRS)
 
 
 def fetch(run, sql):
@@ -147,23 +108,22 @@ def test_historical_baseline_is_a_trajectory_row(run):
     assert trajectory(run)["historical"][1] == pytest.approx(0.005)
 
 
-def test_failed_assets_are_left_out_of_means_and_counted(tmp_path):
+def test_failed_assets_are_left_out_of_means_and_counted(make_run):
     impacts = [(1, "Wind", "ssp585", 2050, 0.01)]
-    run = make_run(tmp_path, ASSETS, impacts, [("ssp585", 2050)], [(2, "ssp585", 2050)])
+    run = make_run(ASSETS, impacts, [("ssp585", 2050)], [(2, "ssp585", 2050)])
     assert trajectory(run)["ssp585"][:2] == (1, pytest.approx(0.01))
     assert summary(run)["failed_assets"] == 1
 
 
-def test_summary_counts(tmp_path):
+def test_summary_counts(make_run, asset_row):
     run = make_run(
-        tmp_path,
         [
-            asset(1),
-            asset(2, source="assumed"),
-            asset(3, source="assumed", match="none"),
-            asset(4, match="nearest", fallback=True),
-            asset(5, assessable=False, match="invalid", reason="invalid"),
-            asset(6, assessable=False, match="none", reason="off_land"),
+            asset_row(1),
+            asset_row(2, source="assumed"),
+            asset_row(3, source="assumed", match="none"),
+            asset_row(4, match="nearest", fallback=True),
+            asset_row(5, assessable=False, match="invalid", reason="invalid"),
+            asset_row(6, assessable=False, match="none", reason="off_land"),
         ],
     )
     assert summary(run) == {
@@ -208,8 +168,8 @@ def weighted(run):
     return {r[0]: r[1:] for r in rows}
 
 
-def test_value_weighted_means_and_expected_losses(tmp_path):
-    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=VALUES, currency="EUR")
+def test_value_weighted_means_and_expected_losses(make_run):
+    run = make_run(ASSETS, IMPACTS, PAIRS, values=VALUES, currency="EUR")
     # ssp585: asset 1 totals 3% (Wind 1%, shared) and asset 2 totals 7% (Wind 3%, shared).
     assert weighted(run)["ssp585"] == pytest.approx(
         (
@@ -225,8 +185,8 @@ def test_value_weighted_means_and_expected_losses(tmp_path):
     assert trajectory(run)["ssp585"][1] == pytest.approx(0.05)
 
 
-def test_weighted_shared_figures_compare_scenarios_on_shared_hazards(tmp_path):
-    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=VALUES)
+def test_weighted_shared_figures_compare_scenarios_on_shared_hazards(make_run):
+    run = make_run(ASSETS, IMPACTS, PAIRS, values=VALUES)
     rows = weighted(run)
     # ssp245 has only Wind, so its total and shared figures agree.
     assert rows["ssp245"][3] == pytest.approx((0.05 * 100 + 0.07 * 300) / 400)
@@ -234,36 +194,34 @@ def test_weighted_shared_figures_compare_scenarios_on_shared_hazards(tmp_path):
     assert rows["ssp585"][3] < rows["ssp585"][2]
 
 
-def test_assets_without_a_usable_value_are_left_out_of_weighting(tmp_path):
+def test_assets_without_a_usable_value_are_left_out_of_weighting(make_run):
     values = [(None, "missing"), (300.0, "given")]
-    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=values)
+    run = make_run(ASSETS, IMPACTS, PAIRS, values=values)
     assert weighted(run)["ssp585"][:4] == (1, 300.0, pytest.approx(0.07), pytest.approx(0.03))
     assert trajectory(run)["ssp585"][0] == 2  # equal weighting still counts both
 
 
-def test_failed_assets_are_left_out_of_weighting_not_counted_as_zero(tmp_path):
+def test_failed_assets_are_left_out_of_weighting_not_counted_as_zero(make_run):
     impacts = [(1, "Wind", "ssp585", 2050, 0.01)]
-    run = make_run(
-        tmp_path, ASSETS, impacts, [("ssp585", 2050)], [(2, "ssp585", 2050)], values=VALUES
-    )
+    run = make_run(ASSETS, impacts, [("ssp585", 2050)], [(2, "ssp585", 2050)], values=VALUES)
     assert weighted(run)["ssp585"][:4] == (1, 100.0, pytest.approx(0.01), pytest.approx(0.01))
 
 
-def test_a_zero_total_value_has_no_weighted_mean(tmp_path):
+def test_a_zero_total_value_has_no_weighted_mean(make_run):
     values = [(0.0, "given"), (0.0, "given")]
-    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=values)
+    run = make_run(ASSETS, IMPACTS, PAIRS, values=values)
     assert weighted(run)["ssp585"] == (2, 0.0, None, None, 0.0, 0.0)
 
 
-def test_pairs_without_results_have_no_weighted_figures(tmp_path):
-    run = make_run(tmp_path, ASSETS, IMPACTS, PAIRS, values=VALUES)
+def test_pairs_without_results_have_no_weighted_figures(make_run):
+    run = make_run(ASSETS, IMPACTS, PAIRS, values=VALUES)
     assert weighted(run)["ssp370"] == (0, None, None, None, None, None)
 
 
-def test_summary_counts_values(tmp_path):
-    assets = [asset(1), asset(2), asset(3)]
+def test_summary_counts_values(make_run, asset_row):
+    assets = [asset_row(1), asset_row(2), asset_row(3)]
     values = [(100.0, "given"), (None, "missing"), (None, "invalid")]
-    run = make_run(tmp_path, assets, values=values, currency="USD")
+    run = make_run(assets, values=values, currency="USD")
     result = summary(run)
     assert {k: result[k] for k in ("valued_assets", "missing_values", "invalid_values")} == {
         "valued_assets": 1,
@@ -277,6 +235,6 @@ def test_summary_counts_values(tmp_path):
     )
 
 
-def test_a_value_column_with_no_usable_value_has_no_values(tmp_path):
-    run = make_run(tmp_path, ASSETS, values=[(None, "invalid"), (None, "missing")])
+def test_a_value_column_with_no_usable_value_has_no_values(make_run):
+    run = make_run(ASSETS, values=[(None, "invalid"), (None, "missing")])
     assert summary(run)["has_values"] is False
