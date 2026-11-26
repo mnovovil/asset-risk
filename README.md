@@ -77,7 +77,10 @@ out, the chat says so and the rest of the dashboard works the same. `analyst_mod
 (`claude-opus-5-5` by default; `claude-sonnet-5-5` or `claude-haiku-5-5` cost less). See
 [the methodology](docs/methodology.md#the-analyst) for what it can and can't tell you.
 
-The app has no login, so it only listens on localhost. Don't expose it as it stands.
+The app has no login, so it only listens on localhost. Don't expose it as it stands. It also
+refuses any request addressed to a host name other than `localhost`, `127.0.0.1` or `[::1]`, so
+that a web page can't reach it by pointing its own domain at your machine (DNS rebinding). Opening
+it as `http://<machine-name>:8000`, by a LAN address or behind a reverse proxy returns 400.
 
 ## How it works
 

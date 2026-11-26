@@ -35,7 +35,7 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `analyst_model` | `claude-opus-5-5` | The Claude model the analyst asks, by its API id (`claude-...`). See [the model](#the-model) |
 | `analyst_max_calls` | `5` | Tool calls the analyst may make for one question, 1 to 10. Each is a billed call to the model |
 | `analyst_timeout_s` | `120` | Seconds one call to the model may take, 30 to 1800 |
-| `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
+| `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh`. Requests must be addressed to `localhost`, `127.0.0.1` or `[::1]`: any other `Host` gets a 400 |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
 Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`,
