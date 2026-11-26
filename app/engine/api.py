@@ -19,6 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from engine import analyst, hazard_maps, results, schemas, store
 from engine.assess import HISTORICAL, hazard_curve
@@ -43,6 +44,10 @@ ANALYST_OFF_MESSAGE = (
 )
 # Tiles only change with the physrisk pin, but a run can be deleted, so not "immutable".
 TILE_CACHE_CONTROL = "private, max-age=86400"
+# The only host names the app answers to, whatever the port. Listening on localhost doesn't stop
+# DNS rebinding: a page on evil.example can point its own name at 127.0.0.1 and then call the API as
+# its own origin. Its requests still say Host: evil.example, so they're refused here.
+ALLOWED_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 
 
 def _settings(request: Request) -> Settings:
@@ -455,6 +460,9 @@ def create_app(
         app.state.queue.stop()
 
     app = FastAPI(title="asset-risk", lifespan=lifespan)
+    # Refused requests get Starlette's plain-text 400, not {"detail": ...}: they never come from the
+    # app's own front end. The check covers the front end's files too.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(ALLOWED_HOSTS))
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.include_router(router)
     if front_dist.is_dir():

@@ -18,6 +18,11 @@ ROOT = Path(__file__).resolve().parents[2]
 CSV = b"id,lat,lon\n=cmd,40.4,-3.7\nb,29.7,-95.3\nbad,95,1\n"
 
 
+def local_client(app):
+    """A test client addressed to localhost: the app refuses TestClient's default "testserver"."""
+    return TestClient(app, base_url="http://127.0.0.1")
+
+
 def api_app(settings, execute):
     """The API alone, whether or not the front end has been built on this machine."""
     return create_app(settings, execute=execute, front_dist=Path("/nonexistent"))
@@ -74,7 +79,7 @@ def complete_run(run, points, settings):
 
 @pytest.fixture
 def client(settings):
-    with TestClient(api_app(settings, complete_run)) as c:
+    with local_client(api_app(settings, complete_run)) as c:
         yield c
 
 
@@ -160,7 +165,7 @@ def test_too_many_rows_is_rejected(client):
 
 def test_too_many_bytes_is_rejected(settings):
     small = replace(settings, max_upload_mb=0.001)
-    with TestClient(api_app(small, complete_run)) as client:
+    with local_client(api_app(small, complete_run)) as client:
         response = upload(client, b"id,lat,lon\n" + b"a,1,2\n" * 1000)
     assert response.status_code == 413
     assert "MB limit" in response.json()["detail"]
@@ -237,13 +242,13 @@ def test_unreadable_runs_are_skipped_and_logged(client, settings, caplog):
 def test_startup_survives_an_unreadable_run(settings):
     unreadable_runs(settings.data_dir)
     unfinished = create_run(settings.data_dir, 1)
-    with TestClient(api_app(settings, complete_run)) as client:
+    with local_client(api_app(settings, complete_run)) as client:
         assert client.get(f"/api/runs/{unfinished.run_id}").json()["status"] == "interrupted"
 
 
 def test_each_status_is_listed_as_stored(settings):
     pipeline = Blocking()
-    with TestClient(api_app(settings, pipeline)) as client:
+    with local_client(api_app(settings, pipeline)) as client:
         running = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         queued = upload(client).json()["run_id"]
@@ -281,7 +286,7 @@ class Blocking:
 
 def test_queue_runs_one_at_a_time_in_order(settings):
     pipeline = Blocking()
-    with TestClient(api_app(settings, pipeline)) as client:
+    with local_client(api_app(settings, pipeline)) as client:
         first = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         second = upload(client).json()
@@ -300,7 +305,7 @@ def test_queue_runs_one_at_a_time_in_order(settings):
 
 def test_results_wait_for_the_run_to_complete(settings):
     pipeline = Blocking()
-    with TestClient(api_app(settings, pipeline)) as client:
+    with local_client(api_app(settings, pipeline)) as client:
         run_id = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         response = client.get(f"/api/runs/{run_id}/summary")
@@ -314,7 +319,7 @@ def test_failed_run_reports_its_error_and_has_no_results(settings):
         set_status(run, "failed", error="geolocate failed: S3 is down")
         return False
 
-    with TestClient(api_app(settings, fail)) as client:
+    with local_client(api_app(settings, fail)) as client:
         run_id = upload(client).json()["run_id"]
         body = wait_until_finished(client, run_id)
         assert (body["status"], body["error"]) == ("failed", "geolocate failed: S3 is down")
@@ -333,7 +338,7 @@ def test_a_crash_in_the_pipeline_does_not_stop_the_queue(settings):
             raise RuntimeError("boom")
         return complete_run(run, points, settings)
 
-    with TestClient(api_app(settings, crash_once)) as client:
+    with local_client(api_app(settings, crash_once)) as client:
         upload(client)
         second = upload(client).json()["run_id"]
         assert wait_until_finished(client, second)["status"] == "completed"
@@ -344,7 +349,7 @@ def test_unfinished_runs_are_marked_interrupted_at_startup(settings, state):
     run = create_run(settings.data_dir, 1)
     if state == "running":
         set_status(run, "running", "assessing")
-    with TestClient(api_app(settings, complete_run)) as client:
+    with local_client(api_app(settings, complete_run)) as client:
         body = client.get(f"/api/runs/{run.run_id}").json()
     assert body["status"] == "interrupted"
     assert "Upload the portfolio again" in body["error"]
@@ -353,7 +358,7 @@ def test_unfinished_runs_are_marked_interrupted_at_startup(settings, state):
 def test_finished_runs_survive_a_restart(settings):
     run = create_run(settings.data_dir, 1)
     set_status(run, "completed")
-    with TestClient(api_app(settings, complete_run)) as client:
+    with local_client(api_app(settings, complete_run)) as client:
         assert client.get(f"/api/runs/{run.run_id}").json()["status"] == "completed"
     assert len(all_runs(settings.data_dir)) == 1
 
@@ -467,7 +472,7 @@ def test_delete_a_failed_run(settings):
         set_status(run, "failed", error="S3 is down")
         return False
 
-    with TestClient(api_app(settings, fail)) as client:
+    with local_client(api_app(settings, fail)) as client:
         run_id = upload(client).json()["run_id"]
         wait_until_finished(client, run_id)
         assert client.delete(f"/api/runs/{run_id}").status_code == 204
@@ -475,7 +480,7 @@ def test_delete_a_failed_run(settings):
 
 def test_delete_refuses_a_run_that_has_not_finished(settings):
     pipeline = Blocking()
-    with TestClient(api_app(settings, pipeline)) as client:
+    with local_client(api_app(settings, pipeline)) as client:
         running = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         queued = upload(client).json()["run_id"]
@@ -735,7 +740,7 @@ def map_settings(settings):
 
 
 def test_hazard_map_settings_reach_the_layers(map_settings):
-    with TestClient(api_app(map_settings, complete_run)) as client:
+    with local_client(api_app(map_settings, complete_run)) as client:
         run_id = upload(client).json()["run_id"]
         assert wait_until_finished(client, run_id)["status"] == "completed"
         url = f"/api/runs/{run_id}/hazard-maps"
@@ -820,7 +825,7 @@ def test_hazard_maps_need_an_assessed_pair(client, finished):
 
 def test_hazard_maps_wait_for_the_run_to_complete(settings):
     pipeline = Blocking()
-    with TestClient(api_app(settings, pipeline)) as client:
+    with local_client(api_app(settings, pipeline)) as client:
         run_id = upload(client).json()["run_id"]
         assert pipeline.first_started.wait(10)
         url = f"/api/runs/{run_id}/hazard-maps"
@@ -955,7 +960,7 @@ def spa_app(settings, tmp_path):
 
 
 def test_front_end_routes_serve_the_app(settings, tmp_path):
-    with TestClient(spa_app(settings, tmp_path)) as client:
+    with local_client(spa_app(settings, tmp_path)) as client:
         assert client.get("/").text == "<html>app</html>"
         assert client.get("/assets/main.js").text == "console.log(1)"
         assert client.get(f"/runs/{uuid.uuid4()}").text == "<html>app</html>"
@@ -964,13 +969,13 @@ def test_front_end_routes_serve_the_app(settings, tmp_path):
 
 
 def test_unknown_api_paths_stay_404_with_a_front_end(settings, tmp_path):
-    with TestClient(spa_app(settings, tmp_path)) as client:
+    with local_client(spa_app(settings, tmp_path)) as client:
         assert client.get("/api/nope").status_code == 404
 
 
 def test_static_files_cannot_escape_the_folder(settings, tmp_path):
     (tmp_path / "secret.txt").write_text("secret")
-    with TestClient(spa_app(settings, tmp_path)) as client:
+    with local_client(spa_app(settings, tmp_path)) as client:
         assert "secret" not in client.get("/..%2fsecret.txt").text
         assert "secret" not in client.get("/api/runs/..%2f..%2f..%2fsecret.txt").text
 
@@ -1145,7 +1150,7 @@ def chat_app(settings, model, execute=complete_run):
 
 @pytest.fixture
 def chat_client(analyst_settings, model):
-    with TestClient(chat_app(analyst_settings, model)) as c:
+    with local_client(chat_app(analyst_settings, model)) as c:
         yield c
 
 
@@ -1262,7 +1267,7 @@ def test_chat_answers_while_a_portfolio_runs(analyst_settings, model):
             release.wait(5)
         return complete_run(run, points, settings)
 
-    with TestClient(chat_app(analyst_settings, model, execute)) as c:
+    with local_client(chat_app(analyst_settings, model, execute)) as c:
         first = upload(c).json()["run_id"]
         wait_until_finished(c, first)
         second = upload(c).json()["run_id"]
@@ -1283,7 +1288,7 @@ def test_chat_without_an_api_key_is_a_readable_503(analyst_settings, monkeypatch
     monkeypatch.setenv("HOME", "/nonexistent")
     monkeypatch.setenv("XDG_CONFIG_HOME", "/nonexistent")
     app = create_app(analyst_settings, execute=complete_run, front_dist=Path("/nonexistent"))
-    with TestClient(app) as c:
+    with local_client(app) as c:
         run_id = upload(c).json()["run_id"]
         wait_until_finished(c, run_id)
         response = ask(c, run_id)
@@ -1304,3 +1309,35 @@ def test_chat_rejects_a_bad_request(chat_client, chat_run, body):
     response = chat_client.post(f"/api/runs/{chat_run}/chat", json=body)
     assert response.status_code == 422
     assert isinstance(response.json()["detail"], str)
+
+
+# DNS rebinding: a page that points its own domain at 127.0.0.1 still sends that domain as Host.
+FOREIGN_HOST = {"host": "evil.example"}
+
+
+@pytest.mark.parametrize("path", ["/api/health", "/api/runs"])
+def test_requests_for_another_host_are_refused(client, path):
+    assert client.get(path, headers=FOREIGN_HOST).status_code == 400
+
+
+def test_another_host_cannot_delete_a_run(client, finished):
+    assert client.delete(f"/api/runs/{finished}", headers=FOREIGN_HOST).status_code == 400
+    assert client.get(f"/api/runs/{finished}").status_code == 200
+
+
+def test_another_host_cannot_ask_the_analyst(chat_client, chat_run, model):
+    response = chat_client.post(
+        f"/api/runs/{chat_run}/chat", json={"question": "Mean loss?"}, headers=FOREIGN_HOST
+    )
+    assert response.status_code == 400
+    assert model.prompts == []
+
+
+def test_another_host_cannot_load_the_front_end(settings, tmp_path):
+    with local_client(spa_app(settings, tmp_path)) as client:
+        assert client.get("/", headers=FOREIGN_HOST).status_code == 400
+
+
+@pytest.mark.parametrize("host", ["localhost:8000", "127.0.0.1:5173", "[::1]:8000", "LOCALHOST"])
+def test_localhost_on_any_port_is_allowed(client, host):
+    assert client.get("/api/health", headers={"host": host}).status_code == 200
