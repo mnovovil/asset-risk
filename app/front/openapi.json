@@ -2538,7 +2538,7 @@
     },
     "/api/runs/{run_id}/chat": {
       "post": {
-        "description": "Ask the portfolio analyst about a completed run. It can take minutes on a CPU.\n\nA sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one\nquestion is answered at a time, and none while a portfolio run is in progress.",
+        "description": "Ask the portfolio analyst, Claude over the Anthropic API, about a completed run.\n\nA sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one\nquestion is answered at a time. The model runs remotely, so a portfolio run in progress doesn't\nstop it.",
         "operationId": "chat_api_runs__run_id__chat_post",
         "parameters": [
           {

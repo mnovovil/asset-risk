@@ -92,21 +92,17 @@ def _service(compose: str, name: str) -> str:
     return block.group(1)
 
 
-def test_ollama_publishes_nothing_and_runs_only_for_the_analyst():
+def test_the_stack_runs_no_model_server():
     compose = (DOCKER / "compose.yml").read_text()
-    ollama = _service(compose, "ollama")
-    assert "ports:" not in ollama and "expose:" not in ollama
-    assert "network_mode" not in ollama
-    assert "profiles: [analyst]" in ollama
-    # A pinned release, never latest.
-    image = re.search(r"image: ollama/ollama:(\S+)", ollama).group(1)
-    assert re.fullmatch(r"\d+\.\d+\.\d+", image)
-    assert "ollama_models:/root/.ollama" in ollama
+    assert "ollama" not in compose.lower()
+    assert "profiles:" not in compose
 
 
-def test_the_app_reaches_the_analyst_over_the_stack_network():
+def test_the_app_gets_the_analysts_key_from_the_shell_only():
     app = _service((DOCKER / "compose.yml").read_text(), "app")
-    assert "ASSET_RISK_ANALYST_URL: http://ollama:11434" in app
+    # Interpolated from the environment of script/start.sh, never a literal and never a file.
+    assert "ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}" in app
+    assert "env_file" not in app
 
 
 def _fake_repo(tmp_path, settings: dict):
@@ -196,7 +192,7 @@ def test_start_script_explains_what_is_missing(tmp_path):
     assert "up --build" in called
 
 
-def _start_with_settings(tmp_path, settings: dict):
+def _start_with_settings(tmp_path, settings: dict, key: str | None = None):
     """Run start.sh against a fake repo, with a docker that logs every call and its profile."""
     root = tmp_path / "repo"
     (root / "script").mkdir(parents=True)
@@ -216,6 +212,9 @@ def _start_with_settings(tmp_path, settings: dict):
     fake_docker.chmod(0o755)
     env = os.environ | {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
     env.pop("COMPOSE_PROFILES", None)
+    env.pop("ANTHROPIC_API_KEY", None)
+    if key is not None:
+        env["ANTHROPIC_API_KEY"] = key
     result = subprocess.run(
         ["bash", "script/start.sh"], cwd=root, env=env, capture_output=True, text=True
     )
@@ -223,32 +222,27 @@ def _start_with_settings(tmp_path, settings: dict):
     return result, calls
 
 
-def test_start_script_pulls_the_analyst_model_when_it_is_on(tmp_path):
-    result, calls = _start_with_settings(
-        tmp_path, {"analyst_enabled": True, "analyst_model": "qwen3:1.7b"}
-    )
+def test_start_script_checks_for_the_key_when_the_analyst_is_on(tmp_path):
+    settings = {"analyst_enabled": True, "analyst_model": "claude-opus-5-5"}
+    result, calls = _start_with_settings(tmp_path, settings, key="sk-test")
     assert result.returncode == 0, result.stderr
-    compose = "analyst compose -f docker/compose.yml"
-    assert calls == [
-        f"{compose} up --detach --wait ollama",
-        f"{compose} exec ollama ollama pull qwen3:1.7b",
-        f"{compose} up --build",
-    ]
+    assert calls == ["none compose -f docker/compose.yml up --build"]
+    assert "sk-test" not in result.stdout + result.stderr
 
 
 def test_start_script_leaves_the_analyst_off_by_default(tmp_path):
-    result, calls = _start_with_settings(
-        tmp_path, {"analyst_enabled": False, "analyst_model": "qwen3:1.7b"}
-    )
+    settings = {"analyst_enabled": False, "analyst_model": "claude-opus-5-5"}
+    result, calls = _start_with_settings(tmp_path, settings)
     assert result.returncode == 0, result.stderr
     assert calls == ["none compose -f docker/compose.yml up --build"]
-    assert "ollama" not in result.stdout
+    assert "ANTHROPIC_API_KEY" not in result.stderr
 
 
-def test_start_script_needs_a_model_for_the_analyst(tmp_path):
-    result, _ = _start_with_settings(tmp_path, {"analyst_enabled": True, "analyst_model": ""})
+def test_start_script_needs_a_key_for_the_analyst(tmp_path):
+    settings = {"analyst_enabled": True, "analyst_model": "claude-opus-5-5"}
+    result, _ = _start_with_settings(tmp_path, settings)
     assert result.returncode != 0
-    assert "analyst_model is empty" in result.stderr
+    assert "ANTHROPIC_API_KEY is empty" in result.stderr
 
 
 def _compose(*args, **kwargs):
