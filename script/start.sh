@@ -43,15 +43,11 @@ if ! grep -q '"flood_zones_db":[[:space:]]*null' .asset-risk.json; then
 fi
 export API_PORT HOST_UID HOST_GID FLOOD_ZONES_FILE FLOOD_ZONES_DB
 
-# The analyst is optional. When it's on, start its model server first and pull the model, which
-# downloads about 1.1 GB the first time and is quick after that.
+# The analyst is optional. When it's on, it asks Claude over the Anthropic API with the key from
+# this shell, which compose passes to the app and nothing writes to disk.
 if grep -q '"analyst_enabled":[[:space:]]*true' .asset-risk.json; then
-  model=$(sed -n 's/.*"analyst_model":[[:space:]]*"\([^"]*\)".*/\1/p' .asset-risk.json)
-  [ -n "$model" ] || fail "analyst_enabled is true but analyst_model is empty. $apply_hint"
-  export COMPOSE_PROFILES=analyst
-  echo "Pulling the analyst's model, $model"
-  docker compose -f docker/compose.yml up --detach --wait ollama
-  docker compose -f docker/compose.yml exec ollama ollama pull "$model"
+  [ -n "${ANTHROPIC_API_KEY:-}" ] ||
+    fail "analyst_enabled is true but ANTHROPIC_API_KEY is empty. Run \`export ANTHROPIC_API_KEY=...\` with a key from the Claude Console, or set analyst_enabled = false in infra/terraform.tfvars. $apply_hint"
 fi
 
 echo "Starting at http://127.0.0.1:${API_PORT}"

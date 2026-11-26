@@ -1,19 +1,19 @@
-"""The portfolio analyst: a local model answers a question about one run by calling read-only tools.
+"""The portfolio analyst: Claude answers a question about one run by calling read-only tools.
 
 The model never sees the database. It replies with one JSON object at a time, either a tool call
 or an answer, and every number in the answer is checked in code against the tool results it cites.
 An answer whose numbers don't all match is returned with verified false and the unmatched numbers,
 after one chance to correct it.
 
-The model is reached through ModelClient, so tests use a fake one. Only one question is asked at a
-time, under this module's own lock: never physrisk's, which the pipeline holds for minutes.
+The model is reached through ModelClient, so tests use a fake one: AnthropicClient asks Claude over
+the Anthropic API. Only one question is asked at a time, under this module's own lock: never
+physrisk's, which the pipeline holds for minutes. The lock also keeps spend to one question's calls.
 """
 
 from __future__ import annotations
 
 import json
 import math
-import os
 import re
 import threading
 from dataclasses import dataclass, field
@@ -21,44 +21,35 @@ from pathlib import Path
 from string import Template
 from typing import Protocol
 
-import httpx
-import ollama
+import anthropic
 
 from engine import analyst_tools
 from engine.store import Run
 
 PROMPT_PATH = Path(__file__).parent / "data" / "analyst_prompt.md"
-# Qwen's advice for qwen3 with thinking off, the default model. Lower makes it repeat itself.
-SAMPLING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20}
 # Earlier turns kept in the prompt, and how much of each, so a long chat can't crowd out the rules.
 MAX_HISTORY = 6
 MAX_HISTORY_CHARS = 2000
 # How much of an unusable reply is quoted back to the model when asking it to correct it.
 MAX_QUOTED_REPLY = 500
+# Each reply is one short JSON object, but thinking counts toward max_tokens too.
+MAX_TOKENS = 16000
+# How hard the model thinks before each reply. Each call picks one tool or writes one short answer
+# from results it's given, which low effort handles: measure with pytest -m anthropic before
+# raising it, since every level up costs more per question.
+EFFORT = "low"
+# Models that accept server-side fallbacks, where a refused request is rerun on a model the API
+# picks by the refusal's category. Others are sent without them.
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+FALLBACK_MODELS = {
+    "claude-fable-5-2",
+    "claude-fable-5-1",
+    "claude-opus-5-5",
+    "claude-opus-5",
+    "claude-sonnet-5-5",
+}
 
 _lock = threading.Lock()
-
-# What a reply may be, for Ollama to hold the model to: one tool call or one answer, so it stops at
-# the object's end instead of writing more. Without it, a small model goes on to write further
-# calls and made-up TOOL RESULTs, which cost a minute per call on a CPU. _parse still checks each
-# reply, so this only shapes the output and never decides what's valid.
-REPLY_FORMAT = {
-    "anyOf": [
-        {
-            "type": "object",
-            "properties": {"tool": {"enum": list(analyst_tools.TOOLS)}, "args": {"type": "object"}},
-            "required": ["tool", "args"],
-        },
-        {
-            "type": "object",
-            "properties": {
-                "answer": {"type": "string"},
-                "sources": {"type": "array", "items": {"type": "integer"}},
-            },
-            "required": ["answer", "sources"],
-        },
-    ]
-}
 
 
 class AnalystError(Exception):
@@ -86,44 +77,79 @@ class ModelClient(Protocol):
         """Send the whole prompt as a single user message and return the reply's content."""
 
 
-class OllamaClient:
-    """A model on Ollama, with thinking off, every CPU thread, and one JSON object per reply.
+class AnthropicClient:
+    """Claude, over the Anthropic API, with one user message per call and only the text returned.
 
-    Thinking is off for every model: on a CPU, reasoning costs hundreds of tokens per call, and
-    Ollama rejects think=True for a model that can't think. A reasoning model that writes a
-    <think> block anyway has it dropped by extract_json. The thread count is this machine's, which
-    is the model server's in the compose stack: Ollama's own default leaves half the cores idle.
+    The SDK reads the key from $ANTHROPIC_API_KEY (or an `ant auth login` profile), never from
+    .asset-risk.json, whose contents end up in Terraform state. Thinking stays on, since current
+    models reject turning it off: EFFORT keeps it short. The reply's text blocks are joined and
+    thinking blocks dropped; _parse still checks every reply, so nothing here decides what's valid.
     """
 
-    def __init__(self, url: str, model: str, timeout_s: float):
+    def __init__(self, model: str, timeout_s: float, sdk: anthropic.Anthropic | None = None):
         self.model = model
-        self._client = ollama.Client(host=url, timeout=timeout_s)
         self._timeout_s = timeout_s
+        self._sdk = sdk or anthropic.Anthropic(timeout=timeout_s, max_retries=2)
+        # Tokens billed across every call this client has made, for measuring cost per question.
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def _has_credentials(self) -> bool:
+        sdk = self._sdk
+        return bool(sdk.api_key or sdk.auth_token or getattr(sdk, "credentials", None))
 
     def chat(self, prompt: str) -> str:
-        try:
-            response = self._client.chat(
-                model=self.model,
-                # Everything in one user message, which every model handles, R1 included.
-                messages=[{"role": "user", "content": prompt}],
-                think=False,
-                format=REPLY_FORMAT,
-                options={**SAMPLING, "num_thread": os.cpu_count() or 1},
+        if not self._has_credentials():
+            raise AnalystUnavailable(
+                "The analyst has no Anthropic API key. Set ANTHROPIC_API_KEY and restart."
             )
-        except httpx.TimeoutException as e:
+        request = {
+            "model": self.model,
+            "max_tokens": MAX_TOKENS,
+            # One user message: the prompt holds the rules, the run and the transcript.
+            "messages": [{"role": "user", "content": prompt}],
+            "output_config": {"effort": EFFORT},
+        }
+        if self.model in FALLBACK_MODELS:
+            request |= {"betas": [FALLBACK_BETA], "fallbacks": "default"}
+        try:
+            response = self._sdk.beta.messages.create(**request)
+        except anthropic.APITimeoutError as e:
             raise AnalystTimeout(
                 f"The model took longer than {self._timeout_s:g} seconds to reply."
             ) from e
-        except ConnectionError as e:  # what ollama raises for httpx.ConnectError
-            raise AnalystUnavailable("The analyst's model server can't be reached.") from e
-        except ollama.ResponseError as e:
-            if e.status_code == 404:
+        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as e:
+            raise AnalystUnavailable(
+                "The Anthropic API rejected the analyst's key. Check ANTHROPIC_API_KEY."
+            ) from e
+        except anthropic.NotFoundError as e:
+            raise AnalystUnavailable(
+                f"The Anthropic API has no model named {self.model}. Check analyst_model."
+            ) from e
+        except anthropic.RateLimitError as e:
+            wait = e.response.headers.get("retry-after")
+            raise AnalystUnavailable(
+                "The Anthropic API's rate or spend limit was reached. Try again "
+                + (f"in {wait} seconds." if wait else "in a minute.")
+            ) from e
+        except anthropic.APIStatusError as e:
+            if e.status_code == 402 or "credit balance" in str(e.message).lower():
                 raise AnalystUnavailable(
-                    f"The model server doesn't have {self.model}. Pull it with "
-                    f"`ollama pull {self.model}`, or restart with script/start.sh."
+                    "The analyst's API credits have run out. Max plan credits refresh each "
+                    "billing cycle, or buy credits in the Claude Console."
                 ) from e
-            raise AnalystUnavailable(f"The model server returned an error: {e.error}") from e
-        return response.message.content or ""
+            raise AnalystUnavailable(
+                f"The Anthropic API returned an error ({e.status_code})."
+            ) from e
+        except anthropic.APIConnectionError as e:
+            raise AnalystUnavailable("The Anthropic API can't be reached.") from e
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.input_tokens += usage.input_tokens or 0
+            self.output_tokens += usage.output_tokens or 0
+        if response.stop_reason == "refusal":
+            raise AnalystOutputError("The model declined to answer this question.")
+        return "".join(block.text for block in response.content if block.type == "text")
 
 
 @dataclass(frozen=True)

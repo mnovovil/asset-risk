@@ -36,9 +36,9 @@ function Chat({ runId, rowNums, onSelect }: Omit<ChatPanelProps, "enabled">) {
     <section className="panel chat-panel" aria-labelledby="chat-heading">
       <h2 id="chat-heading">Ask the analyst</h2>
       <p className="panel-note">
-        A model running on this machine answers from this run's results. A question can take a few
-        minutes. "Verified" means every number matches a result the analyst used, not that its
-        reasoning is right.
+        Claude answers from this run's results, through Anthropic's API, so the results it reads
+        leave this machine. A question takes a few seconds. "Verified" means every number matches a
+        result the analyst used, not that its reasoning is right.
       </p>
       {chat.turns.length > 0 && (
         <ol className="chat-turns">

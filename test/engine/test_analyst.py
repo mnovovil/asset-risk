@@ -1,9 +1,9 @@
 import json
-import os
 import threading
+from types import SimpleNamespace
 
-import httpx
-import ollama
+import anthropic
+import httpx2
 import pytest
 
 from engine import analyst, analyst_tools, assess
@@ -12,7 +12,7 @@ from engine.analyst import (
     AnalystOutputError,
     AnalystTimeout,
     AnalystUnavailable,
-    OllamaClient,
+    AnthropicClient,
     ask,
     extract_json,
     unmatched_numbers,
@@ -280,55 +280,122 @@ def test_extract_json_takes_the_outermost_object(reply, expected):
     assert extract_json(reply) == expected
 
 
-class _Message:
-    content = '{"answer": "ok", "sources": []}'
+_REQUEST = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
 
 
-class _Response:
-    message = _Message()
+def _status_error(kind, status, message="error", headers=None):
+    response = httpx2.Response(status, request=_REQUEST, headers=headers or {})
+    return kind(message, response=response, body=None)
 
 
-@pytest.mark.parametrize(("cpus", "threads"), [(4, 4), (None, 1)])
-def test_ollama_client_sends_one_user_message_without_thinking(monkeypatch, cpus, threads):
-    sent = {}
+class _FakeSDK:
+    """Stands in for anthropic.Anthropic: records each request and returns or raises."""
 
-    def chat(self, **kwargs):
-        sent.update(kwargs)
-        return _Response()
+    def __init__(self, reply=None, error=None, api_key="sk-test"):
+        self.api_key = api_key
+        self.auth_token = None
+        self.credentials = None
+        self.sent = []
+        self._reply = reply
+        self._error = error
+        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._create))
 
-    monkeypatch.setattr(ollama.Client, "chat", chat)
-    monkeypatch.setattr(os, "cpu_count", lambda: cpus)
-    client = OllamaClient("http://ollama:11434", "qwen3:1.7b", 600)
+    def _create(self, **kwargs):
+        self.sent.append(kwargs)
+        if self._error:
+            raise self._error
+        return self._reply
+
+
+def _reply(*blocks, stop_reason="end_turn"):
+    return SimpleNamespace(content=list(blocks), stop_reason=stop_reason)
+
+
+def _text(text):
+    return SimpleNamespace(type="text", text=text)
+
+
+def test_anthropic_client_sends_one_user_message_at_low_effort_with_fallbacks():
+    sdk = _FakeSDK(_reply(SimpleNamespace(type="thinking", thinking=""), _text('{"answer": "ok"')))
+    sdk._reply.content.append(_text(', "sources": []}'))
+    client = AnthropicClient("claude-opus-5-5", 120, sdk=sdk)
     assert client.chat("the prompt") == '{"answer": "ok", "sources": []}'
-    assert sent == {
-        "model": "qwen3:1.7b",
-        "messages": [{"role": "user", "content": "the prompt"}],
-        "think": False,
-        "format": analyst.REPLY_FORMAT,
-        "options": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "num_thread": threads},
-    }
+    assert sdk.sent == [
+        {
+            "model": "claude-opus-5-5",
+            "max_tokens": analyst.MAX_TOKENS,
+            "messages": [{"role": "user", "content": "the prompt"}],
+            "output_config": {"effort": "low"},
+            "betas": ["server-side-fallback-2026-07-01"],
+            "fallbacks": "default",
+        }
+    ]
+    # Current models reject sampling settings and disabled thinking with a 400.
+    assert not {"temperature", "top_p", "top_k", "thinking"} & set(sdk.sent[0])
 
 
-def test_reply_format_names_every_tool():
-    tool_call, answer = analyst.REPLY_FORMAT["anyOf"]
-    assert tool_call["properties"]["tool"]["enum"] == list(analyst_tools.TOOLS)
-    assert tool_call["required"] == ["tool", "args"]
-    assert answer["required"] == ["answer", "sources"]
+def test_anthropic_client_sends_no_fallbacks_to_a_model_without_them():
+    sdk = _FakeSDK(_reply(_text("{}")))
+    AnthropicClient("claude-haiku-5-5", 120, sdk=sdk).chat("p")
+    assert "fallbacks" not in sdk.sent[0] and "betas" not in sdk.sent[0]
+
+
+def test_anthropic_client_without_a_key_asks_for_one_and_sends_nothing():
+    sdk = _FakeSDK(api_key=None)
+    with pytest.raises(AnalystUnavailable, match="ANTHROPIC_API_KEY"):
+        AnthropicClient("claude-opus-5-5", 120, sdk=sdk).chat("p")
+    assert sdk.sent == []
+
+
+def test_anthropic_client_reads_the_key_from_the_environment(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-from-env")
+    client = AnthropicClient("claude-opus-5-5", 120)
+    assert client._sdk.api_key == "sk-from-env"
+    assert client._sdk.timeout == 120
+
+
+def test_a_refusal_is_an_output_error():
+    sdk = _FakeSDK(_reply(stop_reason="refusal"))
+    with pytest.raises(AnalystOutputError, match="declined"):
+        AnthropicClient("claude-opus-5-5", 120, sdk=sdk).chat("p")
+
+
+def test_a_truncated_reply_is_returned_for_parse_to_correct(run):
+    replies = iter(['{"answer": "cut o', '{"answer": "ok", "sources": []}'])
+    sdk = _FakeSDK()
+    sdk.beta.messages.create = lambda **kw: _reply(_text(next(replies)), stop_reason="max_tokens")
+    answer = ask(run, "hi", AnthropicClient("claude-opus-5-5", 120, sdk=sdk), max_calls=2)
+    assert answer.text == "ok"
 
 
 @pytest.mark.parametrize(
     ("error", "kind", "message"),
     [
-        (ConnectionError("Failed to connect"), AnalystUnavailable, "can't be reached"),
-        (httpx.ReadTimeout("slow"), AnalystTimeout, "longer than 600 seconds"),
-        (ollama.ResponseError("model not found", 404), AnalystUnavailable, "ollama pull"),
-        (ollama.ResponseError("out of memory", 500), AnalystUnavailable, "out of memory"),
+        (anthropic.APITimeoutError(request=_REQUEST), AnalystTimeout, "longer than 120 seconds"),
+        (anthropic.APIConnectionError(request=_REQUEST), AnalystUnavailable, "can't be reached"),
+        (_status_error(anthropic.AuthenticationError, 401), AnalystUnavailable, "rejected"),
+        (_status_error(anthropic.PermissionDeniedError, 403), AnalystUnavailable, "rejected"),
+        (_status_error(anthropic.NotFoundError, 404), AnalystUnavailable, "no model named"),
+        (
+            _status_error(anthropic.RateLimitError, 429, headers={"retry-after": "30"}),
+            AnalystUnavailable,
+            "in 30 seconds",
+        ),
+        (_status_error(anthropic.RateLimitError, 429), AnalystUnavailable, "in a minute"),
+        (
+            _status_error(
+                anthropic.BadRequestError,
+                400,
+                "Your credit balance is too low to access the Anthropic API.",
+            ),
+            AnalystUnavailable,
+            "credits have run out",
+        ),
+        (_status_error(anthropic.PaymentRequiredError, 402), AnalystUnavailable, "credits"),
+        (_status_error(anthropic.InternalServerError, 500), AnalystUnavailable, r"error \(500\)"),
     ],
 )
-def test_ollama_client_errors_are_readable(monkeypatch, error, kind, message):
-    def chat(self, **kwargs):
-        raise error
-
-    monkeypatch.setattr(ollama.Client, "chat", chat)
+def test_anthropic_client_errors_are_readable(error, kind, message):
+    sdk = _FakeSDK(error=error)
     with pytest.raises(kind, match=message):
-        OllamaClient("http://ollama:11434", "qwen3:1.7b", 600).chat("p")
+        AnthropicClient("claude-opus-5-5", 120, sdk=sdk).chat("p")

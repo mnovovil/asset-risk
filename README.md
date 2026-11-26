@@ -49,29 +49,33 @@ every figure, and **Download report as PDF**, the map, loss bars and change over
 selected scenario, year and map colouring. With values, the CSV adds each asset's value and expected
 loss, and the PDF follows the selected weighting. The browser builds the PDF itself, so it needs the map tiles to load.
 
-### Asking the analyst (optiona)
+### Asking the analyst (optional)
 
-A finished portfolio's page can have an **Ask the analyst** chat, where a model running on your own
-machine answers questions about the run, such as "Which assets have the highest flood loss under
-ssp585 in 2050?". It reads the results only through read-only tools, and every number in its answer
-is checked against what those tools returned. An answer whose numbers don't all match is marked
-**Unverified figures**. Nothing leaves the machine: the model runs in the compose stack's own
-`ollama` service, which publishes no ports.
+A finished portfolio's page can have an **Ask the analyst** chat, where Claude answers questions
+about the run, such as "Which assets have the highest flood loss under ssp585 in 2050?". It reads
+the results only through read-only tools, and every number in its answer is checked against what
+those tools returned. An answer whose numbers don't all match is marked **Unverified figures**.
 
-It's off by default. To turn it on, set `analyst_enabled = true` in `infra/terraform.tfvars`, run
-`terraform -chdir=infra apply`, and start with `script/start.sh`, which pulls the model
-(`qwen3:1.7b`, about 1.4 GB to download) the first time. The model needs about 2 GB of free
-memory on top of the app's, and it runs on the CPU with thinking off, so an answer can take a
-while. On a machine with about 8 GB free, `analyst_model = "qwen3:4b"` follows the instructions
-more reliably. It doesn't answer while a portfolio is being assessed. See
+The model runs on Anthropic's API, so **the tool results it reads leave the machine**: portfolio
+figures, and for any asset it looks up, its row number, id, coordinates, building, values and
+results. Leave the analyst off for a portfolio that mustn't be shared.
+
+It's off by default. To turn it on:
+1. Get an API key. A Max, Ultra or Team plan includes monthly
+   [API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers):
+   claim them on claude.ai under Settings → Billing → API credits, linking a Claude Console
+   organization. In the Console, create a workspace for asset-risk with a spend limit, and a key in
+   it.
+2. Set `analyst_enabled = true` in `infra/terraform.tfvars` and run `terraform -chdir=infra apply`.
+   Never put the key there: Terraform state holds every variable in plain text.
+3. `export ANTHROPIC_API_KEY=...` and start with `script/start.sh`, which refuses to start without
+   it. Compose passes it to the app, and nothing writes it to disk.
+
+Each tool call is another billed call to the model, so `analyst_max_calls` (5 by default, up to 10)
+caps the cost of one question, and only one question is answered at a time. When the credits run
+out, the chat says so and the rest of the dashboard works the same. `analyst_model` picks the model
+(`claude-opus-5-5` by default; `claude-sonnet-5-5` or `claude-haiku-5-5` cost less). See
 [the methodology](docs/methodology.md#the-analyst) for what it can and can't tell you.
-
-On a small machine, the number of tool calls sets the wait. Each tool call is another full model
-call, with its own reasoning, so `analyst_max_calls` (2 by default) is a trade: fewer calls answer
-sooner, but a question that needs more lookups fails with a 502. With more CPU to spare, raise it
-in `infra/terraform.tfvars`, up to 10. If the chat is still too slow, `analyst_enabled = false`
-frees the 1.3 GB or so the model takes while loaded, and the rest of the dashboard works the same
-without it.
 
 The app has no login, so it only listens on localhost. Don't expose it as it stands.
 
@@ -99,7 +103,7 @@ flowchart TB
 
     subgraph analyst["Portfolio analyst, optional: analyst_enabled"]
         chat["Chat endpoint<br/>POST /api/runs/{id}/chat"] --> loop["Model loop and grounding check<br/>analyst.py"]
-        loop <-->|"one JSON reply at a time"| ollama["Local model<br/>ollama service, no published ports"]
+        loop <-->|"one JSON reply at a time"| claude["Claude<br/>Anthropic API, key from ANTHROPIC_API_KEY"]
         loop <-->|"tool calls and results"| tools["Read-only tools<br/>analyst_tools.py"]
     end
 

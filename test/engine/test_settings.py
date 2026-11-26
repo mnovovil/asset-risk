@@ -62,10 +62,9 @@ VALID = {
     "hazard_map_array_cache": 4,
     "hazard_map_tile_cache": 256,
     "analyst_enabled": False,
-    "analyst_url": "http://localhost:11434",
-    "analyst_model": "qwen3:1.7b",
-    "analyst_max_calls": 2,
-    "analyst_timeout_s": 600,
+    "analyst_model": "claude-opus-5-5",
+    "analyst_max_calls": 5,
+    "analyst_timeout_s": 120,
 }
 
 
@@ -75,7 +74,6 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("GEOLOCATE_CONFIG", raising=False)
     monkeypatch.delenv("ASSET_RISK_DATA_DIR", raising=False)
     monkeypatch.delenv("FLOOD_ZONES_DB", raising=False)
-    monkeypatch.delenv("ASSET_RISK_ANALYST_URL", raising=False)
 
 
 def write(tmp_path, **overrides):
@@ -230,15 +228,14 @@ def test_missing_key(tmp_path, key):
         ("analyst_enabled", "true"),
         ("analyst_enabled", 1),
         ("analyst_enabled", None),
-        ("analyst_url", ""),
-        ("analyst_url", "localhost:11434"),
-        ("analyst_url", "ftp://localhost:11434"),
-        ("analyst_url", "http://localhost:11434/api/chat"),
-        ("analyst_url", "http://user:pass@localhost:11434"),
-        ("analyst_url", 11434),
         ("analyst_model", ""),
         ("analyst_model", "  "),
         ("analyst_model", None),
+        ("analyst_model", "qwen3:1.7b"),
+        ("analyst_model", "gpt-5"),
+        ("analyst_model", "Claude-Opus-5-5"),
+        ("analyst_model", "claude-opus-5-5 "),
+        ("analyst_model", "claude-"),
         ("analyst_max_calls", 0),
         ("analyst_max_calls", 11),
         ("analyst_max_calls", 2.5),
@@ -357,31 +354,20 @@ def test_analyst_is_off_by_default_and_loaded(tmp_path):
         write(
             tmp_path,
             analyst_enabled=True,
-            analyst_url="http://ollama:11434/",
-            analyst_model="qwen3:4b",
+            analyst_model="claude-sonnet-5-5",
             analyst_max_calls=MAX_ANALYST_CALLS,
             analyst_timeout_s=MIN_ANALYST_TIMEOUT_S,
         )
     )
     assert settings.analyst_enabled is True
-    assert settings.analyst_url == "http://ollama:11434"
-    assert settings.analyst_model == "qwen3:4b"
+    assert settings.analyst_model == "claude-sonnet-5-5"
     assert settings.analyst_max_calls == MAX_ANALYST_CALLS
     assert settings.analyst_timeout_s == MIN_ANALYST_TIMEOUT_S
 
 
-def test_analyst_url_env_overrides_the_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("ASSET_RISK_ANALYST_URL", "http://ollama:11434")
-    assert load_settings(write(tmp_path)).analyst_url == "http://ollama:11434"
-    # An empty variable leaves the file's value, as compose passes one when nothing is set.
-    monkeypatch.setenv("ASSET_RISK_ANALYST_URL", "")
-    assert load_settings(write(tmp_path)).analyst_url == "http://localhost:11434"
-
-
-def test_analyst_url_env_is_validated(tmp_path, monkeypatch):
-    monkeypatch.setenv("ASSET_RISK_ANALYST_URL", "ollama:11434")
-    with pytest.raises(SettingsError, match="analyst_url"):
-        load_settings(write(tmp_path))
+def test_the_api_key_is_never_a_setting():
+    assert not [key for key in KEYS if "key" in key or "token" in key]
+    assert "ANTHROPIC_API_KEY" not in (ROOT / "infra" / "main.tf").read_text()
 
 
 def test_analyst_defaults_match_terraform_and_the_code():
