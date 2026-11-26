@@ -31,16 +31,16 @@ edit it, run `terraform -chdir=infra apply`, and restart the app.
 | `hazard_map_legend_stops` | `9` | Colours in the wildfire, wind, hail and drought legends, 2 to 33 |
 | `hazard_map_array_cache` | `4` | Arrays kept per layer: about 4 MB each for wildfire, hail and drought, 17 MB for wind |
 | `hazard_map_tile_cache` | `256` | Tiles kept per layer |
-| `analyst_enabled` | `false` | Turns on the portfolio analyst chat. The default model needs about 2 GB of free memory. Docker runs it in its own `ollama` service |
-| `analyst_url` | `http://localhost:11434` | The Ollama server `script/serve.py` uses, with no path. Docker uses its own service instead |
-| `analyst_model` | `qwen3:1.7b` | The Ollama model the analyst asks. `script/start.sh` pulls it when the analyst is on. See [the model](#the-model) |
-| `analyst_max_calls` | `2` | Tool calls the analyst may make for one question, 1 to 10 |
-| `analyst_timeout_s` | `600` | Seconds one call to the model may take, 30 to 1800. A model on a CPU can take minutes |
+| `analyst_enabled` | `false` | Turns on the portfolio analyst chat, which asks Claude over the Anthropic API with the key in `$ANTHROPIC_API_KEY`. The key is never a setting |
+| `analyst_model` | `claude-opus-5-5` | The Claude model the analyst asks, by its API id (`claude-...`). See [the model](#the-model) |
+| `analyst_max_calls` | `5` | Tool calls the analyst may make for one question, 1 to 10. Each is a billed call to the model |
+| `analyst_timeout_s` | `120` | Seconds one call to the model may take, 30 to 1800 |
 | `api_port` | `8000` | Port on localhost. `API_PORT` overrides it for `script/start.sh` |
 | `aws_access_key_id`, `aws_secret_access_key`, `aws_session_token` | empty | Optional, for geolocate. Prefer `TF_VAR_...` environment variables, and note that the Terraform state holds these in plain text |
 
 Environment variables override the settings in a container: `ASSET_RISK_CONFIG`, `GEOLOCATE_CONFIG`,
-`ASSET_RISK_DATA_DIR`, `FLOOD_ZONES_DB` and `ASSET_RISK_ANALYST_URL`.
+`ASSET_RISK_DATA_DIR` and `FLOOD_ZONES_DB`. `ANTHROPIC_API_KEY` holds the analyst's key, which
+`script/start.sh` requires when the analyst is on and compose passes to the app.
 
 ## Portfolio CSV
 
@@ -171,16 +171,17 @@ It returns:
 | `sources` | The cited tool calls, each with `n`, `tool`, `args` and `result` |
 | `tool_calls` | Every tool call made for the question, cited or not |
 
-A question takes minutes on a CPU. The route is synchronous, so the wait runs in FastAPI's thread
-pool, and only one question is answered at a time.
+A question takes seconds: each tool call is one call to the model. The route is synchronous, so the
+wait runs in FastAPI's thread pool, and only one question is answered at a time, which also caps
+spend. A portfolio run in progress doesn't stop it, since the model runs remotely.
 
 | Status | When |
 |---|---|
 | 404, 409 | The run doesn't exist, or isn't `completed` |
 | 422 | The question is empty or too long, or the history is too long or has another role |
 | 429 | The analyst is answering another question, including one whose request was cancelled |
-| 502 | The model's replies couldn't be used after a correction, or it didn't answer within `analyst_max_calls` tool calls |
-| 503 | The analyst is off, a portfolio run is queued or in progress, the model server can't be reached, or it doesn't have the model |
+| 502 | The model's replies couldn't be used after a correction, it didn't answer within `analyst_max_calls` tool calls, or it declined the question |
+| 503 | The analyst is off, `ANTHROPIC_API_KEY` is missing or rejected, the API credits have run out, a rate or spend limit was reached, the API can't be reached, or it has no such model |
 | 504 | One call to the model took longer than `analyst_timeout_s` |
 
 ### How it works
@@ -192,7 +193,7 @@ gives the model. The prompt is filled in with:
 - the call limit, the history and the question
 - the transcript so far
 
-The model (`qwen3:1.7b` by default, thinking off, one user message per call) replies with one JSON
+The model (`claude-opus-5-5` by default, one user message per call) replies with one JSON
 object: either `{"tool": ..., "args": ...}` or `{"answer": ..., "sources": [n, ...]}`. The
 app takes the outermost object from the reply:
 - A malformed reply or an unknown tool gets one correction, and a second bad reply in a row is a
@@ -231,34 +232,32 @@ tool result.
 | `compare_scenarios(a, b, year)` | Each scenario's `mean_shared_aal`, `difference_b_minus_a`, the shared hazards, and the hazards left out of the comparison. The historical side always has year null |
 | `list_exclusions()` | Exclusion counts and reasons, and up to 25 excluded rows and failed batches, with complete totals |
 
-The live test, `.venv/bin/pytest -m ollama`, asks a real model three questions on a fixture run. It
-needs a model server at `$ASSET_RISK_ANALYST_URL` (default `http://localhost:11434`) with
-`$ASSET_RISK_ANALYST_MODEL` (default `qwen3:1.7b`) pulled.
+The live test, `.venv/bin/pytest -m anthropic -s`, asks Claude three questions on a fixture run and
+prints each one's time, calls and tokens. It needs `$ANTHROPIC_API_KEY` and spends credits.
+`$ASSET_RISK_ANALYST_MODEL` picks another model.
 
 ### The model
 
-The default is `qwen3:1.7b`, about 1.4 GB to download and about 2 GB of memory, so it fits
-alongside the app on a machine with 6 GB. `qwen3:4b` needs about 4 GB, which on such a machine
-means swapping and very slow answers. On a machine with about 8 GB free, set
-`analyst_model = "qwen3:4b"`: it follows the JSON reply format more reliably, so expect fewer
-correction retries, fewer answers marked `verified: false`, and fewer 502s after two bad replies in
-a row. The grounding check is the same for every model, so a smaller model gives less useful
-answers, not wrong ones marked verified.
+`AnthropicClient` in `analyst.py` sends each call to the Messages API with the official `anthropic`
+SDK, which reads the key from `$ANTHROPIC_API_KEY` (or an `ant auth login` profile under
+`script/serve.py`). Three things are fixed in code rather than settings:
+- `EFFORT` is `low`. Current models can't turn thinking off, and effort keeps it short: each call
+  only picks one tool or writes one short answer. Raise it only if the live test shows answers
+  failing at `low`, since each level costs more per question.
+- A model in `FALLBACK_MODELS` is sent server-side fallbacks, so a question the model declines on
+  safety grounds is rerun on a model the API picks. A refusal that survives is a 502.
+- No sampling settings: current models reject them.
 
-Every call is made with thinking off, whatever the model. On a CPU, writing tokens is almost all
-of an answer's time, and a reasoning model writes hundreds of them per call before it replies:
-`deepseek-r1:1.5b` took 366 seconds over 7 calls for "hello" and still didn't answer. Ollama also
-rejects thinking for a model that can't think. A model that writes a `<think>` block anyway has it
-dropped before the reply is read. Each call also passes Ollama a JSON schema that allows one tool
-call or one answer, so the model stops at the end of its object: without it, `qwen3:1.7b` went on
-to write more calls and made-up tool results, about a minute per call instead of 4 to 20 seconds.
-The app still checks every reply as described above. Sampling follows Qwen's advice for thinking off (temperature
-0.7, top_p 0.8, top_k 20).
+The reply's text is read and its thinking dropped, and the app checks it as above. The JSON reply
+format is kept from the local-model design, so the loop and grounding check didn't change. Each
+tool call resends the whole prompt, so a question costs roughly `analyst_max_calls` prompts of a
+few thousand tokens each. `claude-sonnet-5-5` and `claude-haiku-5-5` cost less per token, and the
+grounding check is the same for every model: a weaker model gives more answers marked
+`verified: false`, not wrong ones marked verified.
 
-Each call asks for as many threads as the app's machine has CPUs, because Ollama's own default
-leaves half of them idle (about 15% slower). In Docker, the app and the model server share the
-host, so the count is right. With `script/serve.py` and an `analyst_url` on a different machine,
-the count is the app's, not the server's.
+Errors come back as readable 503s: a missing or rejected key, credits run out (a Max plan's refresh
+each billing cycle), a rate or spend limit with its retry time, an unknown model, or an API that
+can't be reached. The SDK retries rate limits and server errors twice first.
 
 ## Run database
 

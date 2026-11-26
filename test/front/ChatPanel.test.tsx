@@ -65,9 +65,9 @@ describe("ChatPanel", () => {
     expect(screen.queryByRole("heading", { name: "Ask the analyst" })).toBeNull();
   });
 
-  it("says a question can take a few minutes", () => {
+  it("says the results it reads leave this machine", () => {
     renderPanel();
-    expect(screen.getByText(/can take a few\s+minutes/)).toBeTruthy();
+    expect(screen.getByText(/through Anthropic's API, so the results it reads\s+leave this machine/)).toBeTruthy();
   });
 
   it("shows the answer, and its sources expand to the tool, args and result", async () => {

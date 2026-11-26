@@ -15,7 +15,6 @@ ENV_VAR = "ASSET_RISK_CONFIG"
 GEOLOCATE_ENV_VAR = "GEOLOCATE_CONFIG"
 DATA_DIR_ENV_VAR = "ASSET_RISK_DATA_DIR"
 FLOOD_ZONES_ENV_VAR = "FLOOD_ZONES_DB"
-ANALYST_URL_ENV_VAR = "ASSET_RISK_ANALYST_URL"
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PATH = ROOT / ".asset-risk.json"
 KEYS = (
@@ -48,7 +47,6 @@ KEYS = (
     "hazard_map_array_cache",
     "hazard_map_tile_cache",
     "analyst_enabled",
-    "analyst_url",
     "analyst_model",
     "analyst_max_calls",
     "analyst_timeout_s",
@@ -68,9 +66,10 @@ _MAP_PATH = re.compile(r"[A-Za-z0-9_.\-/]*")
 _BUCKET = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]*(/[A-Za-z0-9_.\-]+)*")
 MAX_CLUSTER_EPS_KM = 1000
 MIN_CLUSTER_SAMPLES = 2
-# The analyst's model server (Ollama). A run's chat makes at most this many tool calls per question,
-# and one call to the model may take this long on a CPU.
-_ANALYST_URL = re.compile(r"https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?/?")
+# The analyst's Claude model, by its Anthropic API id. A run's chat makes at most this many tool
+# calls per question, and one call to the model may take this long. The API key is never a setting:
+# the SDK reads $ANTHROPIC_API_KEY, because this file's contents end up in Terraform state.
+_ANALYST_MODEL = re.compile(r"claude-[a-z0-9-]+")
 MAX_ANALYST_CALLS = 10
 MIN_ANALYST_TIMEOUT_S = 30
 MAX_ANALYST_TIMEOUT_S = 1800
@@ -118,10 +117,9 @@ class Settings:
     # The portfolio analyst chat, off unless asked for. The defaults are the code's, so a test can
     # leave them out.
     analyst_enabled: bool = False
-    analyst_url: str = "http://localhost:11434"
-    analyst_model: str = "qwen3:1.7b"
-    analyst_max_calls: int = 2
-    analyst_timeout_s: int = 600
+    analyst_model: str = "claude-opus-5-5"
+    analyst_max_calls: int = 5
+    analyst_timeout_s: int = 120
 
 
 def settings_path(path: str | os.PathLike[str] | None = None) -> Path:
@@ -236,17 +234,9 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
     if not isinstance(raw["analyst_enabled"], bool):
         raise bad("analyst_enabled", "true or false")
 
-    # A container reaches the model server by its service name. An empty variable leaves the file's.
-    analyst_url = os.environ.get(ANALYST_URL_ENV_VAR) or raw["analyst_url"]
-    if not isinstance(analyst_url, str) or not _ANALYST_URL.fullmatch(analyst_url):
-        raise bad(
-            "analyst_url",
-            "an http:// or https:// address with no path, like http://localhost:11434",
-        )
-
     model = raw["analyst_model"]
-    if not isinstance(model, str) or not model.strip():
-        raise bad("analyst_model", "a non-empty string")
+    if not isinstance(model, str) or not _ANALYST_MODEL.fullmatch(model):
+        raise bad("analyst_model", "a Claude model id, like claude-opus-5-5")
 
     calls = raw["analyst_max_calls"]
     if not _is_int(calls) or not 1 <= calls <= MAX_ANALYST_CALLS:
@@ -291,7 +281,6 @@ def load_settings(path: str | os.PathLike[str] | None = None) -> Settings:
         hazard_map_array_cache=raw["hazard_map_array_cache"],
         hazard_map_tile_cache=raw["hazard_map_tile_cache"],
         analyst_enabled=raw["analyst_enabled"],
-        analyst_url=analyst_url.rstrip("/"),
         analyst_model=model,
         analyst_max_calls=calls,
         analyst_timeout_s=timeout,

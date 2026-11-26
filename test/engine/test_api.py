@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine import analyst
-from engine.api import ANALYST_OFF_MESSAGE, ANALYST_RUN_IN_PROGRESS_MESSAGE, create_app
+from engine.api import ANALYST_OFF_MESSAGE, create_app
 from engine.store import all_runs, create_run, find_run, set_status
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -1110,7 +1110,7 @@ def test_mixed_currencies_are_rejected_on_upload(client):
 
 
 class FakeModel:
-    """Stands in for the model server: replies in order, or raises an exception it's given."""
+    """Stands in for the model: replies in order, or raises an exception it's given."""
 
     def __init__(self):
         self.replies: list = []
@@ -1251,7 +1251,8 @@ def test_chat_answers_one_question_at_a_time(chat_client, chat_run, model):
     assert ask(chat_client, chat_run).status_code == 200
 
 
-def test_chat_waits_while_a_portfolio_runs(analyst_settings, model):
+def test_chat_answers_while_a_portfolio_runs(analyst_settings, model):
+    # The model is remote, so a run in progress no longer holds it up.
     release = threading.Event()
     calls = []
 
@@ -1265,16 +1266,29 @@ def test_chat_waits_while_a_portfolio_runs(analyst_settings, model):
         first = upload(c).json()["run_id"]
         wait_until_finished(c, first)
         second = upload(c).json()["run_id"]
-        response = ask(c, first)
-        release.set()
-        wait_until_finished(c, second)
         model.replies = [{"answer": "No.", "sources": []}]
-        after = ask(c, first)
-    assert (response.status_code, response.json()) == (
-        503,
-        {"detail": ANALYST_RUN_IN_PROGRESS_MESSAGE},
-    )
-    assert after.status_code == 200
+        try:
+            response = ask(c, first)
+            running = c.get(f"/api/runs/{second}").json()["status"]
+        finally:
+            release.set()
+        wait_until_finished(c, second)
+    assert response.status_code == 200, response.json()
+    assert running in ("queued", "running")
+
+
+def test_chat_without_an_api_key_is_a_readable_503(analyst_settings, monkeypatch):
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HOME", "/nonexistent")
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/nonexistent")
+    app = create_app(analyst_settings, execute=complete_run, front_dist=Path("/nonexistent"))
+    with TestClient(app) as c:
+        run_id = upload(c).json()["run_id"]
+        wait_until_finished(c, run_id)
+        response = ask(c, run_id)
+    assert response.status_code == 503
+    assert "ANTHROPIC_API_KEY" in response.json()["detail"]
 
 
 @pytest.mark.parametrize(

@@ -1,9 +1,9 @@
-"""Ask a real model three questions about a fixture run (opt-in: pytest -m ollama).
+"""Ask Claude three questions about a fixture run (opt-in: pytest -m anthropic).
 
-Needs an Ollama server at $ASSET_RISK_ANALYST_URL (default http://localhost:11434) with
-$ASSET_RISK_ANALYST_MODEL (default qwen3:1.7b) pulled. Each answer must be verified by the
-grounding check as it stands: if a model can't pass, that's the finding, not a reason to loosen it.
-Run with -s to see each question's time and answer.
+Needs $ANTHROPIC_API_KEY, and spends API credits on every question. $ASSET_RISK_ANALYST_MODEL picks
+the model (default claude-opus-5-5). Each answer must be verified by the grounding check as it
+stands: if a model can't pass, that's the finding, not a reason to loosen it. Run with -s to see
+each question's time, tokens and answer.
 """
 
 import os
@@ -11,13 +11,12 @@ import time
 
 import pytest
 
-from engine.analyst import OllamaClient, ask
+from engine.analyst import AnthropicClient, ask
 
-pytestmark = pytest.mark.ollama
+pytestmark = pytest.mark.anthropic
 
-URL = os.environ.get("ASSET_RISK_ANALYST_URL") or "http://localhost:11434"
-MODEL = os.environ.get("ASSET_RISK_ANALYST_MODEL") or "qwen3:1.7b"
-TIMEOUT_S = 600
+MODEL = os.environ.get("ASSET_RISK_ANALYST_MODEL") or "claude-opus-5-5"
+TIMEOUT_S = 120
 MAX_CALLS = 4
 
 # Three offices and one bad row. Row 2 has the highest loss under ssp585, and ssp245 has no fire,
@@ -61,12 +60,15 @@ def run(make_run, asset_row):
 
 
 @pytest.mark.parametrize(("question", "tool"), QUESTIONS)
-def test_a_real_model_answers_with_verified_figures(run, question, tool):
-    client = OllamaClient(URL, MODEL, TIMEOUT_S)
+def test_claude_answers_with_verified_figures(run, question, tool):
+    client = AnthropicClient(MODEL, TIMEOUT_S)
     started = time.monotonic()
     answer = ask(run, question, client, MAX_CALLS)
     seconds = time.monotonic() - started
-    print(f"\n{question}\n{seconds:.0f} s, {len(answer.tool_calls)} calls: {answer.text}")
+    print(
+        f"\n{question}\n{seconds:.0f} s, {len(answer.tool_calls)} calls, "
+        f"{client.input_tokens} in / {client.output_tokens} out tokens: {answer.text}"
+    )
     if not answer.verified:
         print(f"Unverified: {answer.unmatched}")
     assert tool in {call.tool for call in answer.tool_calls}

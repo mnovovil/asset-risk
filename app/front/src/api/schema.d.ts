@@ -168,10 +168,11 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description Ask the portfolio analyst about a completed run. It can take minutes on a CPU.
+         * @description Ask the portfolio analyst, Claude over the Anthropic API, about a completed run.
          *
          *     A sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one
-         *     question is answered at a time, and none while a portfolio run is in progress.
+         *     question is answered at a time. The model runs remotely, so a portfolio run in progress doesn't
+         *     stop it.
          */
         post: operations["chat_api_runs__run_id__chat_post"];
         delete?: never;

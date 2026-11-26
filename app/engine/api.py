@@ -41,10 +41,6 @@ ANALYST_OFF_MESSAGE = (
     "The analyst is turned off. Set analyst_enabled = true in infra/terraform.tfvars, run "
     "terraform apply, and restart."
 )
-ANALYST_RUN_IN_PROGRESS_MESSAGE = (
-    "A portfolio run is in progress, and the analyst's model needs the memory it's using. "
-    "Ask again when the run finishes."
-)
 # Tiles only change with the physrisk pin, but a run can be deleted, so not "immutable".
 TILE_CACHE_CONTROL = "private, max-age=86400"
 
@@ -60,10 +56,8 @@ def _queue(request: Request) -> RunQueue:
 AnalystClientFactory = Callable[[Settings], analyst.ModelClient]
 
 
-def _ollama_client(settings: Settings) -> analyst.ModelClient:
-    return analyst.OllamaClient(
-        settings.analyst_url, settings.analyst_model, settings.analyst_timeout_s
-    )
+def _anthropic_client(settings: Settings) -> analyst.ModelClient:
+    return analyst.AnthropicClient(settings.analyst_model, settings.analyst_timeout_s)
 
 
 SettingsDep = Annotated[Settings, Depends(_settings)]
@@ -370,17 +364,15 @@ def chat(
     body: schemas.ChatRequest,
     request: Request,
     settings: SettingsDep,
-    queue: QueueDep,
 ) -> schemas.ChatResponse:
-    """Ask the portfolio analyst about a completed run. It can take minutes on a CPU.
+    """Ask the portfolio analyst, Claude over the Anthropic API, about a completed run.
 
     A sync route, so the wait runs in FastAPI's thread pool rather than on the event loop. Only one
-    question is answered at a time, and none while a portfolio run is in progress.
+    question is answered at a time. The model runs remotely, so a portfolio run in progress doesn't
+    stop it.
     """
     if not settings.analyst_enabled:
         raise HTTPException(503, ANALYST_OFF_MESSAGE)
-    if queue.busy():
-        raise HTTPException(503, ANALYST_RUN_IN_PROGRESS_MESSAGE)
     client = request.app.state.analyst_client(settings)
     history = [message.model_dump() for message in body.history]
     try:
@@ -444,7 +436,7 @@ def create_app(
     settings: Settings | None = None,
     execute: Execute = run_pipeline,
     front_dist: Path = FRONT_DIST,
-    analyst_client: AnalystClientFactory = _ollama_client,
+    analyst_client: AnalystClientFactory = _anthropic_client,
 ) -> FastAPI:
     """Build the app. Settings load at startup, so the schema can be exported without them.
 

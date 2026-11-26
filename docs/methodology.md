@@ -179,9 +179,10 @@ These come from physrisk's default data, and most were found while building
 
 ## The analyst
 
-When it's turned on, a finished portfolio's page has an **Ask the analyst** chat. A local model
-(`qwen3:1.7b` by default) answers questions about that run by calling read-only tools, which return the
-same figures the dashboard shows. It can't see the database, other runs or the internet.
+When it's turned on, a finished portfolio's page has an **Ask the analyst** chat. Claude
+(`claude-opus-5-5` by default, over Anthropic's API) answers questions about that run by calling
+read-only tools, which return the same figures the dashboard shows. It can't see the database,
+other runs or the internet, but the results it reads are sent to Anthropic.
 
 **It can tell you** what the run's results say:
 - portfolio means for a scenario and year, overall or by hazard
@@ -195,7 +196,7 @@ same figures the dashboard shows. It can't see the database, other runs or the i
 - hazards physrisk doesn't model, such as European windstorms
 - what a loss means for a decision
 
-It has the model's limits, listed above, and adds a small model's own. It can misread a question,
+It has the model's limits, listed above, and adds a language model's own. It can misread a question,
 pick the wrong scenario or reason badly. Read its sources, not just its answer.
 
 **"Verified" means the numbers match, not that the reasoning is right.** Every number in an answer
